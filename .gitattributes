@@ -1,0 +1,3 @@
+# Keep source text stable across Linux, Windows, and CI.
+* text=auto eol=lf
+
