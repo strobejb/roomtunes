@@ -1,0 +1,158 @@
+#pragma once
+
+#include <QHash>
+#include <QList>
+#include <QNetworkAccessManager>
+#include <QObject>
+#include <QSet>
+#include <QString>
+
+#include "../services/MusicServiceCatalog.h"
+#include "../services/ServiceLogoCatalog.h"
+#include "../services/ThirdPartyMediaServers.h"
+#include "NetworkWatcher.h"
+#include "ZoneDiscovery.h"
+#include "ZonePlayer.h"
+
+namespace RoomTunes {
+
+class MusicService;
+class SmapiService;
+class SonosLibraryService;
+
+// Owns the music-service side of one Sonos household -- catalog/icon
+// fetching, and decrypting/resolving ThirdPartyMediaServersX (the
+// household's configured service logins, e.g. your own Spotify account) --
+// plus a thin, unchanged-from-before public API over ZoneDiscovery for
+// zone/topology access. Zone discovery itself (SSDP -> device description
+// -> household ID -> ZoneGroupTopology subscription, in that strict order)
+// lives entirely in ZoneDiscovery now; see its class comment for the exact
+// process. No global singleton: owned by the caller (the CLI tool for now,
+// the GUI later) and passed by pointer to anything that needs it.
+//
+// ThirdPartyMediaServersX can only be decrypted once BOTH the household ID
+// and a reachable (topology) zone are known -- see
+// tryProcessThirdPartyMediaServersX(), which is deliberately self-gating
+// and re-attempted from two independent trigger points (a fresh TPMSX
+// payload arriving, and the topology zone first being picked) rather than
+// assumed to always arrive in a safe order, since which of those two
+// happens last isn't guaranteed.
+//
+// Also owns a NetworkWatcher: when the local network changes (disconnect,
+// reconnect, or silently switching interfaces on the same LAN), every
+// piece of state above is invalidated -- old zone addresses, the household
+// ID, the topology subscription, the music-service catalog -- and has to
+// be thrown away and rebuilt from scratch via onNetworkChanged(), which
+// resets both ZoneDiscovery and Household's own state before discovery
+// restarts.
+class Household : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit Household(QObject *parent = nullptr);
+
+    // The Sonos Music Library service specifically -- QML-callable so a
+    // page can browse an arbitrary ContentDirectory object id through it
+    // without going via MusicServiceListModel first (see BrowseHome.qml's
+    // "FV:2" Sonos Favorites browse, an ordinary ContentDirectory container
+    // id like the library's own A:ALBUM/etc, just not one this service's
+    // own root category list happens to enumerate). Null until a zone is
+    // reachable (see rebuildMusicServices()).
+    Q_INVOKABLE MusicService *libraryService() const;
+
+    bool startDiscovery(quint16 localPort = Ssdp::kDefaultRecvPort) { return m_discovery.start(localPort); }
+
+    const QString &householdId() const { return m_discovery.householdId(); }
+
+    QList<ZonePlayer *> zones() const { return m_discovery.zones(); }
+    ZonePlayer *zone(const QString &udn) const { return m_discovery.zone(udn); }
+    ZonePlayer *zoneByRoomName(const QString &roomName) const { return m_discovery.zoneByRoomName(roomName); }
+
+    // The zone holding the ZoneGroupTopology subscription -- also the zone
+    // SmapiService issues MusicServices:1 GetSessionId calls against
+    // (any zone would do; this one's already known-reachable), and the
+    // zone SonosLibraryService browses.
+    ZonePlayer *topologyZone() const { return m_discovery.topologyZone(); }
+
+    // R_TrialZPSerial, a per-household serial Sonos itself uses as the
+    // "deviceId" for SMAPI loginToken/sessionId credentials (see
+    // SmapiService::withCredentials()) -- ported from
+    // SonosApp::getSerialFinished(). Empty until fetchServiceDeviceSerial()
+    // completes.
+    const QString &serviceDeviceSerial() const { return m_serviceDeviceSerial; }
+
+    QNetworkAccessManager *networkAccessManager() { return &m_netMgr; }
+
+    // One-shot GetZoneGroupState poll of the topology zone. Used as a
+    // fallback if the GENA subscription fails, and available for a manual
+    // "refresh" gesture; normal updates arrive via NOTIFY once subscribed.
+    void refreshTopology() { m_discovery.refreshTopology(); }
+
+    // Every browsable music service for this household: the Sonos local
+    // Music Library (always present once a zone is reachable, regardless
+    // of whether any SMAPI account is linked) plus one SmapiService per
+    // entry actually configured/logged-in on this household (e.g. your own
+    // Spotify account) -- not Sonos' global service catalog. See
+    // ThirdPartyMediaServers.h/MusicServiceCatalog.h for how the SMAPI side
+    // is resolved, and rebuildMusicServices() for the instance-preserving
+    // rebuild that keeps this list's pointers stable across catalog/icon
+    // fetches.
+    QList<MusicService *> services() const { return m_services; }
+
+signals:
+    void zoneReady(ZonePlayer *zone);
+    void zoneListChanged();
+    void discoveryTimedOut();
+    void musicServicesChanged();
+    // See ZoneDiscovery::aboutToResetZones() -- forwarded as-is so QML can
+    // drop any raw ZonePlayer* it's holding (e.g. the selected zone)
+    // before a network-change-triggered restart() destroys it.
+    void aboutToResetZones();
+
+private:
+    void onTopologyZonePicked(ZonePlayer *zone);
+    void onThirdPartyMediaServersXReceived(const QString &encoded);
+    void tryProcessThirdPartyMediaServersX();
+    void onNetworkChanged();
+
+    ZonePlayer *pickCatalogFetchZone() const;
+    void fetchMusicServiceCatalog();
+    void fetchServiceIcons();
+    void fetchServiceDeviceSerial();
+    void rebuildMusicServices();
+    void logServiceMap() const;
+
+private:
+    // Declaration order matters: m_discovery holds a pointer to m_netMgr,
+    // taken in the member-initializer list, so m_netMgr must be
+    // constructed first.
+    QNetworkAccessManager m_netMgr;
+    ZoneDiscovery m_discovery;
+    NetworkWatcher m_networkWatcher;
+
+    bool m_catalogFetched = false;
+    QSet<QString> m_catalogFailedZoneUdns; // zones ListAvailableServices has already failed against this session
+    QString m_serviceDeviceSerial;
+    QHash<int, SmapiCatalogEntry> m_smapiCatalog;
+    QHash<int, QString> m_serviceIcons; // keyed by smapiId (SMAPI) or raw legacy id
+    QList<InstalledService> m_rawInstalledServices; // as decrypted, titles unresolved
+
+    // rebuildMusicServices() fires repeatedly (catalog fetch, icon fetch,
+    // TPMSX arrival) -- recreating service objects on every rebuild would
+    // dangle any `service` a QML BrowseListPage is currently holding
+    // mid-navigation. Existing instances are refreshed in place via
+    // SmapiService::updateResolved() instead; only genuinely new services
+    // are constructed, and only ones that truly disappear are removed. Both
+    // maps/pointers own their objects (parented to this Household).
+    QHash<QString, SmapiService *> m_smapiServicesByKey; // keyed by "smapi:<serviceId>"
+    SonosLibraryService *m_libraryService = nullptr;     // created lazily once any zone is reachable
+    QList<MusicService *> m_services;                    // [library] + [smapi services...], ready for display
+
+    // Raw encrypted <ThirdPartyMediaServersX> payload, cached as soon as it
+    // arrives regardless of whether the household ID/topology zone are
+    // known yet -- see tryProcessThirdPartyMediaServersX().
+    QString m_pendingTpmsxRaw;
+};
+
+}

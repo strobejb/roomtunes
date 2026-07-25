@@ -1,0 +1,806 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Effects
+import QtQuick.Layouts
+
+// One level of the Browse panel's navigation stack: a browse() or search()
+// result for one folder of one MusicService (the Sonos Music Library or a
+// SMAPI partner service -- see core/services/MusicService.h). Only ever
+// created by BrowseStack.qml pushing pageComponent (either the initial
+// "root" folder of a service, or -- recursively, from this same file -- a
+// sub-folder browsed into from an existing page, or a search-results page,
+// which reuses this exact component with searchTerm set instead of a
+// plain objectId), never instantiated standalone.
+Item {
+    id: root
+
+    property StackView stack
+    property Component pageComponent
+
+    property string title: ""
+    property var service
+    property string objectId: "root"
+    // The full browse/search item that was clicked to reach this page (set
+    // only by pushFolder() call sites below -- see MusicServiceRow.qml's
+    // onClicked) -- carries the imageUrl/artist the folder-art header below
+    // needs, plus everything ZonePlayer::playItem() needs for the header's
+    // own Play pill to play this whole folder/album.
+    property var folderItem: ({})
+    // Configurable, defaults on: shows a square folder/album art image at
+    // the top of the page (with title/artist/Play pill underneath) instead
+    // of going straight to the results list. Off for the root services
+    // list, a fresh search-results page, or a folder with no art to show --
+    // see hasFolderArt.
+    property bool showFolderArt: true
+    // Only for an actual album, artist, or playlist -- not a generic
+    // section folder (a service's "Top 10s"/"New Releases", a plain
+    // "Playlists" bucket, ...), which has nothing coherent to show as "the
+    // art for this folder". SMAPI items carry their own precise itemType
+    // (album/albumList/artist/playlist/container/other/...); that's
+    // authoritative when present since SmapiService's lookupUpnpClass()
+    // collapses several different itemTypes -- including generic
+    // "container"/"other" sections -- into the same musicAlbum upnpClass,
+    // too lossy to tell apart on its own. Library items never set
+    // itemType, so fall back to their real DIDL upnp:class there instead.
+    readonly property bool folderIsAlbumArtistOrPlaylist: {
+        const type = root.folderItem.itemType || ""
+        if (type.length > 0)
+            return type === "album" || type === "albumList" || type === "artist" || type === "playlist"
+        const cls = root.folderItem.upnpClass || ""
+        return cls.indexOf("musicAlbum") >= 0 || cls.indexOf("musicArtist") >= 0 || cls.indexOf("playlistContainer") >= 0
+    }
+    readonly property bool hasFolderArt: root.showFolderArt && !root.isSearchResults
+                                          && root.objectId !== "root" && !!root.folderItem.imageUrl
+                                          && root.folderIsAlbumArtistOrPlaylist
+    // The ZonePlayer a leaf-item click plays on -- see BrowseStack.qml's
+    // "zone: stack.zone" binding on pageComponent, which supplies this for
+    // every page (root and recursively-pushed sub-folders/search results)
+    // without it needing to be threaded through pushFolder()/
+    // pushSearchResults() properties.
+    property var zone
+
+    // Non-empty means this page shows service.search() results rather
+    // than service.browse(objectId) -- set only when pushed from the
+    // search field below, never toggled in place on an existing page, so
+    // a search result is a stacked panel exactly like a browsed sub-folder
+    // is, not a mutation of whatever page was already showing.
+    property string searchTerm: ""
+    readonly property bool isSearchResults: root.searchTerm.length > 0
+
+    property bool loading: true
+    property string errorMessage: ""
+    property var items: []
+
+    // Computed once at creation and left stable for this page's lifetime --
+    // distinguishes this page's in-flight browse()/search() call from any
+    // other page's, so a stale reply arriving after the user has already
+    // navigated away can't overwrite the wrong page's content.
+    readonly property string requestToken: (root.searchTerm ? ("search:" + root.searchTerm) : objectId) + "|" + Math.random()
+
+    Component.onCompleted: {
+        // A service needing sign-in shows the sign-in prompt instead of
+        // attempting to browse -- there's nothing a browse() call could
+        // return yet.
+        if (service && service.needsSignIn)
+            loading = false
+        else
+            load()
+    }
+
+    function load() {
+        loading = true
+        errorMessage = ""
+        items = []
+        if (root.searchTerm) {
+            // "tracks" is only a starting hint for the very first search on
+            // a fresh page -- service.activeSearchCategory (a real,
+            // service-specific category id) takes over once resolved, so a
+            // page revisited via load() keeps whatever category was last
+            // selected instead of resetting to the default every time.
+            const category = (service.activeSearchCategory && service.activeSearchCategory.length > 0)
+                ? service.activeSearchCategory : "tracks"
+            service.search(requestToken, category, root.searchTerm)
+        } else {
+            service.browse(requestToken, objectId)
+        }
+    }
+
+    // Re-runs the same search under a different category -- e.g. the user
+    // picked "Albums" instead of "Tracks" from the filter pills below.
+    function switchCategory(categoryId) {
+        if (!root.isSearchResults || !root.service || categoryId === root.service.activeSearchCategory)
+            return
+        loading = true
+        errorMessage = ""
+        items = []
+        service.search(requestToken, categoryId, root.searchTerm)
+        // Picking a filter pill shouldn't close or unfocus the search box --
+        // keep it open with the cursor active, same as right after a fresh
+        // search lands.
+        searchControl.expanded = true
+        searchInput.forceActiveFocus()
+    }
+
+    Connections {
+        target: root.service
+
+        function onBrowseFinished(token, ok, message, results) {
+            if (token !== root.requestToken)
+                return
+            root.loading = false
+            if (ok) {
+                root.items = results
+            } else {
+                root.errorMessage = message
+                root.items = []
+            }
+        }
+
+        // Once sign-in completes, load the folder that was waiting on it.
+        function onNeedsSignInChanged() {
+            if (root.service && !root.service.needsSignIn)
+                root.load()
+        }
+    }
+
+    SignInDialog {
+        id: signInDialog
+        service: root.service
+    }
+
+    // Shared by every row -- opened against whichever row's dots button
+    // was clicked (see the delegate below), same approach as
+    // QueuePanel.qml's rowMenu/Main.qml's zonesSettingsMenu.
+    ActionMenu {
+        id: rowMenu
+        property var currentItem: ({})
+        items: [qsTr("Play Now"), qsTr("Play Next"), qsTr("Add to End of Queue"), qsTr("Replace Queue")]
+
+        onItemClicked: (text) => {
+            if (!root.zone)
+                return
+            if (text === qsTr("Play Now"))
+                root.zone.playItem(rowMenu.currentItem)
+            else if (text === qsTr("Play Next"))
+                root.zone.playItemNext(rowMenu.currentItem)
+            else if (text === qsTr("Add to End of Queue"))
+                root.zone.addItemToQueue(rowMenu.currentItem)
+            else if (text === qsTr("Replace Queue"))
+                root.zone.replaceQueueWithItem(rowMenu.currentItem)
+        }
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 8
+
+        Item {
+            id: header
+            Layout.fillWidth: true
+            implicitHeight: 32
+
+            Item {
+                id: backButton
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                width: 32
+                height: 32
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: width / 2
+                    color: backMouseArea.containsMouse ? "#F0F0F0" : "transparent"
+                }
+
+                Image {
+                    anchors.centerIn: parent
+                    source: "../resources/icons/chevron_left.svg"
+                    sourceSize.width: 26
+                    sourceSize.height: 26
+                }
+
+                MouseArea {
+                    id: backMouseArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.stack.goBack()
+                }
+            }
+
+            Label {
+                anchors.left: backButton.right
+                anchors.leftMargin: 4
+                anchors.right: parent.right
+                // Always reserves the search pill's collapsed footprint
+                // (see searchControl.reserveWidth) rather than only once
+                // it's actually expanded, so opening it never covers a
+                // chunk of title that was visible a moment before -- same
+                // reasoning as NowPlayingPanel.qml's volume pill reserving
+                // root.volumeReserveWidth against its own title Text.
+                anchors.rightMargin: searchControl.reserveWidth
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.title
+                font.pixelSize: Math.round(16 * UiScale.factor)
+                font.bold: true
+                color: "#212121"
+                elide: Text.ElideRight
+            }
+
+            // Sits above the header's own left-to-right flow rather than
+            // inside a RowLayout, so it can grow *leftward* from a fixed
+            // right edge without reflowing anything else -- the same
+            // "icon never moves, a pill grows from it" language
+            // NowPlayingPanel.qml's volume control uses, just horizontal
+            // instead of vertical here since the icon has to stay clear of
+            // the title text to its left rather than other controls below.
+            // Expanded, it spans the full header width except the back
+            // button's own footprint -- wide enough to fully cover the
+            // title underneath, which is the point (not just reserve a
+            // fixed gap next to it).
+            Item {
+                id: searchControl
+                visible: !!root.service && root.service.canSearch
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+
+                // Starts already expanded on a search-results page itself
+                // (isSearchResults is fixed for the page's whole lifetime,
+                // so this is just its initial state -- later imperative
+                // assignments, e.g. the icon click below, still override
+                // it as normal) -- landing on a fresh set of results with
+                // the box closed would mean re-clicking the icon just to
+                // refine the term you already typed to get here.
+                property bool expanded: root.isSearchResults
+                readonly property int collapsedWidth: 32
+                readonly property int reserveWidth: collapsedWidth + 8
+
+                width: expanded ? (parent.width - backButton.width - 4) : collapsedWidth
+                height: 32
+
+                Behavior on width {
+                    NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: height / 2
+                    color: searchControl.expanded ? "#F0F0F0" : (iconMouseArea.containsMouse ? "#F0F0F0" : "transparent")
+                }
+
+                // Small static icon of the service being searched, sitting
+                // left of the typed text -- same circular-mask rendering
+                // MusicServiceRow.qml uses for every other service icon in
+                // this app (a plain unclipped Image reads noticeably softer
+                // here; see that file's own comment for why MultiEffect's
+                // maskSource is used instead of a Canvas clip).
+                Item {
+                    id: serviceIcon
+                    anchors.left: parent.left
+                    anchors.leftMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 20
+                    height: 20
+                    visible: searchControl.expanded
+
+                    Image {
+                        id: serviceIconImage
+                        anchors.fill: parent
+                        source: root.service ? root.service.iconSource : ""
+                        sourceSize.width: width
+                        sourceSize.height: height
+                        smooth: true
+                        mipmap: true
+                        visible: false
+                    }
+
+                    Item {
+                        id: serviceIconMask
+                        anchors.fill: parent
+                        layer.enabled: true
+                        visible: false
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: width / 2
+                            color: "black"
+                        }
+                    }
+
+                    MultiEffect {
+                        anchors.fill: parent
+                        visible: serviceIconImage.status === Image.Ready
+                        source: serviceIconImage
+                        maskEnabled: true
+                        maskSource: serviceIconMask
+                    }
+                }
+
+                TextField {
+                    id: searchInput
+                    anchors.left: serviceIcon.right
+                    anchors.leftMargin: 8
+                    anchors.right: iconArea.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: searchControl.expanded
+                    opacity: searchControl.expanded ? 1 : 0
+                    background: Item {}
+                    font.pixelSize: 13
+                    placeholderText: qsTr("Search")
+                    // Pre-filled with the term that got us here on a
+                    // search-results page, so a freshly-pushed page reads as
+                    // "still searching for this" rather than a blank box --
+                    // an initial value only (isSearchResults/searchTerm are
+                    // both fixed for the page's lifetime), typing normally
+                    // takes over from there.
+                    text: root.isSearchResults ? root.searchTerm : ""
+
+                    onAccepted: {
+                        const term = text.trim()
+                        if (term.length === 0)
+                            return
+
+                        // Deliberately left expanded (with this term still
+                        // showing) rather than collapsed/cleared -- the
+                        // pushed results page opens with its own box
+                        // already expanded and focused (see below), so
+                        // there's no longer any need to reset this one, and
+                        // leaving it means it reads the same way if the
+                        // user backs out to it later.
+                        root.stack.pushSearchResults(root.pageComponent, {
+                            title: term,
+                            service: root.service,
+                            searchTerm: term,
+                            stack: root.stack,
+                            pageComponent: root.pageComponent
+                        })
+                    }
+
+                    onActiveFocusChanged: {
+                        if (!activeFocus && text.length === 0)
+                            searchControl.expanded = false
+                    }
+
+                    Component.onCompleted: {
+                        // Cursor active and ready to refine the term
+                        // immediately, rather than requiring a click first.
+                        if (root.isSearchResults) {
+                            forceActiveFocus()
+                            cursorPosition = text.length
+                        }
+                    }
+                }
+
+                Item {
+                    id: iconArea
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 32
+                    height: 32
+
+                    Image {
+                        anchors.centerIn: parent
+                        source: "../resources/icons/search.svg"
+                        sourceSize.width: 18
+                        sourceSize.height: 18
+                    }
+
+                    MouseArea {
+                        id: iconMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (!searchControl.expanded) {
+                                searchControl.expanded = true
+                                searchInput.forceActiveFocus()
+                            } else if (searchInput.text.trim().length > 0) {
+                                searchInput.accepted()
+                            } else {
+                                searchControl.expanded = false
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Folder/album art header -- square art, title/artist underneath
+        // (same text treatment as NowPlayingPanel.qml's track title/artist),
+        // then a Play pill that plays this whole folder (its own uri is a
+        // container URI the zone expands into multiple queue entries --
+        // the exact mechanism BrowseListPage's "Play Now" row action
+        // already uses for a folder row, just applied to the folder this
+        // whole page IS rather than a row inside it).
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 10
+            // Extra room between the Play pill row and whatever comes next
+            // (filter pills or the results list) -- separate from the 10px
+            // spacing between this block's own children above.
+            Layout.bottomMargin: 16
+            visible: root.hasFolderArt
+
+            Item {
+                // 66% of the panel width rather than filling it, centered --
+                // Layout.preferredHeight matches Layout.preferredWidth so it
+                // stays square at any panel width.
+                Layout.preferredWidth: parent.width * 0.66
+                Layout.preferredHeight: Layout.preferredWidth
+                Layout.alignment: Qt.AlignHCenter
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 8
+                    color: "#E8E8E8"
+                    visible: folderArtImage.status !== Image.Ready
+                }
+
+                // Never shown directly -- MultiEffect below reads its pixels
+                // through `source:` and applies the mask. clip:true on a
+                // plain Rectangle only clips to its bounding box, not its
+                // own radius (same reasoning as MusicServiceRow.qml's icon
+                // masking, reused verbatim here), so a masked Image is the
+                // only way to actually get rounded corners on the art.
+                Image {
+                    id: folderArtImage
+                    anchors.fill: parent
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    source: root.folderItem.imageUrl ? root.folderItem.imageUrl : ""
+                    smooth: true
+                    mipmap: true
+                    visible: false
+                }
+
+                Item {
+                    id: folderArtMask
+                    anchors.fill: parent
+                    layer.enabled: true
+                    visible: false
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 8
+                        color: "black"
+                    }
+                }
+
+                MultiEffect {
+                    anchors.fill: parent
+                    visible: folderArtImage.status === Image.Ready
+                    source: folderArtImage
+                    maskEnabled: true
+                    maskSource: folderArtMask
+                }
+            }
+
+            Label {
+                Layout.fillWidth: true
+                text: root.title
+                font.pixelSize: Math.round(20 * UiScale.factor)
+                font.bold: true
+                color: "#212121"
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Label {
+                Layout.fillWidth: true
+                visible: text.length > 0
+                text: root.folderItem.artist ? root.folderItem.artist : ""
+                font.pixelSize: 14
+                color: "#212121"
+                opacity: 0.65
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            // Play pill (shrinks to fit the room name, but capped at the
+            // width it used to always be -- full row minus the two circular
+            // buttons -- so it can only get smaller, never push them out)
+            // plus shuffle/menu actions alongside it.
+            RowLayout {
+                id: playPillRow
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                spacing: 8
+
+                Rectangle {
+                    id: playPill
+                    // root.width (not playPillRow.width) -- reading a
+                    // RowLayout's own resolved width back out from within
+                    // one of its children's Layout.preferredWidth binding
+                    // isn't reliable (Qt Quick Layouts resolves a
+                    // fillWidth row's width and its children's preferred
+                    // sizes in passes that don't guarantee this settles),
+                    // and it showed: the pill collapsed to a sliver. Page
+                    // width is stable and known well before layout, so
+                    // derive the cap from that instead.
+                    readonly property int maxWidth: root.width - shuffleButton.implicitWidth
+                                                     - folderMenuButton.implicitWidth - playPillRow.spacing * 2
+                    // +4 slack beyond the exact fixed-chrome + text-width
+                    // sum -- an exact fit measured out to fractional pixels
+                    // (confirmed via a debug overlay: e.g. a 136.34375px
+                    // pill for text needing exactly 82.34375px) still
+                    // elided one notch early, since layout rounds to whole
+                    // device pixels and can round the assigned width down
+                    // a hair below the text's own implicitWidth.
+                    Layout.preferredWidth: Math.min(24 + 10 + 4 + 16 + 4 + roomNameMeasure.implicitWidth, maxWidth)
+                    // Same height as the two circular buttons beside it.
+                    Layout.preferredHeight: 32
+                    radius: height / 2
+                    color: playPillMouseArea.containsMouse ? "#E8E8E8" : "#F0F0F0"
+
+                    // Not part of the RowLayout below (and never shown) --
+                    // exists purely so its own implicitWidth reflects the
+                    // room name's natural unclipped text width. Reading
+                    // roomNameLabel.implicitWidth directly wouldn't work:
+                    // that Label's width is itself constrained by this
+                    // pill's own width (Layout.fillWidth within it), which
+                    // would make the pill's width depend on a value that in
+                    // turn depends on the pill's width -- a feedback loop
+                    // that collapses to a tiny/broken size instead of
+                    // resolving, rather than the plain "how wide would this
+                    // text like to be" figure actually needed here. A Label
+                    // (not a plain Text) specifically -- Label's own control
+                    // padding makes its implicitWidth a bit wider than a
+                    // same-font Text's, and undershooting truncated the pill
+                    // one notch early ("Living Ro…" instead of "Living Room").
+                    Label {
+                        id: roomNameMeasure
+                        visible: false
+                        text: roomNameLabel.text
+                        font: roomNameLabel.font
+                    }
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 4
+                        anchors.rightMargin: 16
+                        spacing: 10
+
+                        Item {
+                            Layout.preferredWidth: 24
+                            Layout.preferredHeight: 24
+
+                            Image {
+                                anchors.centerIn: parent
+                                source: "../resources/icons/play.svg"
+                                sourceSize.width: 16
+                                sourceSize.height: 16
+                            }
+                        }
+
+                        Label {
+                            id: roomNameLabel
+                            Layout.fillWidth: true
+                            text: root.zone ? root.zone.roomName : qsTr("No zone selected")
+                            font.pixelSize: 14
+                            font.bold: true
+                            color: "#212121"
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    MouseArea {
+                        id: playPillMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        enabled: !!root.zone
+                        onClicked: root.zone.playItem(root.folderItem)
+                    }
+                }
+
+                // Not wired to anything yet -- there's no shuffle-mode
+                // control on ZonePlayer to call into (AVTransport's
+                // SetPlayMode is wrapped but nothing above it decides/tracks
+                // a shuffle state), same "visual affordance only" situation
+                // as QueuePanel's Favourite entry.
+                IconButton {
+                    id: shuffleButton
+                    iconSource: "../resources/icons/shuffle.svg"
+                    iconSize: 18
+                    idleColor: "#F0F0F0"
+                    hoverColor: "#E4E4E4"
+                    pressedColor: "#D0D0D0"
+                }
+
+                // Opens the same context menu a row's own dots button does
+                // (Play Now/Play Next/Add to End of Queue/Replace Queue),
+                // targeting this whole folder instead of one row inside it.
+                IconButton {
+                    id: folderMenuButton
+                    iconSource: "../resources/icons/three_dots_vertical.svg"
+                    iconSize: 16
+                    idleColor: "#F0F0F0"
+                    hoverColor: "#E4E4E4"
+                    pressedColor: "#D0D0D0"
+                    onClicked: {
+                        rowMenu.currentItem = root.folderItem
+                        rowMenu.parent = folderMenuButton
+                        rowMenu.x = folderMenuButton.width - rowMenu.width
+                        rowMenu.y = folderMenuButton.height + 4
+                        rowMenu.open()
+                    }
+                }
+            }
+        }
+
+        // Filter pills for a search-results page -- which categories a
+        // service offers (Spotify: Tracks/Albums/Artists/Playlists, its
+        // own ids/titles, not something this app invents) only becomes
+        // known once the first search resolves them; see
+        // MusicService::searchCategories. Picking a different pill re-runs
+        // the same search term under that category instead. Centered
+        // (Layout.alignment, not Layout.fillWidth) rather than pinned left.
+        RowLayout {
+            Layout.alignment: Qt.AlignHCenter
+            spacing: 8
+            visible: root.isSearchResults && !!root.service && root.service.searchCategories.length > 0
+
+            Repeater {
+                model: root.service ? root.service.searchCategories : []
+
+                delegate: Rectangle {
+                    id: pill
+                    required property var modelData
+                    readonly property bool active: root.service && modelData.id === root.service.activeSearchCategory
+
+                    radius: height / 2
+                    implicitHeight: 28
+                    implicitWidth: pillLabel.implicitWidth + 20
+                    color: active ? "#D0D0D0" : (pillMouseArea.containsMouse ? "#E8E8E8" : "#F0F0F0")
+
+                    Label {
+                        id: pillLabel
+                        anchors.centerIn: parent
+                        text: pill.modelData.title
+                        font.pixelSize: 12
+                        font.bold: pill.active
+                        color: "#212121"
+                    }
+
+                    MouseArea {
+                        id: pillMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.switchCategory(pill.modelData.id)
+                    }
+                }
+            }
+        }
+
+        // Single flexible region: exactly one of loading/error/sign-in/
+        // results is showing at a time, but all four live here, overlaid,
+        // always claiming this same fillWidth+fillHeight space -- rather
+        // than being flat ColumnLayout siblings that only take up space
+        // while visible. That was the actual cause of the header (and the
+        // filter pills above) visibly shifting down while loading/empty:
+        // with nothing claiming the remaining height, the ColumnLayout's
+        // total content height shrank to fit, and it isn't top-anchored
+        // wide enough on its own to hold that space open across state
+        // changes. Keeping one region permanently sized fixes it for good,
+        // for ordinary browsing and search alike.
+        Item {
+            id: resultsArea
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 12
+                visible: root.loading
+
+                BusyIndicator {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: 48
+                    Layout.preferredHeight: 48
+                    running: root.loading
+                }
+
+                Label {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: root.isSearchResults ? qsTr("Searching…") : qsTr("Loading…")
+                    color: "#9E9E9E"
+                    font.pixelSize: 13
+                }
+            }
+
+            Label {
+                anchors.centerIn: parent
+                width: parent.width - 32
+                visible: !root.loading && !!root.errorMessage
+                text: root.errorMessage
+                color: "#D32F2F"
+                font.pixelSize: 13
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 8
+                visible: !root.loading && !!root.service && root.service.needsSignIn
+
+                Label {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("Sign in required")
+                    color: "#9E9E9E"
+                    font.pixelSize: 13
+                }
+
+                Button {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("Sign In")
+                    onClicked: signInDialog.open()
+                }
+            }
+
+            ListView {
+                id: listView
+                anchors.fill: parent
+                visible: !root.loading && !root.errorMessage && !(root.service && root.service.needsSignIn)
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                spacing: 4
+                model: root.items
+
+                delegate: MusicServiceRow {
+                    id: rowItem
+                    width: listView.width - 20
+                    title: modelData.title
+                    imageUrl: modelData.imageUrl
+                    showChevron: !!modelData.container
+                    showMenu: true
+                    showPlayOverlay: !modelData.container
+                    // Only within an actual album/playlist listing, and
+                    // only for the playable tracks in it -- a list position
+                    // isn't a meaningful "track number" for ordinary
+                    // browsing/search results.
+                    trackNumber: (root.hasFolderArt && !modelData.container)
+                                 ? String(index + 1).padStart(2, "0") : ""
+                    circularIcon: false
+
+                    onClicked: {
+                        if (modelData.container) {
+                            root.stack.pushFolder(root.pageComponent, {
+                                title: modelData.title,
+                                service: root.service,
+                                objectId: modelData.id,
+                                stack: root.stack,
+                                pageComponent: root.pageComponent,
+                                folderItem: modelData
+                            })
+                        } else if (root.zone) {
+                            // Playable leaf item -- modelData already carries
+                            // everything ZonePlayer::playItem() needs
+                            // (uri/upnpClass/didlId/parentId/desc), computed
+                            // by the service itself at parse time (see
+                            // SonosLibraryService/SmapiService.cpp).
+                            root.zone.playItem(modelData)
+                        }
+                    }
+
+                    onMenuRequested: {
+                        rowMenu.currentItem = modelData
+                        rowMenu.parent = rowItem
+                        rowMenu.x = rowItem.width - rowMenu.width - 8
+                        rowMenu.y = rowItem.height
+                        rowMenu.open()
+                    }
+                }
+
+                Label {
+                    anchors.centerIn: parent
+                    visible: listView.count === 0
+                    text: qsTr("Empty")
+                    color: "#9E9E9E"
+                    font.pixelSize: 13
+                }
+            }
+        }
+    }
+}

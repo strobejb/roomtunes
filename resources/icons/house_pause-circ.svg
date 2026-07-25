@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="House pause icon">
+    <defs>
+        <mask id="pause-cutout">
+            <rect width="256" height="256" fill="white" />
+            <circle cx="128" cy="151" r="72" fill="black" />
+            <circle cx="128" cy="151" r="60" fill="white" />
+            <rect x="96" y="121" width="21" height="60" fill="black" />
+            <rect x="139" y="121" width="21" height="60" fill="black" />
+        </mask>
+    </defs>
+    <path fill="black" mask="url(#pause-cutout)" d="M44 236V124H20L61 86V30h34v24.5L128 24l108 100h-24v112H44Z" />
+</svg>
