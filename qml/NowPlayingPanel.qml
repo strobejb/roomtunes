@@ -181,6 +181,7 @@ Item {
         zone: root.zone
         backgroundIsLight: root.backgroundIsLight
         contrastColor: root.contrastColor
+        pillColor: root.panelBackgroundColor
         controlHoverColor: root.controlHoverColor
         controlPressedColor: root.controlPressedColor
     }

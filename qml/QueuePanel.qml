@@ -140,7 +140,7 @@ Item {
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
                     anchors.left: parent.left
-                    anchors.leftMargin: 5
+                    anchors.leftMargin: 10
                     anchors.right: parent.right
                     anchors.rightMargin: -11
                     spacing: 12

@@ -54,12 +54,9 @@ Item {
     width: expanded ? expandedWidth : iconSize
     visible: root.zone !== null
 
-    Behavior on width {
-        NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
-    }
-
     property bool opened: false
     readonly property bool expanded: opened || mouseArea.hoverOpened || slider.dragging
+    readonly property real expandedOpacity: expanded ? 1 : 0
 
     // Matches the card's own current background -- unlike
     // NowPlayingVolumeControl.qml (which expands into open space below
@@ -69,19 +66,31 @@ Item {
     // reading as a garbled overlap (e.g. the status row's own "Vol 63"
     // running directly into this control's "63" label).
     property color pillColor: "white"
+    readonly property color pressedOverlayColor: root.backgroundIsLight
+        ? Qt.rgba(1, 1, 1, 0.22)
+        : Qt.rgba(0, 0, 0, 0.22)
 
     Rectangle {
         anchors.fill: parent
         radius: height / 2
         color: root.expanded ? root.pillColor : "transparent"
+        opacity: root.expandedOpacity
+
+        Behavior on opacity {
+            NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+        }
     }
 
     Rectangle {
         anchors.fill: parent
         radius: height / 2
         color: root.expanded
-            ? (slider.dragging ? root.pressedColor : root.hoverColor)
+            ? (slider.dragging ? root.pressedOverlayColor : root.hoverColor)
             : (mouseArea.iconHovered ? root.hoverColor : "transparent")
+
+        Behavior on color {
+            ColorAnimation { duration: 120 }
+        }
     }
 
     Item {
@@ -109,6 +118,11 @@ Item {
         width: root.sliderLength
         height: 12
         visible: root.expanded
+        opacity: root.expandedOpacity
+
+        Behavior on opacity {
+            NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+        }
 
         // Reads as 0 while muted rather than the real (unchanged) device
         // volume -- same reasoning as NowPlayingVolumeControl.qml's own
@@ -164,7 +178,11 @@ Item {
         text: root.zone ? Math.round(slider.displayRatio * 100) : ""
         font.pixelSize: 13
         color: root.contrastColor
-        opacity: 0.85
+        opacity: root.expandedOpacity * 0.85
+
+        Behavior on opacity {
+            NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+        }
     }
 
     // Single MouseArea over root's own (now variable) footprint -- see

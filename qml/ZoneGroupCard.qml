@@ -186,6 +186,7 @@ Rectangle {
     // ZoneVolumeControl.qml's own comment for why it needs its own
     // component rather than reusing that one directly.
     ZoneVolumeControl {
+        z: 10
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.margins: 8

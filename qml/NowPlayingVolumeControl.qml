@@ -17,6 +17,7 @@ Item {
     property var zone // ZonePlayer* -- null when no zone is selected
     property bool backgroundIsLight: true
     property color contrastColor: "#212121"
+    property color pillColor: "white"
     property color controlHoverColor: Qt.rgba(0, 0, 0, 0.1)
     property color controlPressedColor: Qt.rgba(0, 0, 0, 0.2)
     property bool expandOnHover: true
@@ -63,22 +64,38 @@ Item {
     readonly property int sliderHeight: 90
     property bool opened: false
     readonly property bool expanded: opened || volumeMouseArea.hoverOpened || volumeSlider.dragging
+    readonly property real expandedOpacity: expanded ? 1 : 0
+    readonly property color volumePressedColor: backgroundIsLight
+        ? blendToward(pillColor, Qt.rgba(1, 1, 1, 1), 0.22)
+        : blendToward(pillColor, Qt.rgba(0, 0, 0, 1), 0.22)
 
-    // The one thing that actually animates -- purely cosmetic, doesn't
-    // feed back into `expanded`.
+    Rectangle {
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: 44
+        height: root.iconHeight
+        radius: width / 2
+        color: volumeMouseArea.iconHovered && !root.expanded
+            ? root.controlHoverColor
+            : "transparent"
+    }
+
     Rectangle {
         id: pillBackground
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
         width: 44
-        height: root.expanded ? 44 + root.sliderLength : 44
+        height: 44 + root.sliderLength
         radius: width / 2
-        color: root.expanded
-            ? (volumeSlider.dragging ? root.controlPressedColor : root.controlHoverColor)
-            : (volumeMouseArea.iconHovered ? root.controlHoverColor : "transparent")
+        color: volumeSlider.dragging ? root.volumePressedColor : root.controlHoverColor
+        opacity: root.expandedOpacity
 
-        Behavior on height {
+        Behavior on opacity {
             NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+        }
+
+        Behavior on color {
+            ColorAnimation { duration: 120 }
         }
     }
 
@@ -101,6 +118,11 @@ Item {
         width: 12
         height: root.sliderHeight
         visible: root.expanded
+        opacity: root.expandedOpacity
+
+        Behavior on opacity {
+            NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+        }
 
         // Reads as 0 while muted rather than the real (unchanged) device
         // volume -- see the class comment above.
@@ -155,7 +177,11 @@ Item {
         text: root.zone ? Math.round(volumeSlider.displayRatio * 100) : ""
         font.pixelSize: 14
         color: root.contrastColor
-        opacity: 0.85
+        opacity: root.expandedOpacity * 0.85
+
+        Behavior on opacity {
+            NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+        }
     }
 
     // ONE MouseArea for the whole pill (icon + slider), covering the full

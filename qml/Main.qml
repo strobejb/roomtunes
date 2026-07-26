@@ -67,6 +67,7 @@ ApplicationWindow {
                   + shadowMargin * 2
 
     property var selectedZone: null
+    property bool compactZonesExpanded: false
 
     // Drives UiScale.factor (Zones column width + headline text) and
     // BrowseGrid.factor (Browse column width + tile grid column count)
@@ -110,7 +111,7 @@ ApplicationWindow {
     // overlayDim below) -- true for as long as either settings menu is
     // visible, including during its own fade-out.
     readonly property bool anyActionMenuOpen:
-        zonesPanel.settingsMenuOpen || browseSettingsMenu.visible
+        zonesPanel.settingsMenuOpen || zoneCompact.settingsMenuOpen || browseSettingsMenu.visible
 
     onSelectedZoneChanged: {
         if (selectedZone) {
@@ -212,6 +213,10 @@ ApplicationWindow {
                         // folded into the Browse panel) to see how it
                         // feels before committing to either.
                         visible: UiScale.factor > UiScale.minFactor
+                        onVisibleChanged: {
+                            if (visible)
+                                window.compactZonesExpanded = false
+                        }
 
                         ZonesPanel {
                             id: zonesPanel
@@ -273,20 +278,53 @@ ApplicationWindow {
                             // without needing the room back that a full
                             // list display would take.
                             ZoneGroupCompact {
+                                id: zoneCompact
                                 Layout.fillWidth: true
+                                Layout.fillHeight: window.compactZonesExpanded
+                                Layout.preferredHeight: window.compactZonesExpanded
+                                    ? Math.max(180, nowPlayingColumn.height
+                                                - nowPlaying.preferredHeight
+                                                - compactQueuePanel.Layout.preferredHeight
+                                                - 40)
+                                    : implicitHeight
                                 visible: !zonesColumn.visible
+                                expanded: window.compactZonesExpanded
+                                dragGhost: sharedDragGhost
                                 selectedZone: window.selectedZone
-                                onZoneSelected: (zone) => window.selectedZone = zone
+                                onZoneSelected: (zone) => {
+                                    window.selectedZone = zone
+                                    window.compactZonesExpanded = false
+                                }
+                                onExpandRequested: window.compactZonesExpanded = !window.compactZonesExpanded
+
+                                Behavior on Layout.preferredHeight {
+                                    NumberAnimation { duration: 260; easing.type: Easing.OutCubic }
+                                }
                             }
 
                             Panel {
+                                id: queuePanel
                                 Layout.fillWidth: true
-                                Layout.fillHeight: true
+                                Layout.fillHeight: !window.compactZonesExpanded
                                 Layout.minimumHeight: 140
+                                visible: !window.compactZonesExpanded
 
                                 QueuePanel {
                                     anchors.fill: parent
                                     queue: queueModel
+                                }
+                            }
+
+                            Panel {
+                                id: compactQueuePanel
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 44
+                                visible: window.compactZonesExpanded
+                                radius: height / 2
+
+                                QueueCompact {
+                                    anchors.fill: parent
+                                    onExpandRequested: window.compactZonesExpanded = false
                                 }
                             }
                         }
