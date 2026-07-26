@@ -3,10 +3,11 @@
 #include <QAbstractListModel>
 #include <QSet>
 
+#include "ZonePlayer.h"
+
 namespace RoomTunes {
 
 class Household;
-class ZonePlayer;
 
 // One row per Sonos play-group -- a set of zones playing in sync, sharing
 // a coordinator -- built from Household's zones. Zones the topology marks
@@ -27,6 +28,8 @@ public:
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
+    Q_INVOKABLE RoomTunes::ZonePlayer *firstCoordinator() const;
+    Q_INVOKABLE RoomTunes::ZonePlayer *canonicalCoordinator(RoomTunes::ZonePlayer *zone) const;
 
 private slots:
     void rebuild();

@@ -59,7 +59,7 @@ void GroupedZoneModel::rebuild()
     const QList<ZonePlayer *> zones = m_household->zones();
 
     for (ZonePlayer *zone : zones) {
-        if (zone->invisible())
+        if (zone->invisible() || !zone->hasValidTopology())
             continue;
 
         Group &group = byCoordinator[zone->coordinatorUdn()];
@@ -68,7 +68,11 @@ void GroupedZoneModel::rebuild()
         group.members.append(zone);
     }
 
-    m_groups = byCoordinator.values();
+    m_groups.clear();
+    for (const Group &group : byCoordinator) {
+        if (group.coordinator)
+            m_groups.append(group);
+    }
 
     for (Group &group : m_groups) {
         std::sort(group.members.begin(), group.members.end(), [&group](ZonePlayer *a, ZonePlayer *b) {
@@ -110,6 +114,26 @@ void GroupedZoneModel::scheduleRebuild()
         m_rebuildScheduled = false;
         rebuild();
     });
+}
+
+ZonePlayer *GroupedZoneModel::firstCoordinator() const
+{
+    return m_groups.isEmpty() ? nullptr : m_groups.constFirst().coordinator;
+}
+
+ZonePlayer *GroupedZoneModel::canonicalCoordinator(ZonePlayer *zone) const
+{
+    if (!zone)
+        return firstCoordinator();
+
+    for (const Group &group : m_groups) {
+        if (group.coordinator == zone)
+            return zone;
+        if (group.members.contains(zone))
+            return group.coordinator;
+    }
+
+    return firstCoordinator();
 }
 
 }

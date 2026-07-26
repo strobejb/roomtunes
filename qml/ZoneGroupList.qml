@@ -18,6 +18,12 @@ Item {
     property var selectedZone: null
     signal zoneSelected(var zone)
 
+    function normalizeSelection() {
+        const coordinator = groupsModel.canonicalCoordinator(root.selectedZone)
+        if (coordinator !== root.selectedZone)
+            root.zoneSelected(coordinator)
+    }
+
     ListView {
         id: zoneListView
         anchors.fill: parent
@@ -76,10 +82,7 @@ Item {
                     zone.leaveGroup()
                 }
             }
-            Component.onCompleted: {
-                if (index === 0 && root.selectedZone === null)
-                    root.zoneSelected(model.coordinator)
-            }
+            Component.onCompleted: root.normalizeSelection()
         }
 
         Label {
@@ -209,6 +212,7 @@ Item {
             target: groupsModel
             function onModelReset() {
                 zoneListView.processing = false
+                root.normalizeSelection()
             }
         }
     }

@@ -193,6 +193,12 @@ ApplicationWindow {
                     Layout.fillHeight: true
                     Layout.margins: 20
                     spacing: 20
+                    readonly property int outerMargins: 40
+                    readonly property int zonesPreferredWidth: Math.round(280 * UiScale.factor)
+                    readonly property int wideLayoutRequiredWidth:
+                        zonesPreferredWidth + nowPlaying.minimumCompactWidth + BrowseGrid.minimumColumnWidth
+                        + 40 // two inter-column gaps while Zones is visible
+                        + outerMargins
 
                     // Plain Item (not a Layout type) so Layout.preferredWidth actually
                     // sticks -- a ColumnLayout used directly as the RowLayout-managed,
@@ -202,17 +208,13 @@ ApplicationWindow {
                         Layout.preferredWidth: Math.round(280 * UiScale.factor)
                         Layout.fillHeight: true
                         clip: true
-                        // Below the width where this would otherwise be
-                        // stuck at its own cramped floor (UiScale.minFactor)
-                        // indefinitely, hide it outright instead and let
-                        // Now Playing/Browse have that space -- an
-                        // invisible RowLayout child is skipped entirely
-                        // (no reserved gap), same as BrowseTile's own
-                        // index<5 visibility trick. TEMPORARY: trying this
-                        // instead of moving Zones somewhere else (e.g.
-                        // folded into the Browse panel) to see how it
-                        // feels before committing to either.
-                        visible: UiScale.factor > UiScale.minFactor
+                        // Hide as soon as the full three-column layout no
+                        // longer fits inside the window's real content width.
+                        // Checking only UiScale.factor let the wide layout
+                        // persist a little too long, so Browse got clipped on
+                        // the right and lost its gutter before compact mode
+                        // took over.
+                        visible: background.width >= parent.wideLayoutRequiredWidth
                         onVisibleChanged: {
                             if (visible)
                                 window.compactZonesExpanded = false
