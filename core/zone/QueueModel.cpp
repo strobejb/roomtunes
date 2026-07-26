@@ -81,6 +81,10 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const
         return item->imageUrl();
     case IdRole:
         return item->id();
+    case ParentIdRole:
+        return item->parentId();
+    case UriRole:
+        return item->uri();
     default:
         return {};
     }
@@ -93,6 +97,8 @@ QHash<int, QByteArray> QueueModel::roleNames() const
         { ArtistRole, "artist" },
         { ImageUrlRole, "imageUrl" },
         { IdRole, "id" },
+        { ParentIdRole, "parentId" },
+        { UriRole, "uri" },
     };
 }
 

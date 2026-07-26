@@ -86,27 +86,25 @@ ColumnLayout {
         // a long track title forces this whole column (and everything
         // fillWidth beneath it, like the scrub bar) wider than root, and
         // the overflow renders past the panel's edge instead of eliding.
-        Text {
+        ScrollingText {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             text: root.track && root.track.title
                   ? root.track.title
                   : (root.zone ? qsTr("Nothing playing") : qsTr("No zone selected"))
-            font.pixelSize: 18
-            font.weight: Typography.emphasisWeight
+            pixelSize: 18
+            weight: Typography.emphasisWeight
             color: root.contrastColor
-            elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
         }
 
-        Text {
+        ScrollingText {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             text: root.track ? root.track.artist : ""
-            font.pixelSize: 13
+            pixelSize: 13
             color: root.contrastColor
-            opacity: 0.65
-            elide: Text.ElideRight
+            textOpacity: 0.65
             horizontalAlignment: Text.AlignHCenter
         }
 

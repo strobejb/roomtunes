@@ -1,11 +1,12 @@
 import QtQuick
 
 // Corner volume icon that reveals a vertical slider growing downward from
-// it on hover -- positioned by NowPlayingPanel.qml (top-right corner of
+// it, either on hover or after click depending on expandOnHover. Positioned
+// by NowPlayingPanel.qml (top-right corner of
 // the panel) as a sibling of whichever layout (NowPlayingWide.qml/
 // NowPlayingCompact.qml) is currently active, so it stays in a fixed
-// place regardless of which one is showing. Clicking the icon toggles
-// mute (the real UPnP mute flag, not a manual volume save/restore).
+// place regardless of which one is showing. In hover mode, clicking the
+// icon toggles mute; in click-to-open mode, the first click opens the pill.
 // Sonos itself leaves CurrentVolume untouched while muted -- the slider
 // display forces its own fill to 0 while muted regardless (see
 // volumeSlider.liveRatio below), and un-muting "restores" it for free
@@ -18,6 +19,7 @@ Item {
     property color contrastColor: "#212121"
     property color controlHoverColor: Qt.rgba(0, 0, 0, 0.1)
     property color controlPressedColor: Qt.rgba(0, 0, 0, 0.2)
+    property bool expandOnHover: true
     function blendToward(base, target, amount) {
         return Qt.rgba(
             base.r + (target.r - base.r) * amount,
@@ -59,12 +61,8 @@ Item {
     readonly property int iconHeight: 44
     readonly property int sliderTop: iconHeight + 4
     readonly property int sliderHeight: 90
-    // Opens only when the pointer entered via the icon circle, not merely
-    // by being anywhere in the (always-full-size) hit area -- see
-    // volumeMouseArea.enteredViaIcon. Once open, the whole pill (icon +
-    // revealed slider) keeps it open via containsMouse alone.
-    readonly property bool expanded:
-        (volumeMouseArea.containsMouse && volumeMouseArea.enteredViaIcon) || volumeSlider.dragging
+    property bool opened: false
+    readonly property bool expanded: opened || volumeMouseArea.hoverOpened || volumeSlider.dragging
 
     // The one thing that actually animates -- purely cosmetic, doesn't
     // feed back into `expanded`.
@@ -77,7 +75,7 @@ Item {
         radius: width / 2
         color: root.expanded
             ? (volumeSlider.dragging ? root.controlPressedColor : root.controlHoverColor)
-            : "transparent"
+            : (volumeMouseArea.iconHovered ? root.controlHoverColor : "transparent")
 
         Behavior on height {
             NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
@@ -185,39 +183,32 @@ Item {
         // drag itself already applied the new volume on release).
         property bool pressStartedInIcon: false
 
-        // Whether the pointer reached the icon's 44px circle at some
-        // point during the current hover -- the pill should only *open*
-        // from there, not from hovering the (invisible while collapsed)
-        // slider band below it. Sticky for as long as containsMouse stays
-        // true, so moving down into the now-revealed slider doesn't close
-        // it again; reset once the pointer leaves the whole footprint.
-        property bool enteredViaIcon: false
+        property bool iconHovered: containsMouse && mouseY <= root.iconHeight
+        property bool hoverOpened: false
 
         function ratioFor(mouseY) {
             return 1 - Math.max(0, Math.min(1, (mouseY - root.sliderTop) / root.sliderHeight))
         }
 
         onContainsMouseChanged: {
-            if (!containsMouse)
-                enteredViaIcon = false
-            else if (mouseY <= root.iconHeight)
-                enteredViaIcon = true
+            if (!containsMouse) {
+                root.opened = false
+                hoverOpened = false
+            } else if (root.expandOnHover && mouseY <= root.iconHeight) {
+                hoverOpened = true
+            }
         }
 
         onPressed: mouse => {
             pressStartedInIcon = mouse.y <= root.iconHeight
-            if (!pressStartedInIcon) {
+            if (root.expanded && !pressStartedInIcon) {
                 volumeSlider.dragging = true
                 volumeSlider.dragRatio = ratioFor(mouse.y)
             }
         }
         onPositionChanged: mouse => {
-            // Covers entering the footprint below the icon first (so the
-            // pill stays closed) and then moving up into the icon without
-            // ever leaving the footprint -- onContainsMouseChanged alone
-            // only fires on entry, using whatever y it entered at.
-            if (containsMouse && !enteredViaIcon && mouse.y <= root.iconHeight)
-                enteredViaIcon = true
+            if (containsMouse && root.expandOnHover && !hoverOpened && mouse.y <= root.iconHeight)
+                hoverOpened = true
             if (volumeSlider.dragging)
                 volumeSlider.dragRatio = ratioFor(mouse.y)
         }
@@ -229,8 +220,12 @@ Item {
             }
         }
         onClicked: {
-            if (pressStartedInIcon)
-                root.zone.setMuted(!root.zone.muted)
+            if (pressStartedInIcon) {
+                if (root.expandOnHover || root.expanded)
+                    root.zone.setMuted(!root.zone.muted)
+                else
+                    root.opened = true
+            }
         }
     }
 }

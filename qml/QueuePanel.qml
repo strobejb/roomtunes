@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects
 import QtQuick.Layouts
 
 // Scrollable "Up Next" queue list for the currently selected zone/group.
@@ -74,6 +75,8 @@ Item {
             id: listView
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.leftMargin: -5
+            Layout.rightMargin: -5
             clip: true
             spacing: 4
             model: root.queue
@@ -82,15 +85,37 @@ Item {
                 id: rowItem
                 width: listView.width - 16
                 height: 56
+                readonly property var currentTrack:
+                    root.queue && root.queue.zone ? root.queue.zone.currentTrack : null
+                readonly property string rowTrackId: model.id ? String(model.id) : ""
+                readonly property string rowTrackUri: model.uri ? String(model.uri) : ""
+                readonly property string currentTrackId: currentTrack && currentTrack.id ? String(currentTrack.id) : ""
+                readonly property string currentTrackUri: currentTrack && currentTrack.uri ? String(currentTrack.uri) : ""
+                readonly property bool isCurrentQueueTrack:
+                    (!!rowTrackUri && rowTrackUri === currentTrackUri)
+                    || queueIdMatches(rowTrackId, currentTrackId)
+                readonly property bool rowHoverActive: mouseArea.containsMouse && !rowMenuButton.hovered
 
-                // Same bleed-into-the-margin hover highlight as
-                // MusicServiceRow.qml's Browse/search rows.
+                function queueIdMatches(rowId, trackId) {
+                    if (!rowId || !trackId)
+                        return false
+                    return trackId === rowId
+                        || trackId.indexOf(rowId + "/") === 0
+                        || rowId.indexOf(trackId + "/") === 0
+                }
+
+                // Bleeds into the panel gutter without moving row content.
+                // Plain x/width mirrors MusicServiceRow.qml's workaround for
+                // conditional overhang geometry.
                 Rectangle {
-                    anchors.fill: parent
-                    anchors.leftMargin: -10
-                    anchors.rightMargin: -10
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    x: 0
+                    width: parent.width + 16
                     radius: 10
-                    color: mouseArea.containsMouse ? "#F5F5F5" : "transparent"
+                    color: rowItem.rowHoverActive
+                           ? "#F5F5F5"
+                           : (rowItem.isCurrentQueueTrack && !rowMenuButton.hovered ? "#E0E0E0" : "transparent")
                 }
 
                 // Already-queued track -- Seek(TRACK_NR) + Play, no
@@ -112,15 +137,24 @@ Item {
                 }
 
                 RowLayout {
-                    anchors.fill: parent
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.leftMargin: 5
+                    anchors.right: parent.right
+                    anchors.rightMargin: -11
                     spacing: 12
 
-                    Rectangle {
+                    Item {
                         Layout.preferredWidth: 44
                         Layout.preferredHeight: 44
-                        radius: 6
-                        color: "#E8E8E8"
-                        clip: true
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 6
+                            color: "#E8E8E8"
+                            visible: artImage.status !== Image.Ready
+                        }
 
                         Image {
                             id: artImage
@@ -128,7 +162,32 @@ Item {
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
                             source: model.imageUrl ? model.imageUrl : ""
-                            visible: status === Image.Ready
+                            sourceSize.width: width
+                            sourceSize.height: height
+                            smooth: true
+                            mipmap: true
+                            visible: false
+                        }
+
+                        Item {
+                            id: artMask
+                            anchors.fill: parent
+                            layer.enabled: true
+                            visible: false
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 6
+                                color: "black"
+                            }
+                        }
+
+                        MultiEffect {
+                            anchors.fill: parent
+                            visible: artImage.status === Image.Ready
+                            source: artImage
+                            maskEnabled: true
+                            maskSource: artMask
                         }
 
                         Text {
@@ -146,7 +205,7 @@ Item {
                         Rectangle {
                             anchors.fill: parent
                             color: "#000000"
-                            opacity: mouseArea.containsMouse ? 0.45 : 0
+                            opacity: rowItem.rowHoverActive ? 0.45 : 0
                             visible: opacity > 0
                             Behavior on opacity { NumberAnimation { duration: 120 } }
                         }
@@ -156,7 +215,7 @@ Item {
                             source: "../resources/icons/play_light.svg"
                             sourceSize.width: 16
                             sourceSize.height: 16
-                            visible: mouseArea.containsMouse
+                            visible: rowItem.rowHoverActive
                         }
                     }
 
@@ -184,6 +243,7 @@ Item {
                     }
 
                     IconButton {
+                        id: rowMenuButton
                         iconSource: "../resources/icons/three_dots_vertical.svg"
                         iconSize: 16
                         onClicked: {

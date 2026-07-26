@@ -28,6 +28,8 @@ public:
         ArtistRole,
         ImageUrlRole,
         IdRole,
+        ParentIdRole,
+        UriRole,
     };
 
     explicit QueueModel(QObject *parent = nullptr);

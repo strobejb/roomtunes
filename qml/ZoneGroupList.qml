@@ -76,10 +76,6 @@ Item {
                     zone.leaveGroup()
                 }
             }
-            // No per-card settings menu exists yet -- see
-            // ZoneGroupCard.qml's own settingsRequested comment.
-            onSettingsRequested: {}
-
             Component.onCompleted: {
                 if (index === 0 && root.selectedZone === null)
                     root.zoneSelected(model.coordinator)

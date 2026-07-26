@@ -49,6 +49,8 @@ qt_add_qml_module(RoomTunes
         qml/BrowseGrid.qml
         qml/Typography.qml
         qml/Panel.qml
+        qml/EqualizerIcon.qml
+        qml/ScrollingText.qml
         qml/ZoneGroupCard.qml
         qml/ZoneGroupList.qml
         qml/ZonesPanel.qml

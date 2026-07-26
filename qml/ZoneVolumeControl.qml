@@ -1,7 +1,7 @@
 import QtQuick
 
-// Same interaction model as NowPlayingVolumeControl.qml (hover the icon
-// to reveal a draggable slider, click the icon to toggle mute), but
+// Same interaction model as NowPlayingVolumeControl.qml (hover highlights
+// the icon circle, click reveals a draggable slider), but
 // horizontal and expanding to the *left* instead of vertical/downward --
 // fits the zone card's own top-right corner, where the icon has to stay
 // fixed in place with the room name to its left, unlike Now Playing's
@@ -19,6 +19,7 @@ Item {
     property var zone // ZonePlayer* -- null when no coordinator yet
     property bool backgroundIsLight: true
     property color contrastColor: "#212121"
+    property bool expandOnHover: true
 
     // Contrast-based, not a fixed black tint -- this sits on cards that
     // can go dark/accent-colored (see ZoneGroupCard.qml), unlike Now
@@ -57,8 +58,8 @@ Item {
         NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
     }
 
-    readonly property bool expanded:
-        (mouseArea.containsMouse && mouseArea.enteredViaIcon) || slider.dragging
+    property bool opened: false
+    readonly property bool expanded: opened || mouseArea.hoverOpened || slider.dragging
 
     // Matches the card's own current background -- unlike
     // NowPlayingVolumeControl.qml (which expands into open space below
@@ -80,17 +81,24 @@ Item {
         radius: height / 2
         color: root.expanded
             ? (slider.dragging ? root.pressedColor : root.hoverColor)
-            : "transparent"
+            : (mouseArea.iconHovered ? root.hoverColor : "transparent")
     }
 
-    Image {
+    Item {
+        id: iconSlot
         anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        source: root.backgroundIsLight
-            ? "../resources/icons/" + root.volumeIconName + ".svg"
-            : "../resources/icons/" + root.volumeIconName + "_light.svg"
-        sourceSize.width: 18
-        sourceSize.height: 18
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: root.iconSize
+
+        Image {
+            anchors.centerIn: parent
+            source: root.backgroundIsLight
+                ? "../resources/icons/" + root.volumeIconName + ".svg"
+                : "../resources/icons/" + root.volumeIconName + "_light.svg"
+            sourceSize.width: 18
+            sourceSize.height: 18
+        }
     }
 
     Item {
@@ -172,18 +180,13 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
 
-        // Which region the button went down in -- decides whether
-        // onClicked toggles mute (icon) or is a no-op (slider, where the
-        // drag itself already applied the new volume on release).
+        // Which region the button went down in -- decides whether onClicked
+        // opens the pill/toggles mute (icon) or is a no-op (slider, where
+        // the drag itself already applied the new volume on release).
         property bool pressStartedInIcon: false
 
-        // Whether the pointer reached the icon's own region (root's
-        // rightmost iconSize px, in root's *current* coordinate space --
-        // works whether root is collapsed or expanded) at some point
-        // during the current hover -- sticky for as long as containsMouse
-        // stays true, same reasoning as NowPlayingVolumeControl.qml's own
-        // enteredViaIcon.
-        property bool enteredViaIcon: false
+        property bool iconHovered: containsMouse && inIcon(mouseX)
+        property bool hoverOpened: false
 
         function inIcon(mouseX) {
             return mouseX >= root.width - root.iconSize
@@ -198,22 +201,24 @@ Item {
         }
 
         onContainsMouseChanged: {
-            if (!containsMouse)
-                enteredViaIcon = false
-            else if (inIcon(mouseX))
-                enteredViaIcon = true
+            if (!containsMouse) {
+                root.opened = false
+                hoverOpened = false
+            } else if (root.expandOnHover && inIcon(mouseX)) {
+                hoverOpened = true
+            }
         }
 
         onPressed: mouse => {
             pressStartedInIcon = inIcon(mouse.x)
-            if (!pressStartedInIcon) {
+            if (root.expanded && !pressStartedInIcon) {
                 slider.dragging = true
                 slider.dragRatio = ratioFor(mouse.x)
             }
         }
         onPositionChanged: mouse => {
-            if (containsMouse && !enteredViaIcon && inIcon(mouse.x))
-                enteredViaIcon = true
+            if (containsMouse && root.expandOnHover && !hoverOpened && inIcon(mouse.x))
+                hoverOpened = true
             if (slider.dragging)
                 slider.dragRatio = ratioFor(mouse.x)
         }
@@ -225,8 +230,12 @@ Item {
             }
         }
         onClicked: {
-            if (pressStartedInIcon)
-                root.zone.setMuted(!root.zone.muted)
+            if (pressStartedInIcon) {
+                if (root.expandOnHover || root.expanded)
+                    root.zone.setMuted(!root.zone.muted)
+                else
+                    root.opened = true
+            }
         }
     }
 }

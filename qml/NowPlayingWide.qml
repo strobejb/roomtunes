@@ -55,7 +55,7 @@ ColumnLayout {
             // eliding (see the same fix in NowPlayingCompact.qml, where a
             // short "stupid song" title already reproduced the overflow
             // at narrow widths).
-            Text {
+            ScrollingText {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 // Always reserves the volume pill's width rather than
@@ -66,20 +66,18 @@ ColumnLayout {
                 text: root.track && root.track.title
                       ? root.track.title
                       : (root.zone ? qsTr("Nothing playing") : qsTr("No zone selected"))
-                font.pixelSize: 20
-                font.weight: Typography.emphasisWeight
+                pixelSize: 20
+                weight: Typography.emphasisWeight
                 color: root.contrastColor
-                elide: Text.ElideRight
             }
 
-            Text {
+            ScrollingText {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 text: root.track ? root.track.artist : ""
-                font.pixelSize: 14
+                pixelSize: 14
                 color: root.contrastColor
-                opacity: 0.65
-                elide: Text.ElideRight
+                textOpacity: 0.65
             }
 
             NowPlayingScrubBar {

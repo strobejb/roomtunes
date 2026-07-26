@@ -17,6 +17,7 @@ Item {
     property color idleColor: "transparent"
     property color hoverColor: "#F0F0F0"
     property color pressedColor: "#D0D0D0"
+    readonly property bool hovered: mouseArea.containsMouse
 
     signal clicked()
     signal pressed()

@@ -250,16 +250,22 @@ ZonePlayer *ZoneDiscovery::allocateZone(const QString &deviceIp, const QString &
 
 void ZoneDiscovery::fetchDeviceDescription(ZonePlayer *zone)
 {
+    const QString udn = zone->udn();
+    const QString deviceIp = zone->deviceIp();
     QNetworkRequest request{QUrl(zone->baseUrl() + QStringLiteral("xml/device_description.xml"))};
     QNetworkReply *reply = m_netMgr->get(request);
 
-    connect(reply, &QNetworkReply::finished, this, [this, zone, reply]() {
+    connect(reply, &QNetworkReply::finished, this, [this, udn, deviceIp, reply]() {
         reply->deleteLater();
 
         if (reply->error() != QNetworkReply::NoError) {
-            QWARN() << "device_description fetch failed for" << zone->deviceIp() << reply->errorString();
+            QWARN() << "device_description fetch failed for" << deviceIp << reply->errorString();
             return;
         }
+
+        ZonePlayer *zone = m_zones.value(udn);
+        if (!zone)
+            return;
 
         QXmlStreamReader xml(reply->readAll());
 
@@ -401,10 +407,11 @@ void ZoneDiscovery::subscribeTopology()
     const QString localAddress = localAddressForPeer(topologyZoneVal->deviceIp());
     QLOG() << "ZoneGroupTopology SUBSCRIBE to" << topologyZoneVal->deviceIp() << "callback" << localAddress
            << m_notifyServer.port();
+    const QString topologyZoneUdn = topologyZoneVal->udn();
     QNetworkReply *reply = topologyZoneVal->zoneGroupTopology().subscribe(localAddress, m_notifyServer.port(),
                                                                            kTopologySubscriptionTimeoutSeconds);
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply, topologyZoneVal]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, topologyZoneUdn]() {
         reply->deleteLater();
 
         if (reply->error() != QNetworkReply::NoError) {
@@ -413,6 +420,10 @@ void ZoneDiscovery::subscribeTopology()
             refreshTopology();
             return;
         }
+
+        ZonePlayer *topologyZoneVal = m_zones.value(topologyZoneUdn);
+        if (!topologyZoneVal)
+            return;
 
         const QString sid = QString::fromUtf8(reply->rawHeader("SID"));
         m_topologySubscriptionSid = sid;
@@ -437,16 +448,21 @@ void ZoneDiscovery::renewTopologySubscription()
         return;
 
     const QString localAddress = localAddressForPeer(topologyZoneVal->deviceIp());
+    const QString topologyZoneUdn = topologyZoneVal->udn();
     QNetworkReply *reply = topologyZoneVal->zoneGroupTopology().subscribe(localAddress, m_notifyServer.port(),
                                                                            kTopologySubscriptionTimeoutSeconds);
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply, topologyZoneVal]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, topologyZoneUdn]() {
         reply->deleteLater();
 
         if (reply->error() != QNetworkReply::NoError) {
             QWARN() << "ZoneGroupTopology resubscribe failed:" << reply->errorString();
             return;
         }
+
+        ZonePlayer *topologyZoneVal = m_zones.value(topologyZoneUdn);
+        if (!topologyZoneVal)
+            return;
 
         const QString sid = QString::fromUtf8(reply->rawHeader("SID"));
         m_topologySubscriptionSid = sid;

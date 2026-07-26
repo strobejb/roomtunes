@@ -45,11 +45,6 @@ Rectangle {
     // that one zone from the group -- Main.qml calls zone.leaveGroup().
     signal unlinkRequested(var zone)
 
-    // Emitted by the corner settings/cog icon. No per-card settings menu
-    // exists yet, so this just surfaces the intent, same as
-    // unlinkRequested/dropRequested above.
-    signal settingsRequested()
-
     // True while this card is the current drop target -- set from
     // outside (by zoneListView's hit-testing in Main.qml, not by this
     // card itself), since eligibility is based on where the mouse is,
@@ -200,48 +195,6 @@ Rectangle {
         pillColor: card.cardBackground
     }
 
-    // Settings/cog icon, bottom-right corner -- only shown at all while
-    // hovering the card (unlike the always-visible volume icon), and
-    // even then sits at half strength until the pointer is over the
-    // icon itself, which brings it to full strength. No per-card
-    // settings menu exists yet, so this just surfaces the intent via
-    // settingsRequested() for now.
-    Rectangle {
-        id: cardSettingsButton
-        width: 32
-        height: 32
-        radius: 16
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.margins: 8
-        visible: card.cardHovered
-        opacity: cardSettingsMouseArea.containsMouse ? 1.0 : 0.5
-        color: cardSettingsMouseArea.pressed
-               ? Qt.rgba(card.contrastColor.r, card.contrastColor.g, card.contrastColor.b, 0.18)
-               : (cardSettingsMouseArea.containsMouse
-                  ? Qt.rgba(card.contrastColor.r, card.contrastColor.g, card.contrastColor.b, 0.10)
-                  : "transparent")
-
-        Behavior on opacity {
-            NumberAnimation { duration: 150 }
-        }
-
-        Image {
-            anchors.centerIn: parent
-            source: card.backgroundIsLight ? "../resources/icons/settings.svg" : "../resources/icons/settings_light.svg"
-            sourceSize.width: 18
-            sourceSize.height: 18
-        }
-
-        MouseArea {
-            id: cardSettingsMouseArea
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: card.settingsRequested()
-        }
-    }
-
     // Split out from cardMouseArea's handlers above (rather than left
     // inline) so the same drag sequence can be driven programmatically
     // -- useful for verifying this without dragging a real mouse, the
@@ -310,35 +263,215 @@ Rectangle {
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.margins: 14
-        // Wide enough to clear the volume/settings corner buttons
-        // (32px + 8px margin each) at both the top and bottom of the
-        // card, since content can run the full height between them.
+        // Wide enough to clear the volume corner button (32px + 8px
+        // margin), since content can run the full height below it.
         anchors.rightMargin: 48
-        spacing: 8
+        spacing: 12
 
-        Row {
+        Item {
+            id: statusRow
+            readonly property bool isPlaying: card.coordinator && card.coordinator.playStateText === "Playing"
+            readonly property string stateText: card.coordinator ? card.coordinator.playStateText : ""
+            readonly property var track: card.coordinator ? card.coordinator.currentTrack : null
+            readonly property string titleArtistText: {
+                if (!track || !track.title)
+                    return ""
+                return track.artist ? (track.title + " • " + track.artist) : track.title
+            }
+            readonly property string artistTitleText: {
+                if (!track || !track.title)
+                    return ""
+                return track.artist ? (track.artist + " • " + track.title) : track.title
+            }
+            readonly property bool canCycle: isPlaying && titleArtistText.length > 0
+            readonly property int textLeft: playStateIcon.width + 8
+            readonly property int textWidth: Math.max(0, width - textLeft)
+            readonly property int longPauseMs: 5000
+            readonly property int briefPauseMs: 1500
+            readonly property real pixelsPerSecond: 42
+            property int statusPhase: 0
+            property int pendingStatusPhase: 0
+            property bool animating: false
+            property bool fadingToState: false
+            property string currentStatusText: stateText
+            property string nextStatusText: ""
+
             width: parent.width
-            spacing: 8
+            height: 20
 
-            Rectangle {
-                width: 10
-                height: 10
-                radius: 5
-                anchors.verticalCenter: parent.verticalCenter
-                // Only overridden to plain contrastColor while showing an
-                // accent-colored card -- otherwise this keeps its normal
-                // ready/not-ready meaning.
-                color: card.hasAccent
-                       ? card.contrastColor
-                       : (card.coordinator && card.coordinator.ready ? "#4CAF50" : "#BDBDBD")
+            onStateTextChanged: resetStatusCycle()
+            onTitleArtistTextChanged: resetStatusCycle()
+            onArtistTitleTextChanged: resetStatusCycle()
+            onCanCycleChanged: resetStatusCycle()
+
+            function resetStatusCycle() {
+                transitionTimer.stop()
+                statusSlideAnimation.stop()
+                statusFadeAnimation.stop()
+                animating = false
+                fadingToState = false
+                statusPhase = 0
+                pendingStatusPhase = 0
+                currentStatusText = stateText
+                nextStatusText = ""
+                currentStatusTextItem.x = 0
+                currentStatusTextItem.opacity = 0.7
+                nextStatusTextItem.x = statusTextViewport.width
+                nextStatusTextItem.opacity = 0.7
+                transitionTimer.interval = longPauseMs
+                if (canCycle)
+                    transitionTimer.restart()
             }
 
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: card.coordinator ? (card.coordinator.playStateText + " · Vol " + card.coordinator.volume) : ""
-                font.pixelSize: 12
-                color: card.contrastColor
-                opacity: 0.7
+            function textForPhase(phase) {
+                if (phase === 1)
+                    return titleArtistText
+                if (phase === 2)
+                    return artistTitleText
+                return stateText
+            }
+
+            function startStatusTransition() {
+                if (!canCycle || animating)
+                    return
+                pendingStatusPhase = statusPhase === 0 ? 1 : (statusPhase === 1 ? 2 : 0)
+                animating = true
+                fadingToState = statusPhase === 0 || pendingStatusPhase === 0
+                nextStatusText = textForPhase(pendingStatusPhase)
+                if (fadingToState) {
+                    currentStatusTextItem.opacity = 0.7
+                    nextStatusTextItem.x = 0
+                    nextStatusTextItem.opacity = 0
+                    statusFadeAnimation.start()
+                } else {
+                    nextStatusTextItem.x = statusTextViewport.width
+                    nextStatusTextItem.opacity = 0.7
+                    statusSlideAnimation.start()
+                }
+            }
+
+            Timer {
+                id: transitionTimer
+                interval: 5000
+                repeat: false
+                onTriggered: statusRow.startStatusTransition()
+            }
+
+            Item {
+                id: playStateIcon
+                width: 18
+                height: 16
+                x: 0
+                y: currentStatusTextItem.y + currentStatusTextItem.baselineOffset - height
+
+                EqualizerIcon {
+                    anchors.centerIn: parent
+                    visible: statusRow.isPlaying
+                    running: visible
+                    barColor: card.hasAccent ? card.contrastColor : "#4CAF50"
+                }
+
+                Rectangle {
+                    width: 10
+                    height: 10
+                    radius: 2
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    visible: !statusRow.isPlaying
+                    color: card.hasAccent ? card.contrastColor : "#616161"
+                }
+            }
+
+            Item {
+                id: statusTextViewport
+                x: statusRow.textLeft
+                width: statusRow.textWidth
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                clip: true
+
+                Text {
+                    id: currentStatusTextItem
+                    width: statusTextViewport.width
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: statusRow.currentStatusText
+                    font.pixelSize: 12
+                    color: card.contrastColor
+                    opacity: 0.7
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    id: nextStatusTextItem
+                    x: statusTextViewport.width
+                    width: statusTextViewport.width
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: statusRow.nextStatusText
+                    font.pixelSize: currentStatusTextItem.font.pixelSize
+                    color: currentStatusTextItem.color
+                    opacity: 0.7
+                    elide: Text.ElideRight
+                }
+            }
+
+            ParallelAnimation {
+                id: statusSlideAnimation
+
+                NumberAnimation {
+                    target: currentStatusTextItem
+                    property: "x"
+                    to: -statusTextViewport.width
+                    duration: Math.max(2400,
+                                       Math.round(statusTextViewport.width / statusRow.pixelsPerSecond * 1000))
+                    easing.type: Easing.InOutSine
+                }
+
+                NumberAnimation {
+                    target: nextStatusTextItem
+                    property: "x"
+                    to: 0
+                    duration: Math.max(2400,
+                                       Math.round(statusTextViewport.width / statusRow.pixelsPerSecond * 1000))
+                    easing.type: Easing.InOutSine
+                }
+
+                onFinished: statusRow.finishStatusTransition()
+            }
+
+            ParallelAnimation {
+                id: statusFadeAnimation
+
+                NumberAnimation {
+                    target: currentStatusTextItem
+                    property: "opacity"
+                    to: 0
+                    duration: 450
+                    easing.type: Easing.OutQuad
+                }
+
+                NumberAnimation {
+                    target: nextStatusTextItem
+                    property: "opacity"
+                    to: 0.7
+                    duration: 700
+                    easing.type: Easing.InOutQuad
+                }
+
+                onFinished: statusRow.finishStatusTransition()
+            }
+
+            function finishStatusTransition() {
+                statusPhase = pendingStatusPhase
+                currentStatusText = nextStatusText
+                nextStatusText = ""
+                currentStatusTextItem.x = 0
+                currentStatusTextItem.opacity = 0.7
+                nextStatusTextItem.x = statusTextViewport.width
+                nextStatusTextItem.opacity = 0.7
+                animating = false
+                transitionTimer.interval = statusPhase === 1 ? briefPauseMs : longPauseMs
+                if (canCycle)
+                    transitionTimer.restart()
             }
         }
 
@@ -362,7 +495,62 @@ Rectangle {
                 }
 
                 Row {
-                    spacing: 6
+                    width: parent.width
+                    spacing: 10
+
+                    // Per-card settings/cog affordance, placed before each
+                    // zone title so grouped zones get the same affordance as
+                    // single-zone cards.
+                    Item {
+                        id: cardSettingsButton
+                        width: 16
+                        height: 24
+                        anchors.verticalCenter: parent.verticalCenter
+                        opacity: cardSettingsMouseArea.containsMouse ? 1.0 : 0.3
+
+                        Behavior on opacity {
+                            NumberAnimation { duration: 150 }
+                        }
+
+                        Rectangle {
+                            id: cardSettingsHoverCircle
+                            width: 24
+                            height: 24
+                            radius: 12
+                            x: (cardSettingsButton.width - width) / 2
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: cardSettingsMouseArea.pressed
+                                   ? Qt.rgba(card.contrastColor.r, card.contrastColor.g, card.contrastColor.b, 0.18)
+                                   : (cardSettingsMouseArea.containsMouse
+                                      ? Qt.rgba(card.contrastColor.r, card.contrastColor.g, card.contrastColor.b, 0.10)
+                                      : "transparent")
+                        }
+
+                        Image {
+                            anchors.centerIn: parent
+                            source: card.backgroundIsLight ? "../resources/icons/settings.svg" : "../resources/icons/settings_light.svg"
+                            sourceSize.width: 16
+                            sourceSize.height: 16
+                        }
+
+                        MouseArea {
+                            id: cardSettingsMouseArea
+                            anchors.fill: cardSettingsHoverCircle
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: zoneSettingsMenu.open()
+                        }
+
+                        ActionMenu {
+                            id: zoneSettingsMenu
+                            parent: cardSettingsButton
+                            x: 0
+                            y: cardSettingsButton.height + 4
+                            items: [qsTr("Leave zone group")]
+
+                            onItemClicked: card.unlinkRequested(memberBlock.zone)
+                        }
+                    }
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
@@ -370,39 +558,6 @@ Rectangle {
                         font.pixelSize: Math.round(16 * UiScale.factor)
                         font.weight: Typography.emphasisWeight
                         color: card.contrastColor
-                    }
-
-                    // Removes just this one zone from the group -- only
-                    // meaningful (and only shown) when there's more than
-                    // one zone to unlink from, and even then only while
-                    // hovering the card.
-                    Rectangle {
-                        id: unlinkButton
-                        width: 24
-                        height: 24
-                        radius: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: card.cardHovered && card.members.length > 1
-                        color: unlinkMouseArea.pressed
-                               ? Qt.rgba(card.contrastColor.r, card.contrastColor.g, card.contrastColor.b, 0.18)
-                               : (unlinkMouseArea.containsMouse
-                                  ? Qt.rgba(card.contrastColor.r, card.contrastColor.g, card.contrastColor.b, 0.10)
-                                  : "transparent")
-
-                        Image {
-                            anchors.centerIn: parent
-                            source: card.backgroundIsLight ? "../resources/icons/unlink.svg" : "../resources/icons/unlink_light.svg"
-                            sourceSize.width: 15
-                            sourceSize.height: 15
-                        }
-
-                        MouseArea {
-                            id: unlinkMouseArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: card.unlinkRequested(memberBlock.zone)
-                        }
                     }
                 }
             }
