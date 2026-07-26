@@ -2,11 +2,10 @@ import QtQuick
 import QtQuick.Window
 import QtQuick.Layouts
 
-// Custom-drawn title bar: draggable title strip + platform-ordered
-// minimize/maximize/close buttons. Button glyphs and left/right placement
-// come from PlatformChrome (fixed on Windows, read from GNOME's own
-// gsettings button-layout on Linux) so the custom bar matches whatever
-// native windows already look like on that desktop.
+// Custom-drawn title bar: draggable title strip + platform-appropriate
+// minimize/maximize/close buttons. Windows keeps its native right-side
+// caption layout; the Linux/GNOME-style headerbar keeps a single app/menu
+// button on the left and puts window controls on the right.
 Item {
     id: titleBar
 
@@ -17,7 +16,11 @@ Item {
     // the Now Playing column's center instead.
     property real centerX: width / 2
 
-    implicitHeight: 40
+    readonly property bool linuxHeaderBar: !PlatformChrome.isWindows
+    readonly property var linuxWindowButtons: configuredWindowButtons()
+    readonly property int buttonEdgePadding: linuxHeaderBar ? 6 : 0
+
+    implicitHeight: linuxHeaderBar ? 46 : 40
 
     function glyphFor(name) {
         switch (name) {
@@ -26,6 +29,20 @@ Item {
         case "close": return "✕"
         default: return ""
         }
+    }
+
+    function isWindowButton(name) {
+        return name === "minimize" || name === "maximize" || name === "close"
+    }
+
+    function configuredWindowButtons() {
+        var controls = []
+        var configured = PlatformChrome.leftButtons.concat(PlatformChrome.rightButtons)
+        for (var i = 0; i < configured.length; ++i) {
+            if (isWindowButton(configured[i]) && controls.indexOf(configured[i]) < 0)
+                controls.push(configured[i])
+        }
+        return controls.length > 0 ? controls : ["close"]
     }
 
     function toggleMaximize() {
@@ -50,7 +67,10 @@ Item {
         // controls on the right for now; not wired to a menu yet.
         WindowButton {
             id: menuButton
+            Layout.leftMargin: titleBar.buttonEdgePadding
             glyph: "☰"
+            glyphPixelSize: titleBar.linuxHeaderBar ? 20 : 11
+            linuxHeaderBar: titleBar.linuxHeaderBar
         }
 
         // Repeater delegates directly as RowLayout children (not wrapped in
@@ -59,8 +79,11 @@ Item {
         // Repeater-instantiated children, leaving every button stacked at
         // (0,0) instead of laid out side by side.
         Repeater {
-            model: PlatformChrome.leftButtons
+            model: titleBar.linuxHeaderBar ? [] : PlatformChrome.leftButtons
             delegate: WindowButton {
+                buttonName: modelData
+                appWindow: titleBar.appWindow
+                linuxHeaderBar: titleBar.linuxHeaderBar
                 glyph: titleBar.glyphFor(modelData)
                 danger: modelData === "close"
                 onClicked: titleBar.activate(modelData)
@@ -81,8 +104,14 @@ Item {
         }
 
         Repeater {
-            model: PlatformChrome.rightButtons
+            model: titleBar.linuxHeaderBar ? titleBar.linuxWindowButtons : PlatformChrome.rightButtons
             delegate: WindowButton {
+                Layout.rightMargin: titleBar.linuxHeaderBar && index === titleBar.linuxWindowButtons.length - 1
+                                    ? titleBar.buttonEdgePadding
+                                    : 0
+                buttonName: modelData
+                appWindow: titleBar.appWindow
+                linuxHeaderBar: titleBar.linuxHeaderBar
                 glyph: titleBar.glyphFor(modelData)
                 danger: modelData === "close"
                 onClicked: titleBar.activate(modelData)

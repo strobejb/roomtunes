@@ -125,6 +125,10 @@ qt_add_qml_module(RoomTunes
         resources/icons/triangle_down_light.svg
         resources/icons/triangle_up.svg
         resources/icons/triangle_up_light.svg
+        resources/icons/window_close_symbolic.svg
+        resources/icons/window_maximize_symbolic.svg
+        resources/icons/window_minimize_symbolic.svg
+        resources/icons/window_restore_symbolic.svg
 )
 
 target_link_libraries(RoomTunes PRIVATE Qt6::Quick Qt6::QuickControls2 roomtunes_core)
