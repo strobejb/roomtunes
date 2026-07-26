@@ -201,7 +201,7 @@ private:
     QString m_soapUrl;
     QString m_soapAction;
     QString m_language;
-    QSslConfiguration m_sslConfig;
+    QSslConfiguration m_sslConfig = QSslConfiguration::defaultConfiguration();
 
     QMap<QString, QString> m_cred;
     CredentialType m_credType = CredentialType::None;

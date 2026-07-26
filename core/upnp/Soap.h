@@ -6,6 +6,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QSslConfiguration>
+#include <QSslError>
 #include <QUrl>
 #include <QXmlStreamWriter>
 
@@ -145,6 +146,15 @@ public:
         reply->setProperty("soapMethod", m_method);
         reply->setProperty("soapAction", action);
         reply->setProperty("destHost", QUrl(url).host());
+        QObject::connect(reply, &QNetworkReply::sslErrors, reply, [reply](const QList<QSslError> &errors) {
+            for (const QSslError &error : errors) {
+                qCWarning(logSoap).noquote()
+                    << QStringLiteral("%1 %2 SSL error: %3")
+                           .arg(reply->property("destHost").toString(),
+                                reply->property("soapMethod").toString(),
+                                error.errorString());
+            }
+        });
         return reply;
     }
 
