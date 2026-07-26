@@ -93,7 +93,7 @@ ColumnLayout {
                   ? root.track.title
                   : (root.zone ? qsTr("Nothing playing") : qsTr("No zone selected"))
             font.pixelSize: 18
-            font.bold: true
+            font.weight: Typography.emphasisWeight
             color: root.contrastColor
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter

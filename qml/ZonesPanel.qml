@@ -33,7 +33,7 @@ Item {
                 Layout.fillWidth: true
                 text: qsTr("Zones")
                 font.pixelSize: Math.round(18 * UiScale.factor)
-                font.bold: true
+                font.weight: Typography.emphasisWeight
                 color: "#212121"
             }
 

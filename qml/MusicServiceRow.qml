@@ -185,7 +185,7 @@ Item {
             Layout.fillWidth: true
             text: root.title
             font.pixelSize: Math.round(15 * UiScale.factor)
-            font.bold: true
+            font.weight: Typography.emphasisWeight
             color: "#212121"
             elide: Text.ElideRight
         }

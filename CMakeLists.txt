@@ -36,7 +36,7 @@ target_include_directories(RoomTunes PRIVATE src)
 # this, qt_add_qml_module registers it as an ordinary (non-singleton)
 # type, so a bare "UiScale.factor" reference silently resolves to
 # undefined instead of the shared instance.
-set_source_files_properties(qml/UiScale.qml qml/BrowseGrid.qml PROPERTIES
+set_source_files_properties(qml/UiScale.qml qml/BrowseGrid.qml qml/Typography.qml PROPERTIES
     QT_QML_SINGLETON_TYPE TRUE
 )
 
@@ -47,6 +47,7 @@ qt_add_qml_module(RoomTunes
         qml/Main.qml
         qml/UiScale.qml
         qml/BrowseGrid.qml
+        qml/Typography.qml
         qml/Panel.qml
         qml/ZoneGroupCard.qml
         qml/ZoneGroupList.qml
@@ -133,3 +134,7 @@ set_target_properties(RoomTunes PROPERTIES
     WIN32_EXECUTABLE ON
     MACOSX_BUNDLE ON
 )
+
+if(UNIX AND NOT APPLE)
+    set_target_properties(RoomTunes PROPERTIES OUTPUT_NAME roomtunes)
+endif()

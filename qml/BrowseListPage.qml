@@ -222,7 +222,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.title
                 font.pixelSize: Math.round(16 * UiScale.factor)
-                font.bold: true
+                font.weight: Typography.emphasisWeight
                 color: "#212121"
                 elide: Text.ElideRight
             }
@@ -479,7 +479,7 @@ Item {
                 Layout.fillWidth: true
                 text: root.title
                 font.pixelSize: Math.round(20 * UiScale.factor)
-                font.bold: true
+                font.weight: Typography.emphasisWeight
                 color: "#212121"
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
@@ -577,7 +577,7 @@ Item {
                             Layout.fillWidth: true
                             text: root.zone ? root.zone.roomName : qsTr("No zone selected")
                             font.pixelSize: 14
-                            font.bold: true
+                            font.weight: Typography.emphasisWeight
                             color: "#212121"
                             elide: Text.ElideRight
                         }
@@ -658,7 +658,7 @@ Item {
                         anchors.centerIn: parent
                         text: pill.modelData.title
                         font.pixelSize: 12
-                        font.bold: pill.active
+                        font.weight: pill.active ? Typography.emphasisWeight : Font.Normal
                         color: "#212121"
                     }
 

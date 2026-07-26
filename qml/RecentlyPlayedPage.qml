@@ -58,7 +58,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: qsTr("Recently Played")
                 font.pixelSize: Math.round(16 * UiScale.factor)
-                font.bold: true
+                font.weight: Typography.emphasisWeight
                 color: "#212121"
                 elide: Text.ElideRight
             }

@@ -44,7 +44,7 @@ Item {
                 Layout.fillWidth: true
                 text: qsTr("Queue")
                 font.pixelSize: Math.round(18 * UiScale.factor)
-                font.bold: true
+                font.weight: Typography.emphasisWeight
                 color: "#212121"
             }
 
@@ -169,7 +169,7 @@ Item {
                             Layout.fillWidth: true
                             text: model.title
                             font.pixelSize: Math.round(15 * UiScale.factor)
-                            font.bold: true
+                            font.weight: Typography.emphasisWeight
                             color: "#212121"
                             elide: Text.ElideRight
                         }

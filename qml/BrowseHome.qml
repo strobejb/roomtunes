@@ -155,7 +155,7 @@ Item {
                 Layout.fillWidth: true
                 text: qsTr("Browse")
                 font.pixelSize: Math.round(18 * UiScale.factor)
-                font.bold: true
+                font.weight: Typography.emphasisWeight
                 color: "#212121"
             }
 
@@ -189,7 +189,7 @@ Item {
                             Layout.fillWidth: true
                             text: qsTr("Recently Played")
                             font.pixelSize: 14
-                            font.bold: true
+                            font.weight: Typography.emphasisWeight
                             color: "#212121"
                         }
 
@@ -282,7 +282,7 @@ Item {
                             Layout.fillWidth: true
                             text: qsTr("Favourites")
                             font.pixelSize: 14
-                            font.bold: true
+                            font.weight: Typography.emphasisWeight
                             color: "#212121"
                         }
 
@@ -357,7 +357,7 @@ Item {
                             Layout.fillWidth: true
                             text: qsTr("Your Services")
                             font.pixelSize: 14
-                            font.bold: true
+                            font.weight: Typography.emphasisWeight
                             color: "#212121"
                         }
 

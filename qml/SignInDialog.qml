@@ -79,7 +79,7 @@ Popup {
             Layout.fillWidth: true
             text: qsTr("Sign in to %1").arg(dialog.service ? dialog.service.title : "")
             font.pixelSize: 15
-            font.bold: true
+            font.weight: Typography.emphasisWeight
             color: "#212121"
             wrapMode: Text.WordWrap
         }
@@ -109,7 +109,7 @@ Popup {
                 Layout.alignment: Qt.AlignHCenter
                 text: dialog.linkCode
                 font.pixelSize: 22
-                font.bold: true
+                font.weight: Typography.emphasisWeight
                 color: "#212121"
             }
 

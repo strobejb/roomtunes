@@ -101,7 +101,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         text: titleBar.titleText
         font.pixelSize: 13
-        font.bold: true
+        font.weight: Typography.emphasisWeight
         color: "#3A3A3A"
         elide: Text.ElideRight
     }

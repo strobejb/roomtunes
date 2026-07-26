@@ -402,7 +402,7 @@ Rectangle {
                         anchors.verticalCenter: parent.verticalCenter
                         text: memberBlock.zone ? memberBlock.zone.roomName : ""
                         font.pixelSize: Math.round(16 * UiScale.factor)
-                        font.bold: true
+                        font.weight: Typography.emphasisWeight
                         color: card.contrastColor
                     }
 

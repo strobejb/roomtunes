@@ -86,7 +86,7 @@ Item {
                     Layout.fillWidth: true
                     text: root.selectedZone ? root.selectedZone.roomName : qsTr("No zone selected")
                     font.pixelSize: 14
-                    font.bold: true
+                    font.weight: Typography.emphasisWeight
                     color: root.contrastColor
                     elide: Text.ElideRight
                 }
