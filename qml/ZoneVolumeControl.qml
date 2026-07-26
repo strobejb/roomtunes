@@ -1,0 +1,232 @@
+import QtQuick
+
+// Same interaction model as NowPlayingVolumeControl.qml (hover the icon
+// to reveal a draggable slider, click the icon to toggle mute), but
+// horizontal and expanding to the *left* instead of vertical/downward --
+// fits the zone card's own top-right corner, where the icon has to stay
+// fixed in place with the room name to its left, unlike Now Playing's
+// open space below.
+//
+// Unlike that version, this one's own hit area (not just the visible
+// pill) actually grows/shrinks with `expanded`, rather than always
+// sitting at its full max footprint. An always-max horizontal footprint
+// here would silently overlap the room name text even while collapsed,
+// which NowPlayingVolumeControl never has to worry about -- there's
+// nothing else competing for input in the space it reserves.
+Item {
+    id: root
+
+    property var zone // ZonePlayer* -- null when no coordinator yet
+    property bool backgroundIsLight: true
+    property color contrastColor: "#212121"
+
+    // Contrast-based, not a fixed black tint -- this sits on cards that
+    // can go dark/accent-colored (see ZoneGroupCard.qml), unlike Now
+    // Playing's own fixed-background context. Same 0.10/0.18 alphas as
+    // that card's other icon buttons (volume/settings/unlink), for a
+    // consistent hover/press feel across all of them.
+    readonly property color hoverColor: Qt.rgba(contrastColor.r, contrastColor.g, contrastColor.b, 0.10)
+    readonly property color pressedColor: Qt.rgba(contrastColor.r, contrastColor.g, contrastColor.b, 0.18)
+
+    // Same threshold logic as NowPlayingVolumeControl.qml's own
+    // volumeIconName -- see its own comment for the bb10 provenance.
+    readonly property string volumeIconName: {
+        if (!zone)
+            return "volume_1"
+        if (zone.muted)
+            return "volume_x"
+        if (zone.volume < 5)
+            return "volume_0"
+        if (zone.volume < 20)
+            return "volume_1"
+        return "volume_2"
+    }
+
+    readonly property int iconSize: 32
+    readonly property int sliderLength: 90
+    readonly property int sliderGap: 10
+    readonly property int labelGap: 8
+    readonly property int labelWidth: 26
+    readonly property int expandedWidth: iconSize + sliderGap + sliderLength + labelGap + labelWidth
+
+    height: iconSize
+    width: expanded ? expandedWidth : iconSize
+    visible: root.zone !== null
+
+    Behavior on width {
+        NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+    }
+
+    readonly property bool expanded:
+        (mouseArea.containsMouse && mouseArea.enteredViaIcon) || slider.dragging
+
+    // Matches the card's own current background -- unlike
+    // NowPlayingVolumeControl.qml (which expands into open space below
+    // it), this expands leftward *over* the card's own room-name/status
+    // text. Without an opaque backdrop here, that text shows straight
+    // through the low-alpha hover tint underneath the slider/label,
+    // reading as a garbled overlap (e.g. the status row's own "Vol 63"
+    // running directly into this control's "63" label).
+    property color pillColor: "white"
+
+    Rectangle {
+        anchors.fill: parent
+        radius: height / 2
+        color: root.expanded ? root.pillColor : "transparent"
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        radius: height / 2
+        color: root.expanded
+            ? (slider.dragging ? root.pressedColor : root.hoverColor)
+            : "transparent"
+    }
+
+    Image {
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        source: root.backgroundIsLight
+            ? "../resources/icons/" + root.volumeIconName + ".svg"
+            : "../resources/icons/" + root.volumeIconName + "_light.svg"
+        sourceSize.width: 18
+        sourceSize.height: 18
+    }
+
+    Item {
+        id: slider
+        anchors.right: parent.right
+        anchors.rightMargin: root.iconSize + root.sliderGap
+        anchors.verticalCenter: parent.verticalCenter
+        width: root.sliderLength
+        height: 12
+        visible: root.expanded
+
+        // Reads as 0 while muted rather than the real (unchanged) device
+        // volume -- same reasoning as NowPlayingVolumeControl.qml's own
+        // liveRatio.
+        readonly property real liveRatio:
+            (root.zone && !root.zone.muted) ? Math.max(0, Math.min(1, root.zone.volume / 100)) : 0
+        property bool dragging: false
+        property real dragRatio: 0
+        readonly property real displayRatio: dragging ? dragRatio : liveRatio
+
+        Rectangle {
+            id: volumeTrack
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            height: 3
+            radius: 1.5
+            color: root.contrastColor
+            opacity: 0.3
+        }
+
+        // Fills from the left, growing toward the icon on the right as
+        // volume increases -- horizontal counterpart of
+        // NowPlayingVolumeControl's own "fills from the bottom upward,
+        // toward the icon" convention.
+        Rectangle {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            height: 3
+            radius: 1.5
+            width: volumeTrack.width * slider.displayRatio
+            color: root.contrastColor
+        }
+
+        Rectangle {
+            width: 10
+            height: 10
+            radius: 5
+            color: root.contrastColor
+            anchors.verticalCenter: parent.verticalCenter
+            x: volumeTrack.width * slider.displayRatio - width / 2
+        }
+    }
+
+    // Balances the icon -- mirrors slider's own displayRatio (not
+    // root.zone.volume directly), same reasoning as
+    // NowPlayingVolumeControl.qml's own label.
+    Text {
+        anchors.right: slider.left
+        anchors.rightMargin: root.labelGap
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root.expanded
+        text: root.zone ? Math.round(slider.displayRatio * 100) : ""
+        font.pixelSize: 13
+        color: root.contrastColor
+        opacity: 0.85
+    }
+
+    // Single MouseArea over root's own (now variable) footprint -- see
+    // NowPlayingVolumeControl.qml's own comment for why one MouseArea
+    // rather than several stacked ones. root.width changing underneath
+    // it is fine: Qt Quick re-evaluates containsMouse against whatever
+    // the current bounds are, so a press that starts the expansion keeps
+    // being tracked correctly as the area grows around the still-hovered
+    // point.
+    MouseArea {
+        id: mouseArea
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+
+        // Which region the button went down in -- decides whether
+        // onClicked toggles mute (icon) or is a no-op (slider, where the
+        // drag itself already applied the new volume on release).
+        property bool pressStartedInIcon: false
+
+        // Whether the pointer reached the icon's own region (root's
+        // rightmost iconSize px, in root's *current* coordinate space --
+        // works whether root is collapsed or expanded) at some point
+        // during the current hover -- sticky for as long as containsMouse
+        // stays true, same reasoning as NowPlayingVolumeControl.qml's own
+        // enteredViaIcon.
+        property bool enteredViaIcon: false
+
+        function inIcon(mouseX) {
+            return mouseX >= root.width - root.iconSize
+        }
+
+        function ratioFor(mouseX) {
+            // The slider's own left edge, in root's local coordinate
+            // space, regardless of root's current (possibly
+            // mid-animation) width.
+            var sliderLeft = root.width - root.iconSize - root.sliderGap - root.sliderLength
+            return Math.max(0, Math.min(1, (mouseX - sliderLeft) / root.sliderLength))
+        }
+
+        onContainsMouseChanged: {
+            if (!containsMouse)
+                enteredViaIcon = false
+            else if (inIcon(mouseX))
+                enteredViaIcon = true
+        }
+
+        onPressed: mouse => {
+            pressStartedInIcon = inIcon(mouse.x)
+            if (!pressStartedInIcon) {
+                slider.dragging = true
+                slider.dragRatio = ratioFor(mouse.x)
+            }
+        }
+        onPositionChanged: mouse => {
+            if (containsMouse && !enteredViaIcon && inIcon(mouse.x))
+                enteredViaIcon = true
+            if (slider.dragging)
+                slider.dragRatio = ratioFor(mouse.x)
+        }
+        onReleased: mouse => {
+            if (slider.dragging) {
+                slider.dragRatio = ratioFor(mouse.x)
+                slider.dragging = false
+                root.zone.setVolume(Math.round(slider.dragRatio * 100))
+            }
+        }
+        onClicked: {
+            if (pressStartedInIcon)
+                root.zone.setMuted(!root.zone.muted)
+        }
+    }
+}

@@ -46,22 +46,36 @@ Item {
         : blendToward(barBackground, Qt.rgba(1, 1, 1, 1), 0.12)
 
     RowLayout {
-        Layout.fillWidth: true
         anchors.fill: parent
-
-
+        spacing: 8
 
         Rectangle {
             id: bar
-            width: parent.width
-            //Layout.fillWidth: true
-            anchors.fill: parent
-            anchors.rightMargin: 42 // space for cog
-            radius: 16//height / 2
+            // Layout.fillWidth/fillHeight, not anchors.fill: parent --
+            // anchoring to the outer RowLayout's own bounds made this
+            // ignore the row's layout entirely and claim the full width,
+            // leaving no room for zonesSettingsButton beside it (it was
+            // being squeezed to zero width rather than actually
+            // appearing "on the right").
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            radius: height / 2
             color: mouseArea.containsMouse ? root.hoverColor : root.barBackground
 
             Behavior on color {
                 ColorAnimation { duration: 400 }
+            }
+
+            // Shadow lives on the pill itself, not the whole root item --
+            // matches ZoneGroupCard.qml's own layer.effect-on-the-card
+            // treatment, so the shadow actually hugs this rounded shape
+            // instead of the icon button's own separate bounding box too.
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: "#22000000"
+                shadowBlur: 0.5
+                shadowVerticalOffset: 2
             }
 
             RowLayout {
@@ -82,8 +96,11 @@ Item {
                            : (root.selectedZone && root.selectedZone.ready ? "#4CAF50" : "#BDBDBD")
                 }
 
+                // No Layout.fillWidth here -- keeps the arrow sitting
+                // right next to the name instead of pinned to the pill's
+                // far right edge (the row's own remaining space, if any,
+                // just stays empty to the right of the arrow).
                 Label {
-                    Layout.fillWidth: true
                     text: root.selectedZone ? root.selectedZone.roomName : qsTr("No zone selected")
                     font.pixelSize: 14
                     font.weight: Typography.emphasisWeight
@@ -91,16 +108,17 @@ Item {
                     elide: Text.ElideRight
                 }
 
-                // A Text glyph, not an Image -- there's no chevron_light.svg
-                // variant to switch to on a dark accent background, and
-                // recoloring an SVG at runtime needs a mask/colorize effect
-                // that's already been found unreliable in this Qt build (see
-                // MusicServiceRow.qml) -- same reasoning TransportIconButton.qml
-                // falls back to a Unicode glyph for shuffle/repeat.
-                Text {
-                    text: "⌄"
-                    font.pixelSize: 16
-                    color: root.contrastColor
+                // Recolored light/dark SVG pair, not a runtime-tinted
+                // single asset -- same reasoning as ZoneGroupCard.qml's
+                // own icon buttons (see e.g. unlink.svg/unlink_light.svg):
+                // an SVG can't be recolored reliably at runtime in this
+                // Qt build.
+                Image {
+                    source: root.backgroundIsLight
+                            ? "../resources/icons/triangle_down.svg"
+                            : "../resources/icons/triangle_down_light.svg"
+                    sourceSize.width: 10
+                    sourceSize.height: 10
                 }
             }
 
@@ -205,8 +223,12 @@ Item {
         }
 
         IconButton {
-            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
             id: zonesSettingsButton
+            Layout.alignment: Qt.AlignVCenter
+            // A little breathing room from root's own right edge --
+            // spacing: 8 on the outer RowLayout already separates it
+            // from the pill on its left.
+            Layout.rightMargin: 4
             iconSource: "../resources/icons/settings.svg"
             onPressed: zonesSettingsMenu.open()
         }
@@ -222,14 +244,5 @@ Item {
             y: zonesSettingsButton.height + 6
             items: [qsTr("Mute All")]
         }
-
-    }
-
-    layer.enabled: true
-    layer.effect: MultiEffect {
-        shadowEnabled: true
-        shadowColor: "#22000000"
-        shadowBlur: 0.5
-        shadowVerticalOffset: 2
     }
 }

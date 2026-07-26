@@ -52,10 +52,13 @@ Item {
     height: 44 + sliderLength
     visible: root.zone !== null
 
-    readonly property int sliderLength: 110
+    // 134, not 110 -- grown to fit the volume-level label below the
+    // slider (see volumeLabel below) while keeping the slider's own
+    // draggable track (sliderHeight) the same length it always was.
+    readonly property int sliderLength: 134
     readonly property int iconHeight: 44
     readonly property int sliderTop: iconHeight + 4
-    readonly property int sliderHeight: sliderLength - 20
+    readonly property int sliderHeight: 90
     // Opens only when the pointer entered via the icon circle, not merely
     // by being anywhere in the (always-full-size) hit area -- see
     // volumeMouseArea.enteredViaIcon. Once open, the whole pill (icon +
@@ -139,6 +142,22 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             y: volumeTrack.height * (1 - volumeSlider.displayRatio) - height / 2
         }
+    }
+
+    // Balances the icon at the top -- mirrors volumeSlider's own
+    // displayRatio (not root.zone.volume directly) so it always agrees
+    // with the fill/thumb position: the live dragged value while
+    // dragging, and 0 while muted, same reasoning as the fill Rectangle
+    // above.
+    Text {
+        anchors.top: volumeSlider.bottom
+        anchors.topMargin: 8
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: root.expanded
+        text: root.zone ? Math.round(volumeSlider.displayRatio * 100) : ""
+        font.pixelSize: 14
+        color: root.contrastColor
+        opacity: 0.85
     }
 
     // ONE MouseArea for the whole pill (icon + slider), covering the full

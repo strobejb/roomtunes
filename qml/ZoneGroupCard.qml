@@ -184,54 +184,20 @@ Rectangle {
 
     // Mute-toggle icon, top-right corner -- always shown, always at full
     // strength (unlike the settings cog below) since volume/mute state
-    // is worth seeing at a glance rather than only on hover. Icon glyph
-    // mirrors NowPlayingVolumeControl.qml's own volume/mute threshold
-    // logic, but as a plain click-to-mute button rather than that
-    // component's hover-expanding slider: this card is far too short to
-    // fit that control's fixed 154px-tall footprint without it
-    // overlapping neighboring cards.
-    Rectangle {
-        id: volumeButton
-        width: 32
-        height: 32
-        radius: 16
+    // is worth seeing at a glance rather than only on hover. Hovering it
+    // reveals the same drag-to-set-volume slider as
+    // NowPlayingVolumeControl.qml, just horizontal and expanding to the
+    // left (into the card) instead of vertical/downward -- see
+    // ZoneVolumeControl.qml's own comment for why it needs its own
+    // component rather than reusing that one directly.
+    ZoneVolumeControl {
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.margins: 8
-        color: volumeMouseArea.pressed
-               ? Qt.rgba(card.contrastColor.r, card.contrastColor.g, card.contrastColor.b, 0.18)
-               : (volumeMouseArea.containsMouse
-                  ? Qt.rgba(card.contrastColor.r, card.contrastColor.g, card.contrastColor.b, 0.10)
-                  : "transparent")
-
-        readonly property string volumeIconName: {
-            if (!card.coordinator)
-                return "volume_1"
-            if (card.coordinator.muted)
-                return "volume_x"
-            if (card.coordinator.volume < 5)
-                return "volume_0"
-            if (card.coordinator.volume < 20)
-                return "volume_1"
-            return "volume_2"
-        }
-
-        Image {
-            anchors.centerIn: parent
-            source: card.backgroundIsLight
-                    ? "../resources/icons/" + volumeButton.volumeIconName + ".svg"
-                    : "../resources/icons/" + volumeButton.volumeIconName + "_light.svg"
-            sourceSize.width: 18
-            sourceSize.height: 18
-        }
-
-        MouseArea {
-            id: volumeMouseArea
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: if (card.coordinator) card.coordinator.setMuted(!card.coordinator.muted)
-        }
+        zone: card.coordinator
+        backgroundIsLight: card.backgroundIsLight
+        contrastColor: card.contrastColor
+        pillColor: card.cardBackground
     }
 
     // Settings/cog icon, bottom-right corner -- only shown at all while

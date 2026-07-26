@@ -62,6 +62,7 @@ qt_add_qml_module(RoomTunes
         qml/NowPlayingScrubBar.qml
         qml/NowPlayingTransportControls.qml
         qml/NowPlayingVolumeControl.qml
+        qml/ZoneVolumeControl.qml
         qml/QueuePanel.qml
         qml/MusicServiceRow.qml
         qml/BrowseHome.qml
@@ -117,6 +118,8 @@ qt_add_qml_module(RoomTunes
         resources/icons/library.svg
         resources/icons/unlink.svg
         resources/icons/unlink_light.svg
+        resources/icons/triangle_down.svg
+        resources/icons/triangle_down_light.svg
 )
 
 target_link_libraries(RoomTunes PRIVATE Qt6::Quick Qt6::QuickControls2 roomtunes_core)
