@@ -1,10 +1,13 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include <QList>
 
 namespace RoomTunes {
 
 class Household;
+class BrowseRecencyStore;
+class MusicService;
 
 // One row per browsable music service on this household -- the Sonos
 // Music Library plus every SMAPI service actually configured/logged-in --
@@ -21,9 +24,10 @@ public:
         ServiceRole = Qt::UserRole + 1,
         TitleRole,
         ImageUrlRole,
+        ServiceKeyRole,
     };
 
-    explicit MusicServiceListModel(Household *household, QObject *parent = nullptr);
+    explicit MusicServiceListModel(Household *household, BrowseRecencyStore *recencyStore, QObject *parent = nullptr);
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
@@ -33,7 +37,11 @@ private slots:
     void rebuild();
 
 private:
+    MusicService *serviceAt(int row) const;
+    QList<MusicService *> services() const;
+
     Household *m_household;
+    BrowseRecencyStore *m_recencyStore;
 };
 
 }

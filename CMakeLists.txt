@@ -120,6 +120,8 @@ qt_add_qml_module(RoomTunes
         resources/icons/three_dots.svg
         resources/icons/three_dots_vertical.svg
         resources/icons/library.svg
+        resources/icons/line_in.svg
+        resources/icons/tv.svg
         resources/icons/unlink.svg
         resources/icons/unlink_light.svg
         resources/icons/triangle_down.svg

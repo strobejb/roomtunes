@@ -202,10 +202,7 @@ void Household::fetchMusicServiceCatalog()
 
 // Matches roomtunes-bb10's "building service map:" dump (ServiceDiscovery.cpp)
 // -- one line per catalog entry: household-scoped serviceId -> smapiId,
-// title, auth policy, container type, SMAPI endpoint. Plus the handful of
-// pre-SMAPI legacy services (Pandora, Last.fm, Napster, Rhapsody), which
-// never appear in the catalog response at all -- Sonos expects the client
-// to already know their names (see MusicServiceCatalog::legacyServiceName()).
+// title, auth policy, container type, SMAPI endpoint.
 void Household::logServiceMap() const
 {
     QLOG() << "--------------------------------------------------------------------------------";
@@ -301,27 +298,24 @@ void Household::rebuildMusicServices()
     QStringList installedServiceLines;
 
     for (InstalledService service : std::as_const(m_rawInstalledServices)) {
-        // Prefer Sonos' own current global catalog -- matching the
-        // official app, which doesn't show service registrations that have
-        // fallen out of ListAvailableServices. The handful of pre-SMAPI
-        // legacy services (Pandora, Rhapsody, Napster, Last.fm) never
-        // appear in that catalog at all though, so they're kept around via
-        // their hardcoded names rather than dropped entirely.
+        // TPMSX is an account/config snapshot, not proof that a service is
+        // still usable. Legacy registrations such as Pandora/Last.fm can
+        // remain in TPMSX long after Sonos has removed them from the modern
+        // controller UX. Match the official app by only showing installed
+        // services that also resolve through the current ListAvailableServices
+        // catalog, which gives us the SMAPI endpoint/auth policy needed to
+        // browse them anyway.
         const auto catalogEntry = m_smapiCatalog.constFind(service.serviceId);
-        int smapiId = service.serviceId; // legacy services predate the smapiId/serviceId split -- same id serves both
-        if (catalogEntry != m_smapiCatalog.constEnd()) {
-            service.title = catalogEntry->title;
-            service.serviceUri = catalogEntry->uri;
-            service.authPolicy = catalogEntry->auth;
-            smapiId = catalogEntry->smapiId;
-        } else {
-            service.title = MusicServiceCatalog::legacyServiceName(service.serviceId);
-            if (service.title.isEmpty()) {
-                QLOG() << "service skipped: serviceId=" << service.serviceId
-                                       << "(not a legacy service, not in current SMAPI catalog either)";
-                continue; // not a legacy service and not in the current catalog either
-            }
+        if (catalogEntry == m_smapiCatalog.constEnd()) {
+            QLOG() << "service skipped: serviceId=" << service.serviceId
+                   << "(stored in TPMSX but not in current SMAPI catalog)";
+            continue;
         }
+
+        service.title = catalogEntry->title;
+        service.serviceUri = catalogEntry->uri;
+        service.authPolicy = catalogEntry->auth;
+        const int smapiId = catalogEntry->smapiId;
         // Confirmed empirically against the live mslogo.xml feed: unlike
         // bb10-era Sonos (where the icon feed and the SMAPI descriptor list
         // used genuinely different id schemes, needing the smapiId

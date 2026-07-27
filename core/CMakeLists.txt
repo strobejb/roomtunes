@@ -36,6 +36,8 @@ qt_add_library(roomtunes_core STATIC
 
     zone/ZonePlayer.h
     zone/ZonePlayer.cpp
+    zone/BrowseRecencyStore.h
+    zone/BrowseRecencyStore.cpp
     zone/ZoneDiscovery.h
     zone/ZoneDiscovery.cpp
     zone/NetworkWatcher.h

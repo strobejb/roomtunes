@@ -78,13 +78,16 @@ Item {
                 title: model.title
                 imageUrl: model.imageUrl
 
-                onClicked: root.stack.pushFolder(root.pageComponent, {
-                    title: model.title,
-                    service: model.serviceObject,
-                    objectId: "root",
-                    stack: root.stack,
-                    pageComponent: root.pageComponent
-                })
+                onClicked: {
+                    browseRecency.recordUse(model.serviceKey)
+                    root.stack.pushFolder(root.pageComponent, {
+                        title: model.title,
+                        service: model.serviceObject,
+                        objectId: "root",
+                        stack: root.stack,
+                        pageComponent: root.pageComponent
+                    })
+                }
             }
 
             Label {

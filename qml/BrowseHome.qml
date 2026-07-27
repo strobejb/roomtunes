@@ -61,6 +61,47 @@ Item {
     property var favouriteItems: []
     property bool favouritesLoading: true
     property string favouritesError: ""
+    readonly property var sonosSources: [
+        {
+            "title": qsTr("Music Library"),
+            "imageUrl": "../resources/icons/library.svg",
+            "kind": "library"
+        },
+        {
+            "title": qsTr("Line-In"),
+            "imageUrl": "../resources/icons/line_in.svg",
+            "kind": "lineIn"
+        },
+        {
+            "title": qsTr("TV"),
+            "imageUrl": "../resources/icons/tv.svg",
+            "kind": "tv"
+        }
+    ]
+
+    function recencyKey(section, id) {
+        return "browse:" + section + ":" + id
+    }
+
+    function sortedByRecency(items, section, idFunction) {
+        var revision = browseRecency.revision
+        var copy = items.slice(0)
+        copy.sort(function(a, b) {
+            var aKey = root.recencyKey(section, idFunction(a))
+            var bKey = root.recencyKey(section, idFunction(b))
+            var aScore = browseRecency.score(aKey)
+            var bScore = browseRecency.score(bKey)
+            if (aScore !== bScore)
+                return bScore - aScore
+            return String(a.title).localeCompare(String(b.title))
+        })
+        return copy
+    }
+
+    readonly property var orderedSonosSources: sortedByRecency(
+        sonosSources, "source", function(source) { return source.kind })
+    readonly property var orderedFavourites: sortedByRecency(
+        favouriteItems, "favourite", function(item) { return item.id })
 
     Connections {
         target: household
@@ -123,6 +164,7 @@ Item {
     // BrowseListPage.qml's own empty/error state, same as browsing any
     // other folder that comes back empty.
     function openFavourite(item) {
+        browseRecency.recordUse(root.recencyKey("favourite", item.id))
         root.browseStack.pushFolder(root.pageComponent, {
             title: item.title,
             service: root.libraryService,
@@ -130,6 +172,20 @@ Item {
             stack: root.browseStack,
             pageComponent: root.pageComponent,
             folderItem: item
+        })
+    }
+
+    function openSonosSource(source) {
+        browseRecency.recordUse(root.recencyKey("source", source.kind))
+        if (source.kind !== "library" || !root.libraryService)
+            return
+
+        root.browseStack.pushFolder(root.pageComponent, {
+            title: source.title,
+            service: root.libraryService,
+            objectId: "root",
+            stack: root.browseStack,
+            pageComponent: root.pageComponent
         })
     }
 
@@ -261,9 +317,47 @@ Item {
                                 // keep enough to replay an item, not to
                                 // browse from it).
                                 onClicked: {
+                                    browseRecency.recordUse(root.recencyKey("recent", model.item.uri || model.item.id))
                                     if (root.browseStack.zone)
                                         root.browseStack.zone.playItem(model.item)
                                 }
+                            }
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    visible: root.libraryService !== null
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Sonos Sources")
+                        font.pixelSize: 14
+                        font.weight: Typography.emphasisWeight
+                        color: "#212121"
+                    }
+
+                    GridLayout {
+                        id: sonosSourcesGrid
+                        readonly property int columnCount: BrowseGrid.columnsFor(sectionsColumn.width)
+                        readonly property real tileWidth: (sectionsColumn.width - (columnCount - 1) * columnSpacing) / columnCount
+                        Layout.fillWidth: true
+                        columns: columnCount
+                        columnSpacing: 8
+                        rowSpacing: 8
+
+                        Repeater {
+                            model: root.orderedSonosSources
+
+                            BrowseTile {
+                                visible: index < (root.compactSections ? sonosSourcesGrid.columnCount : 5)
+                                Layout.preferredWidth: sonosSourcesGrid.tileWidth
+                                title: modelData.title
+                                imageUrl: modelData.imageUrl
+                                circularIcon: false
+                                onClicked: root.openSonosSource(modelData)
                             }
                         }
                     }
@@ -280,7 +374,7 @@ Item {
 
                         Label {
                             Layout.fillWidth: true
-                            text: qsTr("Favourites")
+                            text: qsTr("Sonos Favourites")
                             font.pixelSize: 14
                             font.weight: Typography.emphasisWeight
                             color: "#212121"
@@ -290,7 +384,7 @@ Item {
                             iconSource: "../resources/icons/chevron_right.svg"
                             iconSize: 16
                             onClicked: root.browseStack.pushFolder(root.pageComponent, {
-                                title: qsTr("Favourites"),
+                                title: qsTr("Sonos Favourites"),
                                 service: root.libraryService,
                                 objectId: "FV:2",
                                 stack: root.browseStack,
@@ -331,7 +425,7 @@ Item {
                         rowSpacing: 8
 
                         Repeater {
-                            model: root.favouriteItems
+                            model: root.orderedFavourites
 
                             BrowseTile {
                                 visible: index < (root.compactSections ? favouritesGrid.columnCount : 5)
@@ -418,13 +512,16 @@ Item {
                                 title: model.title
                                 imageUrl: model.imageUrl
 
-                                onClicked: root.browseStack.pushFolder(root.pageComponent, {
-                                    title: model.title,
-                                    service: model.serviceObject,
-                                    objectId: "root",
-                                    stack: root.browseStack,
-                                    pageComponent: root.pageComponent
-                                })
+                                onClicked: {
+                                    browseRecency.recordUse(model.serviceKey)
+                                    root.browseStack.pushFolder(root.pageComponent, {
+                                        title: model.title,
+                                        service: model.serviceObject,
+                                        objectId: "root",
+                                        stack: root.browseStack,
+                                        pageComponent: root.pageComponent
+                                    })
+                                }
                             }
                         }
                     }
