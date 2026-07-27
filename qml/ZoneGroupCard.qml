@@ -79,6 +79,8 @@ Rectangle {
     // stealing presses from the click MouseArea or the icon buttons
     // layered on top of it.
     readonly property bool cardHovered: cardHoverHandler.hovered
+    property bool dragArmed: false
+    property bool suppressNextClick: false
 
     HoverHandler {
         id: cardHoverHandler
@@ -106,37 +108,48 @@ Rectangle {
         autoPaddingEnabled: false
     }
 
-    // Click-to-select AND press-and-drag-to-group share this one
-    // MouseArea, covering the whole card -- the icon buttons layered on
-    // top of it (volume/settings/unlink below) get first refusal on any
-    // press within their own smaller bounds, so "anywhere except the
-    // buttons" falls out of ordinary Qt Quick hit-testing rather than
-    // needing an explicit exclusion. clicked() and drag.target are safe
-    // to combine on one MouseArea: Qt Quick only starts a drag once the
-    // press has moved past its own drag threshold, and suppresses
-    // clicked() for that press once it does -- so a plain tap still
-    // selects the zone, and only a genuine drag ever reveals the ghost
-    // (see drag.onActiveChanged below).
+    // Click-to-select and hold-then-drag-to-group share this one MouseArea.
+    // A plain click still selects, while a normal press-and-move is left for
+    // the ListView to steal as scrolling. Group dragging is only armed after
+    // a short stationary hold, which keeps the list easy to flick.
     MouseArea {
         id: cardMouseArea
         anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
-        drag.target: card.dragGhost
+        cursorShape: card.dragGhost && card.dragGhost.dragging && !card.dragGhost.insideList
+                     ? Qt.ForbiddenCursor
+                     : Qt.PointingHandCursor
+        drag.target: card.dragArmed ? card.dragGhost : null
         drag.axis: Drag.YAxis
+        pressAndHoldInterval: 220
 
-        onClicked: card.clicked()
+        onClicked: {
+            if (!card.suppressNextClick)
+                card.clicked()
+            card.suppressNextClick = false
+        }
 
-        // Position/size the (still invisible) ghost on every press, not
-        // just real drags -- drag.target reads the target's *current*
-        // position as its own baseline the moment the press starts, well
-        // before drag.active turns true. Deferring this to
-        // drag.onActiveChanged (as an earlier version did) left the ghost
-        // wherever the *previous* drag had ended -- often nowhere near
-        // this card -- since drag.target had already latched onto that
-        // stale position as its baseline by the time this ran. Cheap and
-        // harmless to do unconditionally: a plain click never reveals the
-        // ghost (see below), so this never has a visible effect on its own.
-        onPressed: card.prepareDrag()
+        onPressed: {
+            card.dragArmed = false
+            card.suppressNextClick = false
+        }
+
+        onPressAndHold: {
+            card.prepareDrag()
+            card.dragArmed = true
+            card.suppressNextClick = true
+            card.revealDrag()
+        }
+
+        onReleased: {
+            if (card.dragGhost && card.dragGhost.dragging)
+                card.endDrag()
+            card.dragArmed = false
+        }
+
+        onCanceled: {
+            card.dragArmed = false
+            card.suppressNextClick = false
+        }
 
         // Only a real drag (past Qt's own threshold) reveals the ghost --
         // a plain click's press/release happens too close together for
@@ -146,8 +159,10 @@ Rectangle {
         drag.onActiveChanged: {
             if (cardMouseArea.drag.active)
                 card.revealDrag()
-            else
+            else {
                 card.endDrag()
+                card.dragArmed = false
+            }
         }
 
         // The actual mouse position, not the ghost's -- drag.target
@@ -217,9 +232,14 @@ Rectangle {
         card.dragGhost.width = card.width
         card.dragGhost.height = card.height
         card.dragGhost.sourceCoordinator = card.coordinator
+        card.dragGhost.sourceItem = card
         card.dragGhost.targetCoordinator = null
         card.dragGhost.insideList = true
+        card.dragGhost.parkedAtSource = false
+        card.dragGhost.animateToSource = false
         var startPos = card.mapToItem(card.dragGhost.parent, 0, 0)
+        card.dragGhost.sourceX = startPos.x
+        card.dragGhost.sourceY = startPos.y
         card.dragGhost.x = startPos.x
         card.dragGhost.y = startPos.y
     }
@@ -254,6 +274,9 @@ Rectangle {
             }
             card.dragGhost.dragging = false
             card.dragGhost.targetCoordinator = null
+            card.dragGhost.sourceItem = null
+            card.dragGhost.parkedAtSource = false
+            card.dragGhost.animateToSource = false
             card.dragEnded()
         }
     }

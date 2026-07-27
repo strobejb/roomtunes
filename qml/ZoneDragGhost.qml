@@ -18,16 +18,21 @@ Item {
     // dragging: true for the whole press-to-release gesture.
     // insideList: whether the mouse's last known position was within
     // ZoneGroupList.qml's own viewport (see its updateDropTarget()) --
-    // moving the mouse out of the list hides the ghost entirely rather
-    // than leaving it dangling over unrelated UI, since there's nothing
-    // to drop onto out there.
+    // moving the mouse out of the list parks the ghost back over the
+    // source card rather than leaving it dangling over unrelated UI,
+    // since there's nothing to drop onto out there.
     property bool dragging: false
     property bool insideList: true
-    visible: dragging && insideList
+    property bool parkedAtSource: false
+    visible: dragging && (insideList || parkedAtSource)
     opacity: 0.9
     z: 1000
 
     property var sourceCoordinator: null
+    property Item sourceItem: null
+    property real sourceX: 0
+    property real sourceY: 0
+    property bool animateToSource: false
     // Set by ZoneGroupList.qml's updateDropTarget() from the actual
     // mouse position (see its own comment for why -- NOT from where this
     // ghost's own bounds happen to overlap a card).
@@ -40,6 +45,16 @@ Item {
     // card.radius directly since this item isn't inside any particular
     // card's own document scope.
     readonly property int cornerRadius: 12
+
+    Behavior on x {
+        enabled: root.animateToSource
+        NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+    }
+
+    Behavior on y {
+        enabled: root.animateToSource
+        NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+    }
 
     // Dashed rounded-rect outline -- only ever the ghost's own indicator,
     // shown while not over a valid drop target. Once solid becomes true,

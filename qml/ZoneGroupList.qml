@@ -133,11 +133,11 @@ Item {
             autoScrollTimer.stop()
         }
 
-        // How far in from each card's own edges the mouse has to be for
-        // that card to count as a drop target -- keeps the very edges of
-        // adjacent cards (and the gap between them) from being read as
-        // "over" either one.
-        readonly property int dropTargetMargin: 10
+        // How far in from each card's top/bottom edges the mouse has to
+        // be for that card to count as a drop target -- keeps the gap
+        // between cards from being read as "over" either one, while the
+        // full card width remains targetable.
+        readonly property int dropTargetMargin: 18
 
         // Drop-target eligibility is based on where the *mouse* is, not
         // on where this (possibly hidden, see dragGhost's own comment)
@@ -150,7 +150,21 @@ Item {
             var localPos = zoneListView.mapFromItem(root.dragGhost.parent, globalPos.x, globalPos.y)
             var insideList = localPos.x >= 0 && localPos.x <= zoneListView.width
                               && localPos.y >= 0 && localPos.y <= zoneListView.height
+            var wasInsideList = root.dragGhost.insideList
             root.dragGhost.insideList = insideList
+            root.dragGhost.parkedAtSource = !insideList
+            if (!insideList) {
+                if (root.dragGhost.sourceItem) {
+                    var sourcePos = root.dragGhost.sourceItem.mapToItem(root.dragGhost.parent, 0, 0)
+                    root.dragGhost.sourceX = sourcePos.x
+                    root.dragGhost.sourceY = sourcePos.y
+                }
+                root.dragGhost.animateToSource = wasInsideList
+                root.dragGhost.x = root.dragGhost.sourceX
+                root.dragGhost.y = root.dragGhost.sourceY
+            } else {
+                root.dragGhost.animateToSource = false
+            }
 
             var hitCoordinator = null
             if (insideList) {
@@ -160,8 +174,8 @@ Item {
                     if (!item)
                         continue
                     var topLeft = item.mapToItem(root.dragGhost.parent, 0, 0)
-                    if (globalPos.x >= topLeft.x + margin
-                            && globalPos.x <= topLeft.x + item.width - margin
+                    if (globalPos.x >= topLeft.x
+                            && globalPos.x <= topLeft.x + item.width
                             && globalPos.y >= topLeft.y + margin
                             && globalPos.y <= topLeft.y + item.height - margin) {
                         hitCoordinator = item.coordinator
