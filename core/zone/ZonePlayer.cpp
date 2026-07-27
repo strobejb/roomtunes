@@ -7,6 +7,7 @@
 #include <QNetworkRequest>
 #include <QStringList>
 #include <QUrl>
+#include <QXmlStreamReader>
 
 #include "../Logging.h"
 #include "../media/AlbumColorAnalyzer.h"
@@ -67,6 +68,22 @@ QByteArray buildItemMetadata(const QVariantMap &item)
                            : Didl::buildItem(didlId, parentId, title, upnpClass, desc);
 }
 
+QString genaProperty(const QByteArray &body, const QString &propertyName)
+{
+    QXmlStreamReader xml(body);
+
+    while (!xml.atEnd()) {
+        if (!xml.readNextStartElement())
+            continue;
+        if (xml.name() != QLatin1String("property"))
+            continue;
+        if (xml.readNextStartElement() && xml.name() == propertyName)
+            return xml.readElementText(QXmlStreamReader::SkipChildElements);
+    }
+
+    return {};
+}
+
 }
 
 ZonePlayer::ZonePlayer(QNetworkAccessManager *netMgr, const QString &deviceIp, const QString &udn, QObject *parent)
@@ -78,6 +95,7 @@ ZonePlayer::ZonePlayer(QNetworkAccessManager *netMgr, const QString &deviceIp, c
     , m_avTransport(netMgr, deviceIp)
     , m_renderingControl(netMgr, deviceIp)
     , m_contentDirectory(netMgr, deviceIp)
+    , m_audioIn(netMgr, deviceIp)
     , m_deviceProperties(netMgr, deviceIp)
     , m_zoneGroupTopology(netMgr, deviceIp)
     , m_musicServices(netMgr, deviceIp)
@@ -528,6 +546,50 @@ void ZonePlayer::refreshMute()
             emit mutedChanged();
         }
     });
+}
+
+void ZonePlayer::handleRenderingControlEvent(const QByteArray &body)
+{
+    const QString lastChange = genaProperty(body, QStringLiteral("LastChange"));
+    if (lastChange.isEmpty())
+        return;
+
+    QXmlStreamReader xml(lastChange);
+    while (!xml.atEnd()) {
+        if (!xml.readNextStartElement())
+            continue;
+
+        if (xml.name() == QLatin1String("Volume")
+            && xml.attributes().value(QStringLiteral("channel")) == QLatin1String("Master")) {
+            bool ok = false;
+            const int level = xml.attributes().value(QStringLiteral("val")).toInt(&ok);
+            if (ok && level != m_volume) {
+                m_volume = level;
+                emit volumeChanged();
+            }
+        } else if (xml.name() == QLatin1String("Mute")
+                   && xml.attributes().value(QStringLiteral("channel")) == QLatin1String("Master")) {
+            const bool muted = xml.attributes().value(QStringLiteral("val")) == QLatin1String("1");
+            if (muted != m_muted) {
+                m_muted = muted;
+                emit mutedChanged();
+            }
+        }
+    }
+}
+
+void ZonePlayer::handleAVTransportEvent(const QByteArray &)
+{
+    refreshTransportState();
+}
+
+void ZonePlayer::handleContentDirectoryEvent(const QByteArray &)
+{
+    emit queueChanged();
+}
+
+void ZonePlayer::handleAudioInEvent(const QByteArray &)
+{
 }
 
 void ZonePlayer::refreshTransportState()

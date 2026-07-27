@@ -21,6 +21,7 @@ qt_add_library(roomtunes_core STATIC
     upnp/Didl.h
     upnp/Didl.cpp
     upnp/Smapi.h
+    upnp/services/AudioIn.h
     upnp/services/AVTransport.h
     upnp/services/RenderingControl.h
     upnp/services/ZoneGroupTopology.h

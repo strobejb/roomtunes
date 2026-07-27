@@ -29,24 +29,14 @@ Item {
             1.0)
     }
 
-    // volume_x (crossed-out glyph) when actually muted; otherwise volume_0
-    // (no waves) below 5%, volume_1 (one wave) below 20%, volume_2 (two
-    // waves -- the loudest glyph this icon set has) at 20%+. Thresholds
-    // ported from roomtunes-bb10's Sonosjs.volumeIcon()/volumeSuffix()
-    // (5/20/50%, mapping to four icon tiers 0/1/2/3) -- collapsed to this
-    // app's three-tier icon set (no volume_3 asset exists) by merging
-    // bb10's own top two tiers into one "loud" glyph.
-    readonly property string volumeIconName: {
-        if (!zone)
-            return "volume_1"
-        if (zone.muted)
-            return "volume_x"
-        if (zone.volume < 5)
-            return "volume_0"
-        if (zone.volume < 20)
-            return "volume_1"
-        return "volume_2"
-    }
+    readonly property int displayVolume: volumeSlider.dragging
+        ? Math.round(volumeSlider.dragRatio * 100)
+        : (zone ? zone.volume : 20)
+    readonly property bool displayMuted: volumeSlider.dragging
+        ? displayVolume <= 0
+        : !!zone && zone.muted
+    readonly property string volumeIconName: VolumeIcon.nameFor(
+        displayVolume, displayMuted)
 
     width: 44
     // Fixed at the full max footprint always -- not animated. See
@@ -216,6 +206,27 @@ Item {
             return 1 - Math.max(0, Math.min(1, (mouseY - root.sliderTop) / root.sliderHeight))
         }
 
+        function finishSliderDrag(mouseY) {
+            if (!volumeSlider.dragging)
+                return
+            volumeSlider.dragRatio = ratioFor(mouseY)
+            volumeSlider.dragging = false
+            if (root.zone) {
+                var level = Math.round(volumeSlider.dragRatio * 100)
+                if (level <= 0) {
+                    root.zone.setMuted(true)
+                } else {
+                    if (root.zone.muted)
+                        root.zone.setMuted(false)
+                    root.zone.setVolume(level)
+                }
+            }
+            if (!containsMouse) {
+                root.opened = false
+                hoverOpened = false
+            }
+        }
+
         onContainsMouseChanged: {
             if (!containsMouse) {
                 root.opened = false
@@ -239,10 +250,13 @@ Item {
                 volumeSlider.dragRatio = ratioFor(mouse.y)
         }
         onReleased: mouse => {
-            if (volumeSlider.dragging) {
-                volumeSlider.dragRatio = ratioFor(mouse.y)
-                volumeSlider.dragging = false
-                root.zone.setVolume(Math.round(volumeSlider.dragRatio * 100))
+            finishSliderDrag(mouse.y)
+        }
+        onCanceled: {
+            finishSliderDrag(mouseY)
+            if (!containsMouse) {
+                root.opened = false
+                hoverOpened = false
             }
         }
         onClicked: {

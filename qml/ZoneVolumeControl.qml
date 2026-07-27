@@ -29,19 +29,14 @@ Item {
     readonly property color hoverColor: Qt.rgba(contrastColor.r, contrastColor.g, contrastColor.b, 0.10)
     readonly property color pressedColor: Qt.rgba(contrastColor.r, contrastColor.g, contrastColor.b, 0.18)
 
-    // Same threshold logic as NowPlayingVolumeControl.qml's own
-    // volumeIconName -- see its own comment for the bb10 provenance.
-    readonly property string volumeIconName: {
-        if (!zone)
-            return "volume_1"
-        if (zone.muted)
-            return "volume_x"
-        if (zone.volume < 5)
-            return "volume_0"
-        if (zone.volume < 20)
-            return "volume_1"
-        return "volume_2"
-    }
+    readonly property int displayVolume: slider.dragging
+        ? Math.round(slider.dragRatio * 100)
+        : (zone ? zone.volume : 20)
+    readonly property bool displayMuted: slider.dragging
+        ? displayVolume <= 0
+        : !!zone && zone.muted
+    readonly property string volumeIconName: VolumeIcon.nameFor(
+        displayVolume, displayMuted)
 
     readonly property int iconSize: 32
     readonly property int sliderLength: 90
@@ -224,8 +219,16 @@ Item {
                 return
             slider.dragRatio = ratioFor(mouseX)
             slider.dragging = false
-            if (root.zone)
-                root.zone.setVolume(Math.round(slider.dragRatio * 100))
+            if (root.zone) {
+                var level = Math.round(slider.dragRatio * 100)
+                if (level <= 0) {
+                    root.zone.setMuted(true)
+                } else {
+                    if (root.zone.muted)
+                        root.zone.setMuted(false)
+                    root.zone.setVolume(level)
+                }
+            }
             if (!containsMouse) {
                 root.opened = false
                 hoverOpened = false

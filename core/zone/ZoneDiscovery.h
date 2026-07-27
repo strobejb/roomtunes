@@ -8,6 +8,7 @@
 
 #include "../upnp/GenaNotifyServer.h"
 #include "../upnp/Ssdp.h"
+#include "../upnp/UpnpService.h"
 #include "ZonePlayer.h"
 
 namespace RoomTunes {
@@ -127,13 +128,30 @@ private slots:
     void onSsdpTimeout();
     void onGenaNotify(const QString &sid, const QByteArray &body);
     void renewTopologySubscription();
+    void renewZoneEventSubscriptions();
 
 private:
+    enum class ZoneEventService {
+        AVTransport,
+        RenderingControl,
+        ContentDirectory,
+        AudioIn
+    };
+
+    struct ZoneEventSubscription {
+        QString zoneUdn;
+        ZoneEventService service;
+    };
+
     ZonePlayer *allocateZone(const QString &deviceIp, const QString &udn);
     void fetchDeviceDescription(ZonePlayer *zone);
     void fetchHouseholdId(ZonePlayer *zone);
     void maybePickTopologyZone();
     void subscribeTopology();
+    void subscribeZoneEvents(ZonePlayer *zone);
+    void subscribeZoneEvent(ZonePlayer *zone, UpnpService &service, ZoneEventService serviceType);
+    void unsubscribeZoneEvents();
+    void routeZoneEvent(const ZoneEventSubscription &subscription, const QByteArray &body);
     void parseZoneGroupState(const QByteArray &xml);
     void checkZoneReady(ZonePlayer *zone);
 
@@ -148,7 +166,9 @@ private:
     QMap<QString, ZonePlayer *> m_zones; // keyed by UDN
     QString m_topologyZoneUdn;
     QString m_topologySubscriptionSid;
+    QMap<QString, ZoneEventSubscription> m_zoneEventSubscriptions;
     QTimer m_topologyRenewTimer;
+    QTimer m_zoneEventRenewTimer;
 };
 
 }

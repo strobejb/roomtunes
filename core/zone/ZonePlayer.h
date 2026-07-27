@@ -10,6 +10,7 @@
 
 #include "../media/MediaItem.h"
 #include "../upnp/Didl.h"
+#include "../upnp/services/AudioIn.h"
 #include "../upnp/services/AVTransport.h"
 #include "../upnp/services/ContentDirectory.h"
 #include "../upnp/services/DeviceProperties.h"
@@ -105,6 +106,7 @@ public:
     AVTransport &avTransport() { return m_avTransport; }
     RenderingControl &renderingControl() { return m_renderingControl; }
     ContentDirectory &contentDirectory() { return m_contentDirectory; }
+    AudioIn &audioIn() { return m_audioIn; }
     DeviceProperties &deviceProperties() { return m_deviceProperties; }
     ZoneGroupTopology &zoneGroupTopology() { return m_zoneGroupTopology; }
     MusicServices &musicServices() { return m_musicServices; }
@@ -177,6 +179,10 @@ public:
     Q_INVOKABLE void refreshVolume();
     void refreshMute();
     Q_INVOKABLE void refreshTransportState();
+    void handleRenderingControlEvent(const QByteArray &body);
+    void handleAVTransportEvent(const QByteArray &body);
+    void handleContentDirectoryEvent(const QByteArray &body);
+    void handleAudioInEvent(const QByteArray &body);
 
 signals:
     void roomNameChanged();
@@ -226,6 +232,7 @@ private:
     AVTransport m_avTransport;
     RenderingControl m_renderingControl;
     ContentDirectory m_contentDirectory;
+    AudioIn m_audioIn;
     DeviceProperties m_deviceProperties;
     ZoneGroupTopology m_zoneGroupTopology;
     MusicServices m_musicServices;

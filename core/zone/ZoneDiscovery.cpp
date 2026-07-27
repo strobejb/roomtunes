@@ -125,10 +125,14 @@ ZoneDiscovery::ZoneDiscovery(QNetworkAccessManager *netMgr, QObject *parent)
     // Renew comfortably before the subscription would otherwise expire.
     m_topologyRenewTimer.setInterval(int(kTopologySubscriptionTimeoutSeconds * 0.6 * 1000));
     connect(&m_topologyRenewTimer, &QTimer::timeout, this, &ZoneDiscovery::renewTopologySubscription);
+    m_zoneEventRenewTimer.setInterval(int(kTopologySubscriptionTimeoutSeconds * 0.6 * 1000));
+    connect(&m_zoneEventRenewTimer, &QTimer::timeout, this, &ZoneDiscovery::renewZoneEventSubscriptions);
 }
 
 ZoneDiscovery::~ZoneDiscovery()
 {
+    unsubscribeZoneEvents();
+
     ZonePlayer *topologyZoneVal = m_zones.value(m_topologyZoneUdn);
     if (topologyZoneVal && topologyZoneVal->zoneGroupTopology().subscribed())
         topologyZoneVal->zoneGroupTopology().unsubscribe();
@@ -156,6 +160,7 @@ void ZoneDiscovery::restart()
     ZonePlayer *topologyZoneVal = m_zones.value(m_topologyZoneUdn);
     if (topologyZoneVal && topologyZoneVal->zoneGroupTopology().subscribed())
         topologyZoneVal->zoneGroupTopology().unsubscribe();
+    unsubscribeZoneEvents();
 
     m_topologyRenewTimer.stop();
 
@@ -164,6 +169,7 @@ void ZoneDiscovery::restart()
     m_householdId.clear();
     m_topologyZoneUdn.clear();
     m_topologySubscriptionSid.clear();
+    m_zoneEventSubscriptions.clear();
 
     emit zoneListChanged();
 
@@ -350,6 +356,7 @@ void ZoneDiscovery::checkZoneReady(ZonePlayer *zone)
     if (!zone->householdId().isEmpty() && !zone->roomName().isEmpty() && zone->hasValidTopology() && !zone->ready()) {
         zone->setReady(true);
         emit zoneReady(zone);
+        subscribeZoneEvents(zone);
     }
 }
 
@@ -470,9 +477,127 @@ void ZoneDiscovery::renewTopologySubscription()
     });
 }
 
+void ZoneDiscovery::subscribeZoneEvents(ZonePlayer *zone)
+{
+    if (!zone || zone->invisible())
+        return;
+
+    subscribeZoneEvent(zone, zone->avTransport(), ZoneEventService::AVTransport);
+    subscribeZoneEvent(zone, zone->renderingControl(), ZoneEventService::RenderingControl);
+    subscribeZoneEvent(zone, zone->contentDirectory(), ZoneEventService::ContentDirectory);
+    subscribeZoneEvent(zone, zone->audioIn(), ZoneEventService::AudioIn);
+}
+
+void ZoneDiscovery::subscribeZoneEvent(ZonePlayer *zone, UpnpService &service, ZoneEventService serviceType)
+{
+    const QString localAddress = localAddressForPeer(zone->deviceIp());
+    const QString udn = zone->udn();
+    const QString oldSid = service.sid();
+    QNetworkReply *reply = service.subscribe(localAddress, m_notifyServer.port(), kTopologySubscriptionTimeoutSeconds);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, udn, oldSid, serviceType, serviceName = service.serviceName()]() {
+        reply->deleteLater();
+
+        ZonePlayer *zone = m_zones.value(udn);
+        if (!zone)
+            return;
+
+        UpnpService *service = nullptr;
+        switch (serviceType) {
+        case ZoneEventService::AVTransport:
+            service = &zone->avTransport();
+            break;
+        case ZoneEventService::RenderingControl:
+            service = &zone->renderingControl();
+            break;
+        case ZoneEventService::ContentDirectory:
+            service = &zone->contentDirectory();
+            break;
+        case ZoneEventService::AudioIn:
+            service = &zone->audioIn();
+            break;
+        }
+
+        if (reply->error() != QNetworkReply::NoError) {
+            QWARN() << zone->roomName() << serviceName << "subscribe failed:" << reply->errorString();
+            return;
+        }
+
+        const QString sid = QString::fromUtf8(reply->rawHeader("SID"));
+        if (sid.isEmpty()) {
+            QWARN() << zone->roomName() << serviceName << "subscribe returned no SID";
+            return;
+        }
+
+        if (!oldSid.isEmpty() && oldSid != sid)
+            m_zoneEventSubscriptions.remove(oldSid);
+
+        service->setSid(sid);
+        m_zoneEventSubscriptions.insert(sid, ZoneEventSubscription{udn, serviceType});
+        m_zoneEventRenewTimer.start();
+        QLOG() << "subscribed to" << zone->roomName() << serviceName << "SID=" << sid;
+    });
+}
+
+void ZoneDiscovery::renewZoneEventSubscriptions()
+{
+    for (ZonePlayer *zone : std::as_const(m_zones)) {
+        if (zone && zone->ready())
+            subscribeZoneEvents(zone);
+    }
+}
+
+void ZoneDiscovery::unsubscribeZoneEvents()
+{
+    m_zoneEventRenewTimer.stop();
+
+    for (ZonePlayer *zone : std::as_const(m_zones)) {
+        if (!zone)
+            continue;
+        if (zone->avTransport().subscribed())
+            zone->avTransport().unsubscribe();
+        if (zone->renderingControl().subscribed())
+            zone->renderingControl().unsubscribe();
+        if (zone->contentDirectory().subscribed())
+            zone->contentDirectory().unsubscribe();
+        if (zone->audioIn().subscribed())
+            zone->audioIn().unsubscribe();
+    }
+
+    m_zoneEventSubscriptions.clear();
+}
+
+void ZoneDiscovery::routeZoneEvent(const ZoneEventSubscription &subscription, const QByteArray &body)
+{
+    ZonePlayer *zone = m_zones.value(subscription.zoneUdn);
+    if (!zone)
+        return;
+
+    switch (subscription.service) {
+    case ZoneEventService::AVTransport:
+        zone->handleAVTransportEvent(body);
+        break;
+    case ZoneEventService::RenderingControl:
+        zone->handleRenderingControlEvent(body);
+        break;
+    case ZoneEventService::ContentDirectory:
+        zone->handleContentDirectoryEvent(body);
+        break;
+    case ZoneEventService::AudioIn:
+        zone->handleAudioInEvent(body);
+        break;
+    }
+}
+
 void ZoneDiscovery::onGenaNotify(const QString &sid, const QByteArray &body)
 {
-    QLOG() << "ZoneGroupTopology NOTIFY received, sid=" << sid << "," << body.size() << "bytes";
+    QLOG() << "GENA NOTIFY received, sid=" << sid << "," << body.size() << "bytes";
+
+    const auto zoneEvent = m_zoneEventSubscriptions.constFind(sid);
+    if (zoneEvent != m_zoneEventSubscriptions.constEnd()) {
+        routeZoneEvent(zoneEvent.value(), body);
+        return;
+    }
 
     if (sid != m_topologySubscriptionSid) {
         QLOG() << "ignoring NOTIFY for unrecognized subscription" << sid;
