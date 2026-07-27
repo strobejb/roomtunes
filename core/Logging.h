@@ -15,14 +15,12 @@ Q_DECLARE_LOGGING_CATEGORY(logSmapi)
 // doesn't need one). Installs a custom message handler (deliberately not
 // qSetMessagePattern(): QT_MESSAGE_PATTERN in the environment silently
 // overrides that, and Qt Creator's own Run environment sets it) that
-// prefixes every log line with elapsed time since process start, matching
-// roomtunes-bb10's ZLOG() header shape ("[SSS.mmm|IP] "). The per-request
-// destination (a ZonePlayer's IP, a SMAPI server's hostname, ...) isn't
-// something this handler adds on its own -- that's logged as the first
-// token of the message itself; see SoapRequest::send()/subscribe()/
-// unsubscribe() in upnp/Soap.h, which log every outgoing UPnP/SMAPI
-// request's destination under logSoap regardless of which higher-level
-// code issued it.
+// prefixes every log line with elapsed time since process start. Directed
+// network logs pass ">dest" or "<source" as the first message field; the
+// handler moves that into the prefix so lines use
+// "[SSS.mmm|category|>dest] Method(...)" or
+// "[SSS.mmm|category|<source] NOTIFY ...", while ordinary logs stay
+// "[SSS.mmm|category] message".
 void installLogMessagePattern();
 
 // Call once, right after installLogMessagePattern(). Matches

@@ -81,7 +81,7 @@ void GenaNotifyServer::tryParse(QTcpSocket *socket)
     socket->flush();
     socket->disconnectFromHost();
 
-    emit notified(sid, body);
+    emit notified(socket->peerAddress().toString(), sid, body);
 }
 
 }

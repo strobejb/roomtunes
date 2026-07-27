@@ -20,6 +20,50 @@ namespace {
 
 qint64 g_startMsecs = 0;
 
+QString takeFirstLogField(QString *message)
+{
+    QString text = message->trimmed();
+    if (text.isEmpty())
+        return {};
+
+    QString field;
+    if (text.startsWith(QLatin1Char('"'))) {
+        qsizetype end = 1;
+        bool escaped = false;
+        for (; end < text.size(); ++end) {
+            const QChar ch = text.at(end);
+            if (escaped) {
+                escaped = false;
+            } else if (ch == QLatin1Char('\\')) {
+                escaped = true;
+            } else if (ch == QLatin1Char('"')) {
+                break;
+            }
+        }
+
+        if (end >= text.size())
+            return {};
+
+        field = text.mid(1, end - 1);
+        text = text.mid(end + 1).trimmed();
+    } else {
+        const qsizetype end = text.indexOf(QLatin1Char(' '));
+        if (end < 0) {
+            field = text;
+            text.clear();
+        } else {
+            field = text.left(end);
+            text = text.mid(end + 1).trimmed();
+        }
+    }
+
+    if (field.isEmpty())
+        return {};
+
+    *message = text;
+    return field;
+}
+
 // A custom handler (rather than qSetMessagePattern()) specifically because
 // QT_MESSAGE_PATTERN, when set in the environment, silently overrides any
 // pattern the app requests via qSetMessagePattern() -- and Qt Creator's own
@@ -29,6 +73,7 @@ qint64 g_startMsecs = 0;
 // applies its own formatting, so this is the only formatting logic run.
 void logMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &message)
 {
+    QString outputMessage = message;
     const qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - g_startMsecs;
     const qint64 seconds = elapsed / 1000;
     const qint64 millis = elapsed % 1000;
@@ -37,16 +82,21 @@ void logMessageHandler(QtMsgType type, const QMessageLogContext &context, const 
                            .arg(seconds, 3, 10, QLatin1Char('0'))
                            .arg(millis, 3, 10, QLatin1Char('0'));
 
-    // The category goes in the bracket alongside the timestamp, matching
-    // roomtunes-bb10's "[SSS.mmm|IP]" shape with the category standing in
-    // for IP -- there's no single field to pull a per-request zone/host
-    // address into here the same way: that's just plain text at the start
-    // of the message body already (see SoapRequest::send() in
-    // upnp/Soap.h), not something this handler has separate access to.
+    const bool isSoap = context.category && qstrcmp(context.category, "roomtunes.core.soap") == 0;
+    const bool hasDirectedEndpoint = outputMessage.startsWith(QLatin1Char('>')) || outputMessage.startsWith(QLatin1Char('<'));
+
+    // Directed network logs pass their endpoint as the first message field.
+    // Pull it into the prefix so lines read "[time|source|>dest] Method(...)"
+    // or "[time|source|<dest] NOTIFY ...", without every call site needing
+    // custom formatting.
+    const QString destination = (isSoap || hasDirectedEndpoint) ? takeFirstLogField(&outputMessage) : QString();
+
     if (context.category && qstrcmp(context.category, "default") != 0)
         bracket += QLatin1Char('|') + QString::fromUtf8(context.category);
+    if (!destination.isEmpty())
+        bracket += QLatin1Char('|') + destination;
 
-    const QString line = QStringLiteral("[%1] %2").arg(bracket, message);
+    const QString line = QStringLiteral("[%1] %2").arg(bracket, outputMessage);
 
     // Routing everything through stderr made Qt Creator's Application
     // Output color every single line red (it colors by stream, not by

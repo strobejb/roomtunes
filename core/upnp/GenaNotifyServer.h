@@ -30,9 +30,10 @@ public:
     quint16 port() const;
 
 signals:
-    // sid is the NOTIFY's SID header (identifies which subscription this
-    // is for); body is the raw GENA propertyset XML payload.
-    void notified(const QString &sid, const QByteArray &body);
+    // peerAddress is the zone IP that sent the NOTIFY; sid is the NOTIFY's
+    // SID header (identifies which subscription this is for); body is the
+    // raw GENA propertyset XML payload.
+    void notified(const QString &peerAddress, const QString &sid, const QByteArray &body);
 
 private slots:
     void onNewConnection();

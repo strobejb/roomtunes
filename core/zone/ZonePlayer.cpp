@@ -579,9 +579,6 @@ void ZonePlayer::setMuted(bool muted)
 void ZonePlayer::browse(const QString &objectId, std::function<void(bool, const QString &, const QList<DidlItem> &)> callback,
                          int startingIndex, int requestedCount, const QString &browseFlag)
 {
-    QLOG() << m_roomName << "Browse" << objectId << "flag=" << browseFlag << "startingIndex=" << startingIndex
-           << "requestedCount=" << requestedCount;
-
     QNetworkReply *reply = m_contentDirectory.Browse(objectId, browseFlag, QStringLiteral("*"), startingIndex, requestedCount);
     connect(reply, &QNetworkReply::finished, this, [this, reply, objectId, callback]() {
         SoapResponse response(reply);

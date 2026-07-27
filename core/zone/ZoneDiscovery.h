@@ -126,7 +126,7 @@ signals:
 private slots:
     void onSsdpDiscovered(const QString &fromAddr, const QMap<QString, QString> &headers);
     void onSsdpTimeout();
-    void onGenaNotify(const QString &sid, const QByteArray &body);
+    void onGenaNotify(const QString &peerAddress, const QString &sid, const QByteArray &body);
     void renewTopologySubscription();
     void renewZoneEventSubscriptions();
 

@@ -78,8 +78,8 @@ public:
 
     QNetworkReply *subscribe(const QString &url, const QString &notifyUrl, int timeoutSeconds)
     {
-        qCDebug(logSoap) << QUrl(url).host() << "SUBSCRIBE" << QUrl(url).path() << "callback=" << notifyUrl
-                          << "timeout=" << timeoutSeconds;
+        qCDebug(logSoap).noquote() << directedHost(url, QLatin1Char('>')) << "SUBSCRIBE" << QUrl(url).path()
+                                    << "callback=" << notifyUrl << "timeout=" << timeoutSeconds;
         QNetworkRequest request{QUrl(url)};
         request.setRawHeader("CALLBACK", notifyUrl.toUtf8());
         request.setRawHeader("NT", "upnp:event");
@@ -89,8 +89,8 @@ public:
 
     QNetworkReply *resubscribe(const QString &url, const QString &sid, int timeoutSeconds)
     {
-        qCDebug(logSoap) << QUrl(url).host() << "SUBSCRIBE (renew)" << QUrl(url).path() << "sid=" << sid
-                          << "timeout=" << timeoutSeconds;
+        qCDebug(logSoap).noquote() << directedHost(url, QLatin1Char('>')) << "SUBSCRIBE (renew)" << QUrl(url).path()
+                                    << "sid=" << sid << "timeout=" << timeoutSeconds;
         QNetworkRequest request{QUrl(url)};
         request.setRawHeader("SID", sid.toUtf8());
         request.setRawHeader("TIMEOUT", QStringLiteral("Second-%1").arg(timeoutSeconds).toUtf8());
@@ -99,7 +99,8 @@ public:
 
     QNetworkReply *unsubscribe(const QString &url, const QString &sid)
     {
-        qCDebug(logSoap) << QUrl(url).host() << "UNSUBSCRIBE" << QUrl(url).path() << "sid=" << sid;
+        qCDebug(logSoap).noquote() << directedHost(url, QLatin1Char('>')) << "UNSUBSCRIBE" << QUrl(url).path()
+                                    << "sid=" << sid;
         QNetworkRequest request{QUrl(url)};
         request.setRawHeader("SID", sid.toUtf8());
         return m_netMgr->sendCustomRequest(request, "UNSUBSCRIBE");
@@ -151,7 +152,7 @@ public:
         // ZonePlayer's own IP for a UPnP action (ZonePlayer::baseUrl() is
         // built directly as "http://<ip>:1400/", no DNS involved) or the
         // SMAPI partner's hostname for a music-service call.
-        qCDebug(logSoap).noquote() << QUrl(url).host() << callSummary();
+        qCDebug(logSoap).noquote() << directedHost(url, QLatin1Char('>')) << callSummary();
 
         QNetworkReply *reply = m_netMgr->post(request, m_envelope);
         reply->setProperty("soapMethod", m_method);
@@ -161,7 +162,7 @@ public:
             for (const QSslError &error : errors) {
                 qCWarning(logSoap).noquote()
                     << QStringLiteral("%1 %2 SSL error: %3")
-                           .arg(reply->property("destHost").toString(),
+                           .arg(QLatin1Char('<') + reply->property("destHost").toString(),
                                 reply->property("soapMethod").toString(),
                                 error.errorString());
             }
@@ -170,6 +171,11 @@ public:
     }
 
 private:
+    static QString directedHost(const QString &url, QChar direction)
+    {
+        return direction + QUrl(url).host();
+    }
+
     static bool isSensitiveParameter(const QString &name)
     {
         const QString lower = name.toLower();

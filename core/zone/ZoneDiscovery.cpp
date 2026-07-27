@@ -418,12 +418,12 @@ void ZoneDiscovery::subscribeTopology()
     QNetworkReply *reply = topologyZoneVal->zoneGroupTopology().subscribe(localAddress, m_notifyServer.port(),
                                                                            kTopologySubscriptionTimeoutSeconds);
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply, topologyZoneUdn]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, topologyZoneUdn, topologyZoneIp = topologyZoneVal->deviceIp()]() {
         reply->deleteLater();
 
         if (reply->error() != QNetworkReply::NoError) {
-            QWARN() << "ZoneGroupTopology subscribe failed:" << reply->errorString()
-                    << "-- falling back to a one-shot GetZoneGroupState";
+            QWARN().noquote() << QStringLiteral(">%1").arg(topologyZoneIp) << "ZoneGroupTopology subscribe failed:"
+                               << reply->errorString() << "-- falling back to a one-shot GetZoneGroupState";
             refreshTopology();
             return;
         }
@@ -436,7 +436,8 @@ void ZoneDiscovery::subscribeTopology()
         m_topologySubscriptionSid = sid;
         topologyZoneVal->zoneGroupTopology().setSid(sid);
 
-        QLOG() << "subscribed to ZoneGroupTopology, SID=" << sid;
+        QLOG().noquote() << QStringLiteral(">%1").arg(topologyZoneVal->deviceIp()) << "subscribed to ZoneGroupTopology, SID="
+                          << sid;
 
         m_topologyRenewTimer.start();
 
@@ -459,11 +460,12 @@ void ZoneDiscovery::renewTopologySubscription()
     QNetworkReply *reply = topologyZoneVal->zoneGroupTopology().subscribe(localAddress, m_notifyServer.port(),
                                                                            kTopologySubscriptionTimeoutSeconds);
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply, topologyZoneUdn]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, topologyZoneUdn, topologyZoneIp = topologyZoneVal->deviceIp()]() {
         reply->deleteLater();
 
         if (reply->error() != QNetworkReply::NoError) {
-            QWARN() << "ZoneGroupTopology resubscribe failed:" << reply->errorString();
+            QWARN().noquote() << QStringLiteral(">%1").arg(topologyZoneIp) << "ZoneGroupTopology resubscribe failed:"
+                               << reply->errorString();
             return;
         }
 
@@ -519,13 +521,15 @@ void ZoneDiscovery::subscribeZoneEvent(ZonePlayer *zone, UpnpService &service, Z
         }
 
         if (reply->error() != QNetworkReply::NoError) {
-            QWARN() << zone->roomName() << serviceName << "subscribe failed:" << reply->errorString();
+            QWARN().noquote() << QStringLiteral(">%1").arg(zone->deviceIp()) << zone->roomName() << serviceName
+                               << "subscribe failed:" << reply->errorString();
             return;
         }
 
         const QString sid = QString::fromUtf8(reply->rawHeader("SID"));
         if (sid.isEmpty()) {
-            QWARN() << zone->roomName() << serviceName << "subscribe returned no SID";
+            QWARN().noquote() << QStringLiteral(">%1").arg(zone->deviceIp()) << zone->roomName() << serviceName
+                               << "subscribe returned no SID";
             return;
         }
 
@@ -535,7 +539,8 @@ void ZoneDiscovery::subscribeZoneEvent(ZonePlayer *zone, UpnpService &service, Z
         service->setSid(sid);
         m_zoneEventSubscriptions.insert(sid, ZoneEventSubscription{udn, serviceType});
         m_zoneEventRenewTimer.start();
-        QLOG() << "subscribed to" << zone->roomName() << serviceName << "SID=" << sid;
+        QLOG().noquote() << QStringLiteral(">%1").arg(zone->deviceIp()) << "subscribed to" << zone->roomName()
+                          << serviceName << "SID=" << sid;
     });
 }
 
@@ -589,9 +594,10 @@ void ZoneDiscovery::routeZoneEvent(const ZoneEventSubscription &subscription, co
     }
 }
 
-void ZoneDiscovery::onGenaNotify(const QString &sid, const QByteArray &body)
+void ZoneDiscovery::onGenaNotify(const QString &peerAddress, const QString &sid, const QByteArray &body)
 {
-    QLOG() << "GENA NOTIFY received, sid=" << sid << "," << body.size() << "bytes";
+    QLOG().noquote() << QStringLiteral("<%1").arg(peerAddress) << "GENA NOTIFY received, sid=" << sid << ","
+                      << body.size() << "bytes";
 
     const auto zoneEvent = m_zoneEventSubscriptions.constFind(sid);
     if (zoneEvent != m_zoneEventSubscriptions.constEnd()) {
