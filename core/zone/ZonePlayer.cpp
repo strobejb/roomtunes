@@ -164,6 +164,13 @@ QByteArray buildItemMetadata(const QVariantMap &item)
                            : Didl::buildItem(didlId, parentId, title, upnpClass, desc);
 }
 
+QString soapErrorDetail(const SoapResponse &response)
+{
+    return response.upnpErrorCode().isEmpty()
+        ? response.faultString()
+        : response.upnpErrorCode() + QStringLiteral(" ") + response.upnpErrorDescription();
+}
+
 QString genaProperty(const QByteArray &body, const QString &propertyName)
 {
     QXmlStreamReader xml(body);
@@ -391,22 +398,22 @@ void ZonePlayer::setAVTransportUri(const QString &uri, const QString &metaData, 
 
         const bool ok = !response.error();
         if (!ok)
-            QWARN() << m_roomName << "SetAVTransportURI failed:" << response.faultString();
+            QWARN() << m_roomName << "SetAVTransportURI failed:" << soapErrorDetail(response);
         if (callback)
             callback(ok);
     });
 }
 
-void ZonePlayer::addUriToQueue(const QString &uri, const QString &metaData, bool enqueueAsNext,
+void ZonePlayer::addUriToQueue(const QString &uri, const QString &metaData, int desiredFirstTrackNumberEnqueued, bool enqueueAsNext,
                                 std::function<void(bool ok, int firstTrackNumberEnqueued)> callback)
 {
-    QNetworkReply *reply = m_avTransport.AddURIToQueue(0, uri, metaData, 0, enqueueAsNext);
+    QNetworkReply *reply = m_avTransport.AddURIToQueue(0, uri, metaData, desiredFirstTrackNumberEnqueued, enqueueAsNext);
     connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
         SoapResponse response(reply);
         reply->deleteLater();
 
         if (response.error()) {
-            QWARN() << m_roomName << "AddURIToQueue failed:" << response.faultString();
+            QWARN() << m_roomName << "AddURIToQueue failed:" << soapErrorDetail(response);
             if (callback)
                 callback(false, 0);
             return;
@@ -427,7 +434,7 @@ void ZonePlayer::removeAllTracksFromQueue(std::function<void(bool)> callback)
 
         const bool ok = !response.error();
         if (!ok)
-            QWARN() << m_roomName << "RemoveAllTracksFromQueue failed:" << response.faultString();
+            QWARN() << m_roomName << "RemoveAllTracksFromQueue failed:" << soapErrorDetail(response);
         else
             emit queueChanged();
         if (callback)
@@ -458,7 +465,7 @@ void ZonePlayer::playItem(const QVariantMap &item)
     // Enqueue right after whatever's currently playing, point the
     // transport at this zone's own queue, seek to the newly-enqueued
     // position, then play -- roomtunes-bb10's play_track().
-    addUriToQueue(uri, QString::fromUtf8(metaData), /*enqueueAsNext=*/true,
+    addUriToQueue(uri, QString::fromUtf8(metaData), /*desiredFirstTrackNumberEnqueued=*/0, /*enqueueAsNext=*/true,
                   [this](bool ok, int firstTrackNumberEnqueued) {
         if (ok)
             playQueueTrack(firstTrackNumberEnqueued);
@@ -472,12 +479,10 @@ void ZonePlayer::playItemNext(const QVariantMap &item)
     if (uri.isEmpty() || upnpClass.endsWith(QStringLiteral(".audioBroadcast")))
         return;
 
-    // Same DesiredFirstTrackNumberEnqueued=0 + EnqueueAsNext=1 combination
-    // playItem() uses -- Sonos places it right after the currently-playing
-    // track either way (confirmed by playItem()'s own use of this, since
-    // the position it then seeks to is always immediately next); the only
-    // difference here is not seeking to/playing it immediately after.
-    addUriToQueue(uri, QString::fromUtf8(buildItemMetadata(item)), /*enqueueAsNext=*/true);
+    // roomtunes-bb10's play_next(): insert immediately after the current
+    // queue track rather than just relying on EnqueueAsNext's default
+    // placement.
+    addUriToQueue(uri, QString::fromUtf8(buildItemMetadata(item)), m_currentTrackNumber + 1, /*enqueueAsNext=*/true);
 }
 
 void ZonePlayer::addItemToQueue(const QVariantMap &item)
@@ -487,7 +492,8 @@ void ZonePlayer::addItemToQueue(const QVariantMap &item)
     if (uri.isEmpty() || upnpClass.endsWith(QStringLiteral(".audioBroadcast")))
         return;
 
-    addUriToQueue(uri, QString::fromUtf8(buildItemMetadata(item)), /*enqueueAsNext=*/false);
+    addUriToQueue(uri, QString::fromUtf8(buildItemMetadata(item)), /*desiredFirstTrackNumberEnqueued=*/0,
+                  /*enqueueAsNext=*/false);
 }
 
 void ZonePlayer::replaceQueueWithItem(const QVariantMap &item)
@@ -508,7 +514,7 @@ void ZonePlayer::removeQueueTrack(const QString &objectId)
         reply->deleteLater();
 
         if (response.error()) {
-            QWARN() << m_roomName << "RemoveTrackFromQueue failed:" << response.faultString();
+            QWARN() << m_roomName << "RemoveTrackFromQueue failed:" << soapErrorDetail(response);
             return;
         }
         emit queueChanged();
@@ -531,7 +537,7 @@ void ZonePlayer::playQueueTrack(int trackNumber)
             reply->deleteLater();
 
             if (response.error()) {
-                QWARN() << m_roomName << "Seek failed:" << response.faultString();
+                QWARN() << m_roomName << "Seek failed:" << soapErrorDetail(response);
                 return;
             }
             play();
@@ -727,6 +733,10 @@ void ZonePlayer::refreshTransportState()
 
         const QString trackMetaData = response.value(QStringLiteral("TrackMetaData"));
         const QString trackUri = response.value(QStringLiteral("TrackURI"));
+        bool trackNumberOk = false;
+        const int trackNumber = response.value(QStringLiteral("Track")).toInt(&trackNumberOk);
+        if (trackNumberOk)
+            m_currentTrackNumber = trackNumber;
 
         QList<DidlItem> items = Didl::parseItems(trackMetaData.toUtf8());
         DidlItem didl = items.isEmpty() ? DidlItem{} : items.first();

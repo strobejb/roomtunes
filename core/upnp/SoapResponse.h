@@ -32,6 +32,7 @@ public:
     const QString &faultString() const { return m_faultString; }
     const QString &upnpErrorCode() const { return m_upnpErrorCode; }
     const QString &upnpErrorDescription() const { return m_upnpErrorDescription; }
+    QString diagnosticText() const;
 
     // Present only on a SMAPI "Client.TokenRefreshRequired" fault -- the
     // SMAPI server hands back a replacement DeviceLink token/key right in

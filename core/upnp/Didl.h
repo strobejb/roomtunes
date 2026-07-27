@@ -17,6 +17,16 @@ struct DidlItem
     QString album;
     QString upnpClass;
     QString res;          // playable URI (the <res> element text)
+    // Usually these match id/parentId/desc. Sonos Favourites are the
+    // important exception: the outer favourite item is only a saved
+    // wrapper (id like "FV:2/233", class "object.item.sonos-favorite"),
+    // while r:resMD contains the real service/library item metadata Sonos
+    // expects back in AddURIToQueue/SetAVTransportURI. Keep both: id stays
+    // stable for browsing/navigation, didl* is used for playback metadata.
+    QString didlId;       // metadata <item id> to use when replaying/enqueueing
+    QString didlParentId; // metadata <item parentID> to use when replaying/enqueueing
+    QString desc;         // Sonos desc/cdudn metadata to use when replaying/enqueueing
+    int serviceId = -1;   // SA_RINCON service id parsed from desc, if present
     QString albumArtUri;
     QString streamInfo;   // Sonos r:streamInfo, used by TV/line-in sources
     QString trackNumber;

@@ -2,6 +2,7 @@
 
 #include <functional>
 
+#include <QList>
 #include <QNetworkAccessManager>
 #include <QString>
 
@@ -16,11 +17,12 @@ class Household;
 // Pandora/etc. partner service, one instance per entry in this
 // household's ThirdPartyMediaServersX. Absorbs what used to be
 // ServiceBrowser's browse() logic (see doBrowse()/withCredentials(): a
-// DeviceLink/AppLink service reuses the token/key Sonos already stored
+// DeviceLink/AppLink service reuses the credentials Sonos already stored
 // for it, a UserId service asks the zone itself for a sessionId via
 // MusicServices:1 GetSessionId, anything else browses directly) plus a
-// DeviceLink sign-in flow (beginSignIn()/completeSignIn(), built on
-// getDeviceLinkCode/getDeviceAuthToken).
+// DeviceLink/AppLink sign-in flow (beginSignIn()/completeSignIn()). AppLink
+// obtains the service's browser fallback via getAppLink; both policies
+// finish by exchanging that link code through getDeviceAuthToken.
 class SmapiService : public MusicService
 {
     Q_OBJECT
@@ -37,7 +39,9 @@ public:
     // updateResolved().
     SmapiService(Household *household, int serviceId, int smapiId, const QString &serviceUri,
                  const QString &authPolicy, const QString &username, const QString &token, const QString &key,
-                 const QString &title, const QString &iconUrl, QObject *parent = nullptr);
+                 const QString &title, const QString &iconUrl, quint32 capabilities = 0,
+                 const QString &manifestUri = QString(),
+                 QObject *parent = nullptr);
 
     int serviceId() const override { return m_serviceId; }
     int smapiId() const { return m_smapiId; }
@@ -54,7 +58,8 @@ public:
     // catalog rebuilds so a QML BrowseListPage mid-navigation never holds
     // a dangling pointer; see Household::rebuildMusicServices().
     void updateResolved(int smapiId, const QString &serviceUri, const QString &authPolicy, const QString &username,
-                         const QString &token, const QString &key, const QString &title, const QString &iconUrl);
+                         const QString &token, const QString &key, const QString &title, const QString &iconUrl,
+                         quint32 capabilities = 0, const QString &manifestUri = QString());
 
     Q_INVOKABLE void beginSignIn();
     Q_INVOKABLE void completeSignIn(const QString &linkCode);
@@ -62,24 +67,27 @@ public:
 signals:
     void authorized();
     void authorizationFailed(const QString &message);
-    void deviceLinkCodeReady(const QString &linkCode, const QString &regUrl);
+    void deviceLinkCodeReady(const QString &linkCode, const QString &regUrl, bool showLinkCode);
 
 protected:
     void doBrowse(const QString &objectId, ResultCallback callback) override;
     void doSearch(const QString &category, const QString &term, ResultCallback callback) override;
 
 private:
-    // Ported from the pre-refactor SmapiService: DeviceLink auth flow
-    // building blocks. Not QML-facing themselves -- beginSignIn()/
-    // completeSignIn() are the public entry points.
+    // DeviceLink and AppLink browser-fallback building blocks. Not
+    // QML-facing themselves -- beginSignIn()/completeSignIn() are the
+    // common public entry points.
     void requestDeviceLinkCode(const QString &householdId,
                                 std::function<void(bool ok, const QString &linkCode, const QString &regUrl)> callback);
+    void requestAppLinkCode(const QString &householdId,
+                            std::function<void(bool ok, const QString &linkCode, const QString &regUrl)> callback);
     void exchangeDeviceLinkCode(const QString &householdId, const QString &linkCode,
+                                 const QString &linkDeviceId,
                                  std::function<void(bool ok, const QString &token, const QString &key)> callback);
     void setDeviceLinkToken(const QString &deviceId, const QString &token, const QString &key, const QString &householdId);
 
-    // Resolves credentials for the current authPolicy (reusing a stored
-    // DeviceLink/AppLink token, or fetching a fresh UserId sessionId from
+    // Resolves credentials for the current authPolicy (reusing stored
+    // DeviceLink/AppLink credentials, or fetching a fresh UserId sessionId from
     // the zone) and then invokes onReady(); reports through callback
     // instead of calling onReady() if credentials can't be resolved.
     // requestDescription is purely for logging (e.g. "browse A:ALBUM" or
@@ -87,6 +95,10 @@ private:
     // so every failure/success line says what request it was against. See
     // ServiceBrowser::browse() (removed) for the logic this replaces.
     void withCredentials(const QString &requestDescription, ResultCallback callback, std::function<void()> onReady);
+    void applyStoredCredentials();
+    void browseViaSoap(const QString &objectId, const QString &requestDescription, ResultCallback callback);
+    void browseRootViaManifest(ResultCallback callback, std::function<void()> fallback);
+    void resolveManifestBrowseEndpoint(std::function<void(const QString &)> callback);
 
     // reissue rebuilds and re-sends the exact same request (getMetadata or
     // search, whichever doBrowse/doSearch is calling through) -- needed so
@@ -119,6 +131,11 @@ private:
     int m_serviceId;
     int m_smapiId;
     QString m_serviceUri;
+    quint32 m_capabilities = 0;
+    // AppLink manifests describe additional, non-SOAP HTTP APIs. Keep the
+    // URI as service metadata, but never bind those endpoints to m_smapi:
+    // standard SMAPI calls always go to the descriptor's SecureUri.
+    QString m_manifestUri;
     QString m_authPolicy;
     QString m_username;
     QString m_token;
@@ -133,6 +150,13 @@ private:
     // relinked). See updateResolved().
     QString m_tpmsxToken;
     QString m_tpmsxKey;
+    QString m_pendingLinkDeviceId;
+    bool m_pendingShowLinkCode = true;
+
+    enum class ManifestEndpointState { Unresolved, Resolving, Resolved, Unavailable };
+    ManifestEndpointState m_manifestEndpointState = ManifestEndpointState::Unresolved;
+    QString m_manifestBrowseEndpoint;
+    QList<std::function<void(const QString &)>> m_manifestEndpointWaiters;
 
     // {id, title} pairs from getMetadata("search") -- see
     // resolveSearchCategory(). Empty until the first search.

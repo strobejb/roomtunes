@@ -23,12 +23,14 @@ Popup {
 
     property string linkCode: ""
     property string regUrl: ""
+    property bool showLinkCode: true
     property string errorMessage: ""
     property bool waiting: true
 
     onOpened: {
         linkCode = ""
         regUrl = ""
+        showLinkCode = true
         errorMessage = ""
         waiting = true
         if (service)
@@ -43,9 +45,10 @@ Popup {
         // warning for a target that legitimately doesn't have these.
         ignoreUnknownSignals: true
 
-        function onDeviceLinkCodeReady(code, url) {
+        function onDeviceLinkCodeReady(code, url, showCode) {
             dialog.linkCode = code
             dialog.regUrl = url
+            dialog.showLinkCode = showCode
             dialog.waiting = false
         }
 
@@ -99,7 +102,9 @@ Popup {
 
             Label {
                 Layout.fillWidth: true
-                text: qsTr("Go to %1 and enter this code:").arg(dialog.regUrl)
+                text: dialog.showLinkCode
+                    ? qsTr("Go to %1 and enter this code:").arg(dialog.regUrl)
+                    : qsTr("Continue sign-in at %1.").arg(dialog.regUrl)
                 wrapMode: Text.WordWrap
                 font.pixelSize: 13
                 color: "#212121"
@@ -107,6 +112,7 @@ Popup {
 
             Label {
                 Layout.alignment: Qt.AlignHCenter
+                visible: dialog.showLinkCode
                 text: dialog.linkCode
                 font.pixelSize: 22
                 font.weight: Typography.emphasisWeight

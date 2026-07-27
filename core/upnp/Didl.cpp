@@ -1,5 +1,7 @@
 #include "Didl.h"
 
+#include <QRegularExpression>
+#include <QUrl>
 #include <QXmlStreamWriter>
 
 namespace RoomTunes {
@@ -9,6 +11,46 @@ constexpr char kDidlNsDc[] = "http://purl.org/dc/elements/1.1/";
 constexpr char kDidlNsUpnp[] = "urn:schemas-upnp-org:metadata-1-0/upnp/";
 constexpr char kDidlNsR[] = "urn:schemas-rinconnetworks-com:metadata-1-0/";
 constexpr char kDidlNsDefault[] = "urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/";
+
+QString decodeFavoriteMetadataId(QString id)
+{
+    id = QUrl::fromPercentEncoding(id.toUtf8());
+
+    // BB10 stripped the Sonos enqueue flags prefix from favourite resMD ids
+    // before rebuilding DIDL for AddURIToQueue. Example:
+    // "1006286cspotify%3Aplaylist%3A..." -> "spotify:playlist:...".
+    static const QRegularExpression flagsPrefix(QStringLiteral("^[0-9A-Fa-f]{8,9}"));
+    return id.remove(flagsPrefix);
+}
+
+void applyResourceMetadata(DidlItem *item, const QString &resourceMetadata)
+{
+    if (!item || resourceMetadata.isEmpty())
+        return;
+
+    const QList<DidlItem> nestedItems = Didl::parseItems(resourceMetadata.toUtf8());
+    if (nestedItems.isEmpty())
+        return;
+
+    const DidlItem &nested = nestedItems.first();
+    item->didlId = decodeFavoriteMetadataId(nested.id);
+    item->didlParentId = QUrl::fromPercentEncoding(nested.parentId.toUtf8());
+    item->desc = nested.desc;
+
+    // BB10 used this same desc value to discover the owning SMAPI service
+    // for a favourite. That matters for Spotify playlist favourites: their
+    // children are browsed with getMetadata() on the Spotify service, not
+    // with ContentDirectory::Browse on the Sonos Library.
+    static const QRegularExpression serviceIdPattern(QStringLiteral("^SA_RINCON([0-9]+)_"));
+    const QRegularExpressionMatch match = serviceIdPattern.match(item->desc);
+    if (match.hasMatch())
+        item->serviceId = match.captured(1).toInt();
+
+    if (!nested.upnpClass.isEmpty()) {
+        item->upnpClass = nested.upnpClass;
+        item->container = nested.upnpClass.contains(QStringLiteral(".container"));
+    }
+}
 }
 
 QByteArray Didl::buildItem(const QString &itemId, const QString &parentId, const QString &title,
@@ -69,6 +111,9 @@ DidlItem Didl::parseOneItem(QXmlStreamReader &xml, bool isContainer)
     item.container = isContainer;
     item.id = xml.attributes().value(QStringLiteral("id")).toString();
     item.parentId = xml.attributes().value(QStringLiteral("parentID")).toString();
+    item.didlId = item.id;
+    item.didlParentId = item.parentId;
+    QString resourceMetadata;
 
     while (xml.readNextStartElement()) {
         const QString name = xml.name().toString();
@@ -89,9 +134,19 @@ DidlItem Didl::parseOneItem(QXmlStreamReader &xml, bool isContainer)
             item.trackNumber = xml.readElementText(QXmlStreamReader::SkipChildElements);
         else if (name == QStringLiteral("res"))
             item.res = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (name == QStringLiteral("desc"))
+            item.desc = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (name == QStringLiteral("resMD"))
+            resourceMetadata = xml.readElementText(QXmlStreamReader::SkipChildElements);
         else
             xml.skipCurrentElement();
     }
+
+    // Sonos Favourites wrap the real playable item in r:resMD while the
+    // outer item's own id/class remain the favourite entry itself. Apply
+    // this after the full outer item has been parsed so the inner playable
+    // metadata wins regardless of the XML element order Sonos returned.
+    applyResourceMetadata(&item, resourceMetadata);
 
     return item;
 }

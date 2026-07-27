@@ -26,6 +26,7 @@ Item {
     // needs, plus everything ZonePlayer::playItem() needs for the header's
     // own Play pill to play this whole folder/album.
     property var folderItem: ({})
+    property var browseItem: ({})
     // Configurable, defaults on: shows a square folder/album art image at
     // the top of the page (with title/artist/Play pill underneath) instead
     // of going straight to the results list. Off for the root services
@@ -75,7 +76,7 @@ Item {
     // distinguishes this page's in-flight browse()/search() call from any
     // other page's, so a stale reply arriving after the user has already
     // navigated away can't overwrite the wrong page's content.
-    readonly property string requestToken: (root.searchTerm ? ("search:" + root.searchTerm) : objectId) + "|" + Math.random()
+    readonly property string requestToken: (root.searchTerm ? ("search:" + root.searchTerm) : (root.browseItem.id || objectId)) + "|" + Math.random()
 
     Component.onCompleted: {
         // A service needing sign-in shows the sign-in prompt instead of
@@ -100,9 +101,21 @@ Item {
             const category = (service.activeSearchCategory && service.activeSearchCategory.length > 0)
                 ? service.activeSearchCategory : "tracks"
             service.search(requestToken, category, root.searchTerm)
+        } else if (root.browseItem && Object.keys(root.browseItem).length > 0) {
+            service.browseItem(requestToken, root.browseItem)
         } else {
             service.browse(requestToken, objectId)
         }
+    }
+
+    function recordFavouriteUse(item) {
+        if (!item)
+            return
+
+        const itemId = String(item.id || "")
+        const parentId = String(item.parentId || "")
+        if (root.objectId === "FV:2" || parentId === "FV:2" || itemId.indexOf("FV:2/") === 0)
+            browseRecency.recordUse("browse:favourite:" + itemId)
     }
 
     // Re-runs the same search under a different category -- e.g. the user
@@ -157,8 +170,9 @@ Item {
         items: [qsTr("Play Now"), qsTr("Play Next"), qsTr("Add to End of Queue"), qsTr("Replace Queue")]
 
         onItemClicked: (text) => {
-            if (!root.zone)
+            if (!root.zone || !rowMenu.currentItem.uri)
                 return
+            root.recordFavouriteUse(rowMenu.currentItem)
             if (text === qsTr("Play Now"))
                 root.zone.playItem(rowMenu.currentItem)
             else if (text === qsTr("Play Next"))
@@ -588,7 +602,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        enabled: !!root.zone
+                        enabled: !!root.zone && !!root.folderItem.uri
                         onClicked: root.zone.playItem(root.folderItem)
                     }
                 }
@@ -612,6 +626,7 @@ Item {
                 // targeting this whole folder instead of one row inside it.
                 IconButton {
                     id: folderMenuButton
+                    visible: !!root.folderItem.uri
                     iconSource: "../resources/icons/three_dots_vertical.svg"
                     iconSize: 16
                     idleColor: "#F0F0F0"
@@ -694,10 +709,8 @@ Item {
                 spacing: 12
                 visible: root.loading
 
-                BusyIndicator {
+                BusySpinner {
                     Layout.alignment: Qt.AlignHCenter
-                    Layout.preferredWidth: 48
-                    Layout.preferredHeight: 48
                     running: root.loading
                 }
 
@@ -754,8 +767,8 @@ Item {
                     title: modelData.title
                     imageUrl: modelData.imageUrl
                     showChevron: !!modelData.container
-                    showMenu: true
-                    showPlayOverlay: !modelData.container
+                    showMenu: !!modelData.uri
+                    showPlayOverlay: !modelData.container && !!modelData.uri
                     // Only within an actual album/playlist listing, and
                     // only for the playable tracks in it -- a list position
                     // isn't a meaningful "track number" for ordinary
@@ -765,16 +778,21 @@ Item {
                     circularIcon: false
 
                     onClicked: {
+                        root.recordFavouriteUse(modelData)
                         if (modelData.container) {
                             root.stack.pushFolder(root.pageComponent, {
                                 title: modelData.title,
                                 service: root.service,
-                                objectId: modelData.id,
+                                // Same shape as BB10: QML passes the clicked
+                                // item back to the current service. C++ owns
+                                // the SMAPI-vs-ContentDirectory decision.
+                                objectId: modelData.browseId || modelData.id,
+                                browseItem: modelData,
                                 stack: root.stack,
                                 pageComponent: root.pageComponent,
                                 folderItem: modelData
                             })
-                        } else if (root.zone) {
+                        } else if (root.zone && modelData.uri) {
                             // Playable leaf item -- modelData already carries
                             // everything ZonePlayer::playItem() needs
                             // (uri/upnpClass/didlId/parentId/desc), computed

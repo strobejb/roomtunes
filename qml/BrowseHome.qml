@@ -108,13 +108,17 @@ Item {
         function onMusicServicesChanged() {
             root.libraryService = household.libraryService()
         }
+        function onMusicServicesReadyChanged() {
+            if (household.musicServicesReady && root.favouritesLoading)
+                root.loadFavourites()
+        }
     }
 
     // Same stale-reply guard as BrowseListPage.qml's own requestToken.
     property string favouritesToken: ""
 
     function loadFavourites() {
-        if (!root.libraryService)
+        if (!root.libraryService || !household.musicServicesReady)
             return
         root.favouritesLoading = true
         root.favouritesError = ""
@@ -128,12 +132,21 @@ Item {
         root.libraryService.browse(root.favouritesToken, "FV:2")
     }
 
+    function refreshOnReturn() {
+        if (!root.libraryService || !household.musicServicesReady || root.favouritesLoading)
+            return
+        loadFavourites()
+    }
+
     onLibraryServiceChanged: {
-        if (root.libraryService && root.favouritesLoading)
+        if (root.libraryService && household.musicServicesReady && root.favouritesLoading)
             loadFavourites()
     }
 
-    Component.onCompleted: loadFavourites()
+    Component.onCompleted: {
+        if (household.musicServicesReady)
+            loadFavourites()
+    }
 
     Connections {
         target: root.libraryService
@@ -143,7 +156,11 @@ Item {
                 return
             root.favouritesLoading = false
             if (ok) {
-                root.favouriteItems = results.slice(0, 5)
+                // Keep the full FV:2 result locally, then let orderedFavourites
+                // and the grid delegate's visible cap choose the first row/five
+                // to show. If we truncate before sorting, a favourite selected
+                // from the full child page can never jump into this home list.
+                root.favouriteItems = results.slice()
             } else {
                 root.favouritesError = message
                 root.favouriteItems = []
@@ -158,17 +175,16 @@ Item {
     // modelData.container the way BrowseListPage.qml's ordinary row click
     // is, since favourites are meant as browsable entry points here
     // (mirroring the "services" section's own tiles) rather than
-    // one-tap-to-play shortcuts. A favourite that turns out to have
-    // nothing further to browse into (a single saved track/station, not a
-    // playlist/album) still pushes the page -- it just lands on
-    // BrowseListPage.qml's own empty/error state, same as browsing any
-    // other folder that comes back empty.
+    // one-tap-to-play shortcuts. Match BB10's QML shape: pass the clicked
+    // item back to C++ and let the service decide whether the item should
+    // browse through ContentDirectory or a SMAPI service.
     function openFavourite(item) {
         browseRecency.recordUse(root.recencyKey("favourite", item.id))
         root.browseStack.pushFolder(root.pageComponent, {
             title: item.title,
             service: root.libraryService,
-            objectId: item.id,
+            objectId: item.browseId || item.id,
+            browseItem: item,
             stack: root.browseStack,
             pageComponent: root.pageComponent,
             folderItem: item
@@ -404,21 +420,32 @@ Item {
                         IconButton {
                             iconSource: "../resources/icons/chevron_right.svg"
                             iconSize: 16
-                            onClicked: root.browseStack.pushFolder(root.pageComponent, {
-                                title: qsTr("Sonos Favourites"),
-                                service: root.libraryService,
-                                objectId: "FV:2",
-                                stack: root.browseStack,
-                                pageComponent: root.pageComponent
-                            })
+                            enabled: !!root.libraryService && household.musicServicesReady
+                            onClicked: {
+                                if (!root.libraryService || !household.musicServicesReady)
+                                    return
+                                root.browseStack.pushFolder(root.pageComponent, {
+                                    title: qsTr("Sonos Favourites"),
+                                    service: root.libraryService,
+                                    objectId: "FV:2",
+                                    stack: root.browseStack,
+                                    pageComponent: root.pageComponent
+                                })
+                            }
                         }
                     }
 
-                    BusyIndicator {
-                        Layout.preferredWidth: 28
-                        Layout.preferredHeight: 28
-                        visible: root.favouritesLoading
+                    BusySpinner {
+                        Layout.alignment: Qt.AlignHCenter
                         running: root.favouritesLoading
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignHCenter
+                        visible: root.favouritesLoading
+                        text: household.musicServicesReady ? qsTr("Loading...") : qsTr("Waiting for services...")
+                        color: "#9E9E9E"
+                        font.pixelSize: 12
                     }
 
                     Label {
@@ -495,10 +522,15 @@ Item {
                         // visible even once the services below had loaded).
                         // Repeater.count is a real NOTIFYing property that
                         // updates as its model does.
-                        visible: servicesRepeater.count === 0
+                        visible: household.musicServicesReady && servicesRepeater.count === 0
                         text: qsTr("No music services found")
                         color: "#9E9E9E"
                         font.pixelSize: 13
+                    }
+
+                    BusySpinner {
+                        Layout.alignment: Qt.AlignHCenter
+                        running: !household.musicServicesReady
                     }
 
                     GridLayout {

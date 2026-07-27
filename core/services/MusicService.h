@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QString>
 #include <QVariantList>
+#include <QVariantMap>
 
 namespace RoomTunes {
 
@@ -53,6 +54,8 @@ class MusicService : public QObject
     Q_PROPERTY(QString activeSearchCategory READ activeSearchCategory NOTIFY activeSearchCategoryChanged)
 
 public:
+    using ResultCallback = std::function<void(bool ok, const QString &errorMessage, const QVariantList &items)>;
+
     MusicService(QString serviceKey, QString title, QString iconSource, QObject *parent = nullptr);
     ~MusicService() override = default;
 
@@ -77,7 +80,15 @@ public:
     virtual QString activeSearchCategory() const { return {}; }
 
     Q_INVOKABLE void browse(const QString &requestToken, const QString &objectId);
+    Q_INVOKABLE void browseItem(const QString &requestToken, const QVariantMap &item);
     Q_INVOKABLE void search(const QString &requestToken, const QString &category, const QString &term);
+
+    // Internal C++ browse entry point for service-to-service redirects.
+    // Sonos Favourites are the current use: they are discovered via the
+    // library's FV:2 ContentDirectory container, but a Spotify favourite's
+    // children must be fetched through Spotify SMAPI, not through another
+    // ContentDirectory::Browse.
+    void browseDirect(const QString &objectId, ResultCallback callback);
 
 signals:
     void browseFinished(const QString &requestToken, bool ok, const QString &errorMessage, const QVariantList &items);
@@ -88,9 +99,8 @@ signals:
     void iconSourceChanged();
 
 protected:
-    using ResultCallback = std::function<void(bool ok, const QString &errorMessage, const QVariantList &items)>;
-
     virtual void doBrowse(const QString &objectId, ResultCallback callback) = 0;
+    virtual void doBrowseItem(const QVariantMap &item, ResultCallback callback);
     // Base default: reports "not supported". A subclass only overrides
     // this if it can actually search (see canSearch()).
     virtual void doSearch(const QString &category, const QString &term, ResultCallback callback);

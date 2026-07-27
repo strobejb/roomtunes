@@ -11,6 +11,7 @@
 #include <QXmlStreamWriter>
 
 #include "../Logging.h"
+#include "../upnp/Soap.h"
 #include "../upnp/SoapResponse.h"
 #include "../xml/XmlUtils.h"
 
@@ -674,6 +675,15 @@ void ZoneDiscovery::parseZoneGroupState(const QByteArray &xmlBody)
             const QString location = attrs.value(QStringLiteral("Location")).toString();
             const QString roomName = attrs.value(QStringLiteral("ZoneName")).toString();
             const bool invisible = attrs.value(QStringLiteral("Invisible")) == QStringLiteral("1");
+            const QString softwareVersion = attrs.value(QStringLiteral("SoftwareVersion")).toString();
+            if (SoapRequest::userAgent().isEmpty() && !softwareVersion.isEmpty()) {
+                // BB10 set the SOAP User-Agent from ZoneGroupState's real
+                // Sonos SoftwareVersion before browsing SMAPI services.
+                // Keep that behavior so modern partner endpoints do not
+                // see a stale/fake controller version.
+                SoapRequest::setUserAgent(
+                    QStringLiteral("Linux UPnP/1.0 Sonos/%1 (WDCR:Microsoft Windows NT 10.0.22631)").arg(softwareVersion));
+            }
 
             if (!udn.isEmpty()) {
                 // Allocate any ZonePlayer not yet discovered via SSDP; future

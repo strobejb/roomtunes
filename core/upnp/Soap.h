@@ -34,18 +34,21 @@ public:
     }
 
     QXmlStreamWriter &xmlWriter() { return m_xml; }
+    void setSoapEncodingStyleEnabled(bool enabled) { m_useSoapEncodingStyle = enabled; }
+    static void setUserAgent(const QString &userAgent) { s_userAgent = userAgent; }
+    static const QString &userAgent() { return s_userAgent; }
 
     void openEnvelope()
     {
         m_xml.writeStartElement(QStringLiteral("s:Envelope"));
         m_xml.writeNamespace(QStringLiteral("http://schemas.xmlsoap.org/soap/envelope/"), QStringLiteral("s"));
-        m_xml.writeAttribute(QStringLiteral("s:encodingStyle"), QStringLiteral("http://schemas.xmlsoap.org/soap/encoding/"));
+        if (m_useSoapEncodingStyle)
+            m_xml.writeAttribute(QStringLiteral("s:encodingStyle"), QStringLiteral("http://schemas.xmlsoap.org/soap/encoding/"));
     }
 
     void openCommand(const QString &xmlns = QString())
     {
         m_xml.writeStartElement(QStringLiteral("s:Body"));
-
         if (xmlns.isEmpty()) {
             m_xml.writeStartElement(m_method);
             m_xml.writeDefaultNamespace(m_action);
@@ -131,6 +134,10 @@ public:
         request.setRawHeader("SOAPACTION", action.toUtf8());
         request.setRawHeader("Content-Type", "text/xml; charset=\"utf-8\"");
         request.setRawHeader("Connection", "close");
+        const QString userAgent = s_userAgent.isEmpty()
+            ? QStringLiteral("Linux UPnP/1.0 Sonos/80.0-00000 (WDCR:Microsoft Windows NT 10.0.22631)")
+            : s_userAgent;
+        request.setRawHeader("User-Agent", userAgent.toUtf8());
 
         // Sonos SOAP endpoints only reply in some locales unless we always
         // append 'en' as a fallback.
@@ -157,6 +164,7 @@ public:
         QNetworkReply *reply = m_netMgr->post(request, m_envelope);
         reply->setProperty("soapMethod", m_method);
         reply->setProperty("soapAction", action);
+        reply->setProperty("soapBody", QString::fromUtf8(m_envelope));
         reply->setProperty("destHost", QUrl(url).host());
         QObject::connect(reply, &QNetworkReply::sslErrors, reply, [reply](const QList<QSslError> &errors) {
             for (const QSslError &error : errors) {
@@ -242,6 +250,8 @@ private:
     QString m_language;
     QSslConfiguration *m_sslConfig;
     QStringList m_parameters;
+    bool m_useSoapEncodingStyle = true;
+    inline static QString s_userAgent;
 };
 
 }

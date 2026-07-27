@@ -37,9 +37,12 @@ public:
 
 protected:
     void doBrowse(const QString &objectId, ResultCallback callback) override;
+    void doBrowseItem(const QVariantMap &item, ResultCallback callback) override;
     void doSearch(const QString &category, const QString &term, ResultCallback callback) override;
 
 private:
+    void doBrowseWithReadyCoordinator(const QString &objectId, ResultCallback callback, int attemptsRemaining);
+
     Household *m_household;
     QString m_activeSearchCategoryId;
 };

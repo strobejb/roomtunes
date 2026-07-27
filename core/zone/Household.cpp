@@ -4,9 +4,12 @@
 
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QRegularExpression>
 #include <QStringList>
 #include <QTimer>
 #include <QUrl>
+#include <QXmlStreamReader>
+#include <QXmlStreamWriter>
 
 #include "../Logging.h"
 #include "../services/SmapiService.h"
@@ -25,6 +28,32 @@ namespace {
 // used to be) is the difference between "Spotify etc. never show up for
 // the rest of the session" and "shows up a few seconds late".
 constexpr int kServiceFetchRetrySeconds = 5;
+
+QString redactedFormattedXml(QString xml)
+{
+    xml.replace(QRegularExpression(QStringLiteral(R"(\b((?:Password|Password0|Token|Token0|Key|Key0|AuthToken|PrivateKey|SessionId)\d*)="[^"]*")"),
+                                   QRegularExpression::CaseInsensitiveOption),
+                QStringLiteral(R"(\1="<redacted>")"));
+    xml.replace(QRegularExpression(QStringLiteral("<((?:[A-Za-z_][\\w.-]*:)?(?:authToken|privateKey|sessionId|password|token|key))([^>]*)>.*?</\\1>"),
+                                   QRegularExpression::CaseInsensitiveOption),
+                QStringLiteral("<\\1\\2><redacted></\\1>"));
+
+    QString output;
+    QXmlStreamReader reader(xml);
+    QXmlStreamWriter writer(&output);
+    writer.setAutoFormatting(true);
+    writer.setAutoFormattingIndent(2);
+
+    while (!reader.atEnd()) {
+        reader.readNext();
+        if (reader.hasError())
+            break;
+        if (reader.tokenType() != QXmlStreamReader::StartDocument)
+            writer.writeCurrentToken(reader);
+    }
+
+    return output.isEmpty() ? xml : output;
+}
 }
 
 Household::Household(QObject *parent)
@@ -46,10 +75,38 @@ MusicService *Household::libraryService() const
     return m_libraryService;
 }
 
+MusicService *Household::serviceById(int serviceId) const
+{
+    const QString key = QStringLiteral("smapi:%1").arg(serviceId);
+    if (MusicService *service = m_smapiServicesByKey.value(key, nullptr))
+        return service;
+
+    // Sonos exposes two related ids for a partner service. TPMSX/
+    // ListAvailableServices gives us the household-scoped serviceId used
+    // as m_smapiServicesByKey's stable key, while favourite metadata and
+    // playable URIs can refer to the SMAPI id instead (the sid= value; BB10
+    // carried both via its smapimap.xml). Accept either so a Spotify
+    // favourite parsed from SA_RINCON9_ can still resolve the installed
+    // Spotify service whose household id may be 2311/3079.
+    for (SmapiService *service : m_smapiServicesByKey) {
+        if (service && service->smapiId() == serviceId)
+            return service;
+    }
+
+    return nullptr;
+}
+
 ZonePlayer *Household::contentDirectoryZone() const
 {
+    // Match roomtunes-bb10's stable "gateway" choice:
+    // findGatewayCandidate() picked a ready group coordinator, and
+    // ZonePlayer::isSelectable() further required visible/not-Bridge/
+    // configured. We do not track configured yet, so use the same
+    // observable constraints this port already has.
     for (ZonePlayer *zone : m_discovery.zones()) {
         if (!zone || !zone->ready() || zone->invisible())
+            continue;
+        if (!zone->isCoordinator())
             continue;
         if (zone->modelName().compare(QStringLiteral("DOCK"), Qt::CaseInsensitive) == 0)
             continue;
@@ -60,7 +117,7 @@ ZonePlayer *Household::contentDirectoryZone() const
         return zone;
     }
 
-    return m_discovery.topologyZone();
+    return nullptr;
 }
 
 void Household::onNetworkChanged()
@@ -74,6 +131,9 @@ void Household::onNetworkChanged()
     m_discovery.restart();
 
     m_catalogFetched = false;
+    m_smapiCatalogReady = false;
+    m_installedServicesDecoded = false;
+    updateMusicServicesReady();
     m_catalogFailedZoneUdns.clear();
     m_serviceDeviceSerial.clear();
     m_smapiCatalog.clear();
@@ -159,6 +219,7 @@ void Household::tryProcessThirdPartyMediaServersX()
     }
 
     m_rawInstalledServices = ThirdPartyMediaServers::parse(m_discovery.householdId(), m_pendingTpmsxRaw);
+    m_installedServicesDecoded = true;
     QLOG() << "tryProcessThirdPartyMediaServersX: decrypted" << m_rawInstalledServices.size() << "raw installed service(s)";
     rebuildMusicServices();
 }
@@ -166,28 +227,33 @@ void Household::tryProcessThirdPartyMediaServersX()
 ZonePlayer *Household::pickCatalogFetchZone() const
 {
     for (ZonePlayer *zone : m_discovery.zones()) {
-        if (zone->householdId().isEmpty())
+        if (!zone || !zone->ready() || zone->invisible())
+            continue;
+        if (!zone->isCoordinator())
+            continue;
+        if (zone->modelName().compare(QStringLiteral("DOCK"), Qt::CaseInsensitive) == 0)
+            continue;
+        if (zone->modelName().contains(QStringLiteral("BRIDGE"), Qt::CaseInsensitive))
+            continue;
+        if (zone->modelName().contains(QStringLiteral("Sub"), Qt::CaseInsensitive))
             continue;
         if (!m_catalogFailedZoneUdns.contains(zone->udn()))
             return zone;
     }
 
-    // Every known zone has already failed at least once this session --
-    // nothing left to prefer, so fall back to the topology zone (or, if
-    // that's somehow also gone, whatever we've got). Still bounded/retried
-    // via the usual kServiceFetchRetrySeconds delay, not a tight loop.
-    if (ZonePlayer *fallback = m_discovery.topologyZone())
-        return fallback;
-    const QList<ZonePlayer *> all = m_discovery.zones();
-    return all.isEmpty() ? nullptr : all.first();
+    return nullptr;
 }
 
 void Household::fetchMusicServiceCatalog()
 {
     ZonePlayer *zone = pickCatalogFetchZone();
-    if (!zone)
+    if (!zone) {
+        QLOG() << "ListAvailableServices: no ready coordinator yet -- retrying in" << kServiceFetchRetrySeconds << "s";
+        QTimer::singleShot(kServiceFetchRetrySeconds * 1000, this, &Household::fetchMusicServiceCatalog);
         return;
+    }
 
+    QLOG() << "ListAvailableServices via coordinator" << zone->roomName();
     QNetworkReply *reply = zone->musicServices().ListAvailableServices();
     connect(reply, &QNetworkReply::finished, this, [this, reply, zoneUdn = zone->udn(), roomName = zone->roomName()]() {
         SoapResponse response(reply);
@@ -210,7 +276,13 @@ void Household::fetchMusicServiceCatalog()
 
         const QByteArray descriptorList = response.value(QStringLiteral("AvailableServiceDescriptorList")).toUtf8();
         const QString typeList = response.value(QStringLiteral("AvailableServiceTypeList"));
+        QLOG() << "AvailableServiceTypeList:";
+        QLOG().noquote() << typeList;
+        QLOG() << "AvailableServiceDescriptorList XML:";
+        QLOG().noquote() << redactedFormattedXml(QString::fromUtf8(descriptorList));
+
         m_smapiCatalog = MusicServiceCatalog::build(descriptorList, typeList);
+        m_smapiCatalogReady = true;
 
         logServiceMap();
         rebuildMusicServices();
@@ -219,7 +291,8 @@ void Household::fetchMusicServiceCatalog()
 
 // Matches roomtunes-bb10's "building service map:" dump (ServiceDiscovery.cpp)
 // -- one line per catalog entry: household-scoped serviceId -> smapiId,
-// title, auth policy, container type, SMAPI endpoint.
+// title, auth policy, capabilities, container type, SMAPI endpoints, and
+// AppLink manifest location.
 void Household::logServiceMap() const
 {
     QLOG() << "--------------------------------------------------------------------------------";
@@ -229,13 +302,17 @@ void Household::logServiceMap() const
     std::sort(serviceIds.begin(), serviceIds.end());
     for (int serviceId : std::as_const(serviceIds)) {
         const SmapiCatalogEntry &entry = m_smapiCatalog.value(serviceId);
-        QLOG().noquote() << QStringLiteral("  %1 -> %2  %3 %4 %5 %6")
+        QLOG().noquote() << QStringLiteral("  %1 -> %2  %3 auth=%4 poll=%5 capabilities=%6 type=%7 uri=%8 secureUri=%9 manifest=%10")
                                  .arg(serviceId, 6)
                                  .arg(entry.smapiId, 5)
                                  .arg(entry.title, -32)
-                                 .arg(entry.auth, -10)
-                                 .arg(entry.containerType, -8)
-                                 .arg(entry.uri);
+                                 .arg(entry.auth.isEmpty() ? QStringLiteral("<none>") : entry.auth)
+                                 .arg(entry.pollInterval.isEmpty() ? QStringLiteral("<none>") : entry.pollInterval)
+                                 .arg(entry.capabilities.isEmpty() ? QStringLiteral("<none>") : entry.capabilities)
+                                 .arg(entry.containerType.isEmpty() ? QStringLiteral("<none>") : entry.containerType)
+                                 .arg(entry.uri.isEmpty() ? QStringLiteral("<none>") : entry.uri)
+                                 .arg(entry.secureUri.isEmpty() ? QStringLiteral("<none>") : entry.secureUri)
+                                 .arg(entry.manifestUri.isEmpty() ? QStringLiteral("<none>") : entry.manifestUri);
     }
 
     for (int legacyId : {1, 2, 3, 11, 13, 14}) {
@@ -289,6 +366,7 @@ void Household::fetchServiceDeviceSerial()
             m_serviceDeviceSerial = topZone->serialNumber();
 
         QLOG() << "service device serial:" << m_serviceDeviceSerial;
+        updateMusicServicesReady();
     });
 }
 
@@ -330,7 +408,7 @@ void Household::rebuildMusicServices()
         }
 
         service.title = catalogEntry->title;
-        service.serviceUri = catalogEntry->uri;
+        service.serviceUri = catalogEntry->secureUri.isEmpty() ? catalogEntry->uri : catalogEntry->secureUri;
         service.authPolicy = catalogEntry->auth;
         const int smapiId = catalogEntry->smapiId;
         // Confirmed empirically against the live mslogo.xml feed: unlike
@@ -342,8 +420,13 @@ void Household::rebuildMusicServices()
         // found nothing for every catalog-resolved service.
         service.iconUrl = m_serviceIcons.value(service.serviceId);
 
-        //QLOG() << "service:" << service.title << "serviceId=" << service.serviceId << "smapiId=" << smapiId
-        //                       << "icon=" << (service.iconUrl.isEmpty() ? QStringLiteral("<none found>") : service.iconUrl);
+        QLOG() << "service:" << service.title << "serviceId=" << service.serviceId << "smapiId=" << smapiId
+               << "auth=" << service.authPolicy << "uri=" << service.serviceUri
+               << "capabilities=" << (catalogEntry->capabilities.isEmpty() ? QStringLiteral("<none>") : catalogEntry->capabilities)
+               << "manifest=" << (catalogEntry->manifestUri.isEmpty() ? QStringLiteral("<none>") : catalogEntry->manifestUri)
+               << "username=" << (service.username.isEmpty() ? QStringLiteral("<device-link>") : service.username)
+               << "token=" << (!service.token.isEmpty()) << "key=" << (!service.key.isEmpty())
+               << "icon=" << (service.iconUrl.isEmpty() ? QStringLiteral("<none found>") : service.iconUrl);
 
         // loginName mirrors the UDN suffix Sonos itself uses: a real
         // username for UserId-auth services, or the synthetic
@@ -367,14 +450,16 @@ void Household::rebuildMusicServices()
         seenKeys.insert(key);
 
         SmapiService *smapiService = m_smapiServicesByKey.value(key);
+        const quint32 capabilities = catalogEntry->capabilities.toUInt();
         if (!smapiService) {
             smapiService = new SmapiService(this, service.serviceId, smapiId, service.serviceUri, service.authPolicy,
                                              service.username, service.token, service.key, service.title,
-                                             service.iconUrl, this);
+                                             service.iconUrl, capabilities, catalogEntry->manifestUri, this);
             m_smapiServicesByKey.insert(key, smapiService);
         } else {
             smapiService->updateResolved(smapiId, service.serviceUri, service.authPolicy, service.username,
-                                          service.token, service.key, service.title, service.iconUrl);
+                                          service.token, service.key, service.title, service.iconUrl,
+                                          capabilities, catalogEntry->manifestUri);
         }
         rebuilt.append(smapiService);
     }
@@ -398,9 +483,27 @@ void Household::rebuildMusicServices()
     }
 
     m_services = rebuilt;
+    updateMusicServicesReady();
     QLOG() << "rebuildMusicServices:" << m_services.size() << "service(s) total (library=" << (m_libraryService != nullptr)
            << ", smapi=" << m_smapiServicesByKey.size() << ", rawInstalled=" << m_rawInstalledServices.size() << ")";
     emit musicServicesChanged();
+}
+
+void Household::updateMusicServicesReady()
+{
+    // Do not let QML browse SMAPI-backed entries until all BB10-era service
+    // prerequisites are known: ListAvailableServices gives the catalog/ids,
+    // ThirdPartyMediaServersX gives installed account credentials, and
+    // R_TrialZPSerial supplies the deviceId used in SMAPI credential headers.
+    // Spotify is tolerant of a missing deviceId; BBC Sounds can return an
+    // empty SOAP body, so this readiness gate must include the serial too.
+    const bool ready = m_libraryService && m_smapiCatalogReady && m_installedServicesDecoded
+        && !m_serviceDeviceSerial.isEmpty();
+    if (m_musicServicesReady == ready)
+        return;
+
+    m_musicServicesReady = ready;
+    emit musicServicesReadyChanged();
 }
 
 }

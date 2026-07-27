@@ -163,12 +163,15 @@ int main(int argc, char *argv[])
         config.serviceUrl = parser.value(spotifyUrlOption);
 
         auto *spotify = new SmapiService(&household, 0, 0, config.serviceUrl, QStringLiteral("DeviceLink"), QString(),
-                                          QString(), QString(), config.title, config.imageSource, &app);
+                                          QString(), QString(), config.title, config.imageSource, 0, QString(), &app);
 
         QObject::connect(spotify, &SmapiService::deviceLinkCodeReady, &app,
-                          [](const QString &linkCode, const QString &regUrl) {
+                          [](const QString &linkCode, const QString &regUrl, bool showLinkCode) {
             QTextStream out(stdout);
-            out << "Visit " << regUrl << " and enter link code: " << linkCode << Qt::endl;
+            out << "Visit " << regUrl;
+            if (showLinkCode)
+                out << " and enter link code: " << linkCode;
+            out << Qt::endl;
             out << "(exchanging the code for a token once you've authorized is the next step -- not yet "
                    "wired up in this tool)"
                 << Qt::endl;

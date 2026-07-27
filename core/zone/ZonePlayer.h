@@ -130,7 +130,7 @@ public:
     // action.
     Q_INVOKABLE void leaveGroup();
     void setAVTransportUri(const QString &uri, const QString &metaData, std::function<void(bool)> callback = {});
-    void addUriToQueue(const QString &uri, const QString &metaData, bool enqueueAsNext,
+    void addUriToQueue(const QString &uri, const QString &metaData, int desiredFirstTrackNumberEnqueued, bool enqueueAsNext,
                         std::function<void(bool ok, int firstTrackNumberEnqueued)> callback = {});
     void removeAllTracksFromQueue(std::function<void(bool)> callback = {});
 
@@ -229,6 +229,7 @@ private:
     QString m_tvAudioInfo;
     int m_positionSeconds = 0;
     int m_durationSeconds = 0;
+    int m_currentTrackNumber = 0;
 
     AVTransport m_avTransport;
     RenderingControl m_renderingControl;

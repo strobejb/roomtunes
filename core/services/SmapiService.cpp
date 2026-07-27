@@ -1,8 +1,21 @@
 #include "SmapiService.h"
 
+#include <QDateTime>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QLocale>
 #include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QRegularExpression>
+#include <QSettings>
+#include <QSysInfo>
 #include <QUrl>
+#include <QUuid>
 #include <QXmlStreamReader>
+
+#include <cstdlib>
+#include <utility>
 
 #include "../Logging.h"
 #include "../upnp/SoapResponse.h"
@@ -16,6 +29,170 @@ namespace RoomTunes {
 
 namespace {
 
+constexpr quint32 kContextCapability = 1u << 16;
+
+struct DeviceLinkDetails
+{
+    QString registrationUrl;
+    QString linkCode;
+    QString linkDeviceId;
+    bool showLinkCode = true;
+};
+
+DeviceLinkDetails parseAppLinkDeviceLink(const QByteArray &body)
+{
+    DeviceLinkDetails details;
+    QXmlStreamReader xml(body);
+    while (!xml.atEnd()) {
+        if (!xml.readNextStartElement())
+            continue;
+        if (xml.name() != QLatin1String("deviceLink"))
+            continue;
+
+        while (xml.readNextStartElement()) {
+            const QString name = xml.name().toString();
+            if (name == QStringLiteral("regUrl"))
+                details.registrationUrl = xml.readElementText(QXmlStreamReader::SkipChildElements);
+            else if (name == QStringLiteral("linkCode"))
+                details.linkCode = xml.readElementText(QXmlStreamReader::SkipChildElements);
+            else if (name == QStringLiteral("linkDeviceId"))
+                details.linkDeviceId = xml.readElementText(QXmlStreamReader::SkipChildElements);
+            else if (name == QStringLiteral("showLinkCode"))
+                details.showLinkCode =
+                    xml.readElementText(QXmlStreamReader::SkipChildElements).compare(
+                        QStringLiteral("false"), Qt::CaseInsensitive) != 0;
+            else
+                xml.skipCurrentElement();
+        }
+        break;
+    }
+    return details;
+}
+
+QString compactXmlForLog(QString xml)
+{
+    xml.replace(QRegularExpression(QStringLiteral("<((?:[A-Za-z_][\\w.-]*:)?(?:authToken|privateKey|sessionId|password|token|key))([^>]*)>.*?</\\1>"),
+                                   QRegularExpression::CaseInsensitiveOption),
+                QStringLiteral("<\\1\\2><redacted></\\1>"));
+    xml.replace(QLatin1Char('\r'), QLatin1Char(' '));
+    xml.replace(QLatin1Char('\n'), QLatin1Char(' '));
+    xml.replace(QLatin1Char('\t'), QLatin1Char(' '));
+    xml = xml.simplified();
+
+    constexpr qsizetype maxLength = 4000;
+    if (xml.size() > maxLength)
+        xml = xml.left(maxLength - 3) + QStringLiteral("...");
+    return xml;
+}
+
+bool hasNilMetadataResponse(const QByteArray &body)
+{
+    QXmlStreamReader xml(body);
+    while (!xml.atEnd()) {
+        if (!xml.readNextStartElement())
+            continue;
+        const QString name = xml.name().toString();
+        if (name != QStringLiteral("getMetadataResponse") && name != QStringLiteral("searchResponse"))
+            continue;
+
+        const QXmlStreamAttributes attrs = xml.attributes();
+        for (const QXmlStreamAttribute &attr : attrs) {
+            if (attr.name() == QLatin1String("nil") && attr.value() == QLatin1String("true"))
+                return true;
+        }
+        return false;
+    }
+    return false;
+}
+
+bool hasSoapBodyPayload(const QByteArray &body)
+{
+    QXmlStreamReader xml(body);
+    while (!xml.atEnd()) {
+        if (!xml.readNextStartElement())
+            continue;
+        if (!xml.name().endsWith(QLatin1String("Body")))
+            continue;
+        return xml.readNextStartElement();
+    }
+    return false;
+}
+
+QString responseHeadersForLog(const QNetworkReply *reply)
+{
+    if (!reply)
+        return {};
+
+    QStringList headers;
+    const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QString httpReason = reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString();
+    if (httpStatus > 0)
+        headers << QStringLiteral("HTTP %1%2").arg(httpStatus).arg(httpReason.isEmpty() ? QString() : QStringLiteral(" ") + httpReason);
+
+    for (const auto &pair : reply->rawHeaderPairs()) {
+        const QString name = QString::fromLatin1(pair.first);
+        QString value = QString::fromLatin1(pair.second);
+        if (name.compare(QStringLiteral("set-cookie"), Qt::CaseInsensitive) == 0
+            || name.compare(QStringLiteral("authorization"), Qt::CaseInsensitive) == 0)
+            value = QStringLiteral("<redacted>");
+        headers << QStringLiteral("%1: %2").arg(name, value);
+    }
+
+    return headers.join(QStringLiteral("; "));
+}
+
+QString replyUrlForLog(const QNetworkReply *reply)
+{
+    return reply ? reply->url().toString() : QStringLiteral("<unknown>");
+}
+
+QString manifestBrowseEndpoint(const QByteArray &body)
+{
+    const QJsonArray endpoints = QJsonDocument::fromJson(body).object().value(QStringLiteral("endpoints")).toArray();
+    for (const QJsonValue &value : endpoints) {
+        const QJsonObject endpoint = value.toObject();
+        if (endpoint.value(QStringLiteral("type")).toString() == QStringLiteral("browse"))
+            return endpoint.value(QStringLiteral("uri")).toString();
+    }
+    return {};
+}
+
+QString sonosControllerId()
+{
+    // Manifest browse endpoints expect a controller identity which remains
+    // stable across requests. It identifies this RoomTunes installation,
+    // not a Sonos account, so generate and persist our own UUID.
+    QSettings settings;
+    constexpr auto key = "network/sonosControllerId";
+    QString id = settings.value(QLatin1String(key)).toString();
+    if (id.isEmpty()) {
+        id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        settings.setValue(QLatin1String(key), id);
+    }
+    return id;
+}
+
+QString localUtcOffset()
+{
+    const int offsetSeconds = QDateTime::currentDateTime().offsetFromUtc();
+    const QChar sign = offsetSeconds < 0 ? QLatin1Char('-') : QLatin1Char('+');
+    const int offsetMinutes = std::abs(offsetSeconds) / 60;
+    return QStringLiteral("%1%2:%3")
+        .arg(sign)
+        .arg(offsetMinutes / 60, 2, 10, QLatin1Char('0'))
+        .arg(offsetMinutes % 60, 2, 10, QLatin1Char('0'));
+}
+
+QString jsonString(const QJsonObject &object, const QString &name)
+{
+    const QJsonValue value = object.value(name);
+    if (value.isString())
+        return value.toString();
+    if (value.isObject())
+        return value.toObject().value(QStringLiteral("name")).toString();
+    return {};
+}
+
 QVariantMap itemToVariant(const QString &id, const QString &title, const QString &artist, const QString &album,
                            const QString &imageUrl, bool container, const QString &uri, const QString &upnpClass,
                            const QString &didlId, const QString &parentId, const QString &desc,
@@ -28,6 +205,10 @@ QVariantMap itemToVariant(const QString &id, const QString &title, const QString
     item[QStringLiteral("album")] = album;
     item[QStringLiteral("imageUrl")] = imageUrl;
     item[QStringLiteral("container")] = container;
+    // QML uses browseId for folder descent so ContentDirectory favourites
+    // can keep a distinct visible id and real browse target. SMAPI items do
+    // not have that wrapper split, so their browse target is simply id.
+    item[QStringLiteral("browseId")] = id;
     item[QStringLiteral("uri")] = uri;
     item[QStringLiteral("upnpClass")] = upnpClass;
     item[QStringLiteral("didlId")] = didlId;
@@ -117,7 +298,7 @@ QString enqueuedId(const QString &itemId, const QString &resourceType)
 // roomtunes-bb10's SonosTrack::enqueued_id()/didl_desc()).
 QVariantMap parseOneItem(QXmlStreamReader &xml, bool isCollection, int smapiId, int serviceId, const QString &username)
 {
-    QString id, itemType, mimeType, title, artist, album, albumArtUri;
+    QString id, itemType, mimeType, title, artist, album, albumArtUri, canPlay, onDemand;
 
     while (xml.readNextStartElement()) {
         const QString name = xml.name().toString();
@@ -129,8 +310,14 @@ QVariantMap parseOneItem(QXmlStreamReader &xml, bool isCollection, int smapiId, 
             mimeType = xml.readElementText(QXmlStreamReader::SkipChildElements);
         else if (name == QStringLiteral("title"))
             title = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (name == QStringLiteral("artist"))
+            artist = xml.readElementText(QXmlStreamReader::SkipChildElements);
         else if (name == QStringLiteral("albumArtURI"))
             albumArtUri = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (name == QStringLiteral("canPlay"))
+            canPlay = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (name == QStringLiteral("onDemand"))
+            onDemand = xml.readElementText(QXmlStreamReader::SkipChildElements);
         else if (name == QStringLiteral("trackMetadata")) {
             while (xml.readNextStartElement()) {
                 const QString field = xml.name().toString();
@@ -143,13 +330,26 @@ QVariantMap parseOneItem(QXmlStreamReader &xml, bool isCollection, int smapiId, 
                 else
                     xml.skipCurrentElement();
             }
+        } else if (name == QStringLiteral("streamMetadata")) {
+            while (xml.readNextStartElement()) {
+                const QString field = xml.name().toString();
+                if ((field == QStringLiteral("currentHost") || field == QStringLiteral("description")) && artist.isEmpty())
+                    artist = xml.readElementText(QXmlStreamReader::SkipChildElements);
+                else if (field == QStringLiteral("logo") && albumArtUri.isEmpty())
+                    albumArtUri = xml.readElementText(QXmlStreamReader::SkipChildElements);
+                else
+                    xml.skipCurrentElement();
+            }
         } else {
             xml.skipCurrentElement();
         }
     }
 
-    const bool container = isCollection || itemType == QStringLiteral("playlist") || itemType == QStringLiteral("album")
-        || itemType == QStringLiteral("artist") || itemType == QStringLiteral("container");
+    const bool playable = canPlay == QStringLiteral("true") || onDemand == QStringLiteral("true")
+        || itemType == QStringLiteral("stream");
+    const bool container = itemType == QStringLiteral("program") ? false
+        : isCollection || itemType == QStringLiteral("playlist") || itemType == QStringLiteral("album")
+            || itemType == QStringLiteral("artist") || itemType == QStringLiteral("container");
 
     const QString resourceType = lookupResourceType(itemType, mimeType);
     const QString uri = enqueuedUri(resourceType, id, smapiId);
@@ -158,14 +358,63 @@ QVariantMap parseOneItem(QXmlStreamReader &xml, bool isCollection, int smapiId, 
     // "-1" per SMAPI's own enqueue convention -- only a <mediaCollection>
     // container keeps an empty one (roomtunes-bb10's ParseMediaMetadata/
     // ParseMediaCollection).
-    const QString parentId = isCollection ? QString() : QStringLiteral("-1");
+    const QString parentId = container ? QString() : QStringLiteral("-1");
     const QString desc = QStringLiteral("SA_RINCON%1_%2").arg(serviceId).arg(username);
 
-    return itemToVariant(id, title, artist, album, albumArtUri, container, uri, upnpClass, enqueuedId(id, resourceType),
-                          parentId, desc, itemType);
+    QVariantMap item = itemToVariant(id, title, artist, album, albumArtUri, container, uri, upnpClass,
+                                      enqueuedId(id, resourceType), parentId, desc, itemType);
+    item[QStringLiteral("playable")] = playable;
+    return item;
 }
 
-QVariantList parseMetadataBody(const QByteArray &body, int smapiId, int serviceId, const QString &username)
+QVariantList parseManifestBrowseItems(const QByteArray &body, int smapiId, int serviceId, const QString &username)
+{
+    const QJsonDocument document = QJsonDocument::fromJson(body);
+    if (!document.isObject())
+        return {};
+
+    QVariantList items;
+    const QJsonArray views = document.object().value(QStringLiteral("views")).toArray();
+    for (const QJsonValue &value : views) {
+        const QJsonObject view = value.toObject();
+        const QJsonObject idObject = view.value(QStringLiteral("id")).toObject();
+        const QString id = idObject.isEmpty() ? view.value(QStringLiteral("id")).toString()
+                                              : idObject.value(QStringLiteral("objectId")).toString();
+        const QJsonObject content = view.value(QStringLiteral("content")).toObject();
+        const QJsonObject track = content.value(QStringLiteral("track")).toObject();
+        const QJsonObject containerDetails = content.value(QStringLiteral("container")).toObject();
+        const QJsonObject details = track.isEmpty() ? containerDetails : track;
+        if (id.isEmpty() || details.isEmpty())
+            continue;
+
+        QString itemType = details.value(QStringLiteral("type")).toString();
+        const QJsonObject policies = view.value(QStringLiteral("browsePolicies")).toObject();
+        const bool container = view.value(QStringLiteral("total")).toInt() > 0
+            || policies.value(QStringLiteral("canEnumerate")).toBool()
+            || (!containerDetails.isEmpty() && itemType == QStringLiteral("container"));
+        if (itemType.isEmpty())
+            itemType = container ? QStringLiteral("container") : QStringLiteral("track");
+
+        const bool playable = policies.value(QStringLiteral("canPlay")).toBool();
+        const QString title = details.value(QStringLiteral("name")).toString();
+        const QString artist = jsonString(details, QStringLiteral("artist"));
+        const QString imageUrl = details.value(QStringLiteral("imageUrl")).toString();
+        const QString resourceType = lookupResourceType(itemType, QString());
+        const QString uri = enqueuedUri(resourceType, id, smapiId);
+        const QString parentId = container ? QString() : QStringLiteral("-1");
+        const QString desc = QStringLiteral("SA_RINCON%1_%2").arg(serviceId).arg(username);
+
+        QVariantMap item = itemToVariant(id, title, artist, QString(), imageUrl, container, uri,
+                                         lookupUpnpClass(itemType, QString()), enqueuedId(id, resourceType),
+                                         parentId, desc, itemType);
+        item[QStringLiteral("playable")] = playable;
+        item[QStringLiteral("summary")] = details.value(QStringLiteral("summary")).toString();
+        items.append(item);
+    }
+    return items;
+}
+
+QVariantList parseMetadataXml(const QByteArray &body, int smapiId, int serviceId, const QString &username)
 {
     QVariantList items;
     QXmlStreamReader xml(body);
@@ -180,24 +429,51 @@ QVariantList parseMetadataBody(const QByteArray &body, int smapiId, int serviceI
     return items;
 }
 
+QVariantList parseMetadataBody(const SoapResponse &response, int smapiId, int serviceId, const QString &username)
+{
+    // BB10's pugixml parser selected "//mediaCollection" and
+    // "//mediaMetadata", so it tolerated both literal SMAPI result children
+    // and service-specific wrapper elements. Start with the full SOAP body,
+    // then fall back to any escaped result text if a service returns that
+    // older/stringified shape.
+    QVariantList items = parseMetadataXml(response.rawBody(), smapiId, serviceId, username);
+    if (!items.isEmpty())
+        return items;
+
+    for (const QString &resultTag : {QStringLiteral("getMetadataResult"), QStringLiteral("searchResult")}) {
+        const QString resultXml = response.value(resultTag);
+        if (resultXml.contains(QStringLiteral("mediaCollection")) || resultXml.contains(QStringLiteral("mediaMetadata"))) {
+            items = parseMetadataXml(resultXml.toUtf8(), smapiId, serviceId, username);
+            if (!items.isEmpty())
+                return items;
+        }
+    }
+
+    return {};
+}
+
 }
 
 SmapiService::SmapiService(Household *household, int serviceId, int smapiId, const QString &serviceUri,
                             const QString &authPolicy, const QString &username, const QString &token,
-                            const QString &key, const QString &title, const QString &iconUrl, QObject *parent)
+                            const QString &key, const QString &title, const QString &iconUrl,
+                            quint32 capabilities, const QString &manifestUri, QObject *parent)
     : MusicService(QStringLiteral("smapi:%1").arg(serviceId), title, iconUrl, parent)
     , m_household(household)
     , m_serviceId(serviceId)
     , m_smapiId(smapiId)
     , m_serviceUri(serviceUri)
+    , m_capabilities(capabilities)
     , m_authPolicy(authPolicy)
     , m_username(username)
     , m_token(token)
     , m_key(key)
+    , m_manifestUri(manifestUri)
     , m_tpmsxToken(token)
     , m_tpmsxKey(key)
     , m_smapi(household->networkAccessManager(), serviceUri)
 {
+    m_smapi.setContextEnabled(m_capabilities & kContextCapability);
 }
 
 bool SmapiService::needsSignIn() const
@@ -208,14 +484,24 @@ bool SmapiService::needsSignIn() const
 
 void SmapiService::updateResolved(int smapiId, const QString &serviceUri, const QString &authPolicy,
                                    const QString &username, const QString &token, const QString &key,
-                                   const QString &title, const QString &iconUrl)
+                                   const QString &title, const QString &iconUrl, quint32 capabilities,
+                                   const QString &manifestUri)
 {
     const bool wasNeedsSignIn = needsSignIn();
 
     m_smapiId = smapiId;
     if (m_serviceUri != serviceUri) {
         m_serviceUri = serviceUri;
-        m_smapi.bindService(serviceUri);
+        m_smapi.bindService(m_serviceUri);
+    }
+    if (m_capabilities != capabilities) {
+        m_capabilities = capabilities;
+        m_smapi.setContextEnabled(m_capabilities & kContextCapability);
+    }
+    if (m_manifestUri != manifestUri) {
+        m_manifestUri = manifestUri;
+        m_manifestBrowseEndpoint.clear();
+        m_manifestEndpointState = ManifestEndpointState::Unresolved;
     }
     m_authPolicy = authPolicy;
     m_username = username;
@@ -247,9 +533,20 @@ void SmapiService::doBrowse(const QString &objectId, ResultCallback callback)
     QLOG() << title() << description;
 
     withCredentials(description, callback, [this, objectId, callback, description]() {
-        auto reissue = [this, objectId]() { return m_smapi.getMetadata(objectId, 0, 100); };
-        runMetadataRequest(reissue(), description, callback, reissue);
+        auto soapFallback = [this, objectId, callback, description]() {
+            browseViaSoap(objectId, description, callback);
+        };
+        if (objectId == QStringLiteral("root") && !m_manifestUri.isEmpty())
+            browseRootViaManifest(callback, soapFallback);
+        else
+            soapFallback();
     });
+}
+
+void SmapiService::browseViaSoap(const QString &objectId, const QString &requestDescription, ResultCallback callback)
+{
+    auto reissue = [this, objectId]() { return m_smapi.getMetadata(objectId, 0, 100); };
+    runMetadataRequest(reissue(), requestDescription, callback, reissue);
 }
 
 void SmapiService::doSearch(const QString &category, const QString &term, ResultCallback callback)
@@ -279,28 +576,29 @@ void SmapiService::resolveSearchCategory(const QString &hint, ResultCallback cal
     // the same <mediaCollection> shape as an ordinary browse result, just
     // describing category choices instead of playable content, so the
     // existing parser handles it as-is.
-    QNetworkReply *reply = m_smapi.getMetadata(QStringLiteral("search"), 0, 10);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, hint, callback, onResolved]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
+    const QString description = QStringLiteral("fetch search categories");
+    auto reissue = [this]() { return m_smapi.getMetadata(QStringLiteral("search"), 0, 10); };
+    runMetadataRequest(
+        reissue(), description,
+        [this, hint, callback, onResolved](bool ok, const QString &error, const QVariantList &items) {
+            if (!ok) {
+                QWARN() << title() << "fetching search categories failed:" << error;
+                callback(false, tr("This service doesn't support search."), {});
+                return;
+            }
 
-        if (response.error()) {
-            QWARN() << title() << "fetching search categories failed:" << response.faultCode() << response.faultString();
-            callback(false, tr("This service doesn't support search."), {});
-            return;
-        }
+            m_searchCategories = items;
+            if (m_searchCategories.isEmpty()) {
+                QWARN() << title() << "fetching search categories returned none";
+                callback(false, tr("This service doesn't support search."), {});
+                return;
+            }
 
-        m_searchCategories = parseMetadataBody(response.rawBody(), m_smapiId, m_serviceId, m_username);
-        if (m_searchCategories.isEmpty()) {
-            QWARN() << title() << "fetching search categories returned none";
-            callback(false, tr("This service doesn't support search."), {});
-            return;
-        }
-
-        QLOG() << title() << "search categories:" << m_searchCategories.size();
-        emit searchCategoriesChanged();
-        applyResolvedSearchCategory(pickSearchCategoryId(hint), onResolved);
-    });
+            QLOG() << title() << "search categories:" << m_searchCategories.size();
+            emit searchCategoriesChanged();
+            applyResolvedSearchCategory(pickSearchCategoryId(hint), onResolved);
+        },
+        reissue);
 }
 
 void SmapiService::applyResolvedSearchCategory(const QString &categoryId, std::function<void(const QString &)> onResolved)
@@ -334,23 +632,30 @@ void SmapiService::withCredentials(const QString &requestDescription, ResultCall
         return;
     }
 
-    // "AppLink" is the SMAPI catalog's newer name for the same sign-in
-    // relationship as "DeviceLink" (confirmed against a real household:
-    // Spotify/YouTube Music/BBC Sounds/TuneIn all report "AppLink").
     if (m_authPolicy == QStringLiteral("DeviceLink") || m_authPolicy == QStringLiteral("AppLink")) {
+        if (m_household->serviceDeviceSerial().isEmpty()) {
+            QWARN() << title() << requestDescription << "failed: no SMAPI deviceId available yet";
+            callback(false, tr("This service can't be browsed yet."), {});
+            return;
+        }
         if (m_token.isEmpty() || m_key.isEmpty()) {
             QWARN() << title() << requestDescription << "failed: sign-in required (no stored DeviceLink token)";
             callback(false, tr("Sign-in required for this service."), {});
             return;
         }
 
-        m_smapi.setLoginTokenCredentials(m_household->serviceDeviceSerial(), QStringLiteral("Sonos"), m_token, m_key,
-                                          m_household->householdId());
+        applyStoredCredentials();
         onReady();
         return;
     }
 
     if (m_authPolicy == QStringLiteral("UserId")) {
+        if (m_household->serviceDeviceSerial().isEmpty()) {
+            QWARN() << title() << requestDescription << "failed: no SMAPI deviceId available yet";
+            callback(false, tr("This service can't be browsed yet."), {});
+            return;
+        }
+
         ZonePlayer *zone = m_household->topologyZone();
         if (!zone) {
             QWARN() << title() << requestDescription << "failed: no topology zone available to fetch a sessionId with";
@@ -387,9 +692,120 @@ void SmapiService::withCredentials(const QString &requestDescription, ResultCall
     onReady();
 }
 
+void SmapiService::applyStoredCredentials()
+{
+    m_smapi.setLoginTokenCredentials(m_household->serviceDeviceSerial(), QStringLiteral("Sonos"), m_token, m_key,
+                                      m_household->householdId());
+}
+
+void SmapiService::resolveManifestBrowseEndpoint(std::function<void(const QString &)> callback)
+{
+    if (m_manifestEndpointState == ManifestEndpointState::Resolved) {
+        callback(m_manifestBrowseEndpoint);
+        return;
+    }
+    if (m_manifestEndpointState == ManifestEndpointState::Unavailable || m_manifestUri.isEmpty()) {
+        callback(QString());
+        return;
+    }
+
+    m_manifestEndpointWaiters.append(std::move(callback));
+    if (m_manifestEndpointState == ManifestEndpointState::Resolving)
+        return;
+
+    m_manifestEndpointState = ManifestEndpointState::Resolving;
+    QNetworkRequest request{QUrl(m_manifestUri)};
+    request.setTransferTimeout(10000);
+    request.setRawHeader("Accept", "application/json");
+    QNetworkReply *reply = m_household->networkAccessManager()->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        const QByteArray body = reply->readAll();
+        if (reply->error() == QNetworkReply::NoError)
+            m_manifestBrowseEndpoint = manifestBrowseEndpoint(body);
+
+        m_manifestEndpointState = m_manifestBrowseEndpoint.isEmpty() ? ManifestEndpointState::Unavailable
+                                                                     : ManifestEndpointState::Resolved;
+        if (m_manifestBrowseEndpoint.isEmpty()) {
+            QWARN() << title() << "manifest has no usable browse endpoint:" << m_manifestUri
+                    << reply->errorString();
+        } else {
+            QLOG() << title() << "manifest browse endpoint:" << m_manifestBrowseEndpoint;
+        }
+        reply->deleteLater();
+
+        const auto waiters = std::exchange(m_manifestEndpointWaiters, {});
+        for (const auto &waiter : waiters)
+            waiter(m_manifestBrowseEndpoint);
+    });
+}
+
+void SmapiService::browseRootViaManifest(ResultCallback callback, std::function<void()> fallback)
+{
+    resolveManifestBrowseEndpoint([this, callback, fallback](const QString &endpoint) {
+        if (endpoint.isEmpty()) {
+            fallback();
+            return;
+        }
+
+        // A manifest "browse" endpoint is a separate JSON root-catalog
+        // transport. It is GET-only and is not a replacement URL for SOAP
+        // getMetadata. The complete TPMSX account token is its bearer
+        // credential; SMAPI child ids continue through the SOAP endpoint.
+        QNetworkRequest request{QUrl(endpoint)};
+        request.setTransferTimeout(10000);
+        request.setRawHeader("Accept", "application/json");
+        request.setRawHeader("Content-Type", "application/json");
+        request.setRawHeader("User-Agent", SoapRequest::userAgent().toUtf8());
+        request.setRawHeader("X-Sonos-Corr-Id", QUuid::createUuid().toString(QUuid::WithoutBraces).toUtf8());
+        request.setRawHeader("X-Sonos-Controller-ID", sonosControllerId().toUtf8());
+        request.setRawHeader("X-Sonos-Device-Id", m_household->householdId().toUtf8());
+        // This is the legacy Sonos controller API key used by the LAN
+        // content-browse protocol. It identifies the controller client;
+        // the account authorization remains the user's bearer token.
+        request.setRawHeader("X-Sonos-Api-Key", "8525505d-78e5-4dab-943f-bafe95b6074d");
+        if (m_capabilities & kContextCapability)
+            request.setRawHeader("X-Sonos-Context-TimeZone", localUtcOffset().toUtf8());
+
+        const QString locale = QLocale::system().name().replace(QLatin1Char('_'), QLatin1Char('-'));
+        request.setRawHeader("Accept-Language", (locale == QStringLiteral("C") ? QStringLiteral("en-US") : locale).toUtf8());
+        if (!m_token.isEmpty())
+            request.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + m_token.toUtf8());
+
+        QLOG() << title() << "browse root via manifest JSON endpoint" << endpoint;
+        QNetworkReply *reply = m_household->networkAccessManager()->get(request);
+        connect(reply, &QNetworkReply::finished, this, [this, reply, callback, fallback]() {
+            const QByteArray body = reply->readAll();
+            const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            const QVariantList items = reply->error() == QNetworkReply::NoError
+                ? parseManifestBrowseItems(body, m_smapiId, m_serviceId, m_username)
+                : QVariantList();
+
+            if (!items.isEmpty()) {
+                QLOG() << title() << "browse root via manifest OK," << items.size() << "item(s)";
+                reply->deleteLater();
+                callback(true, QString(), items);
+                return;
+            }
+
+            QWARN() << title() << "manifest browse failed or returned no items:"
+                    << "http=" << status << "network=" << reply->errorString()
+                    << "-- falling back to SMAPI getMetadata";
+            if (!body.isEmpty())
+                QWARN().noquote() << title() << "manifest browse response:" << compactXmlForLog(QString::fromUtf8(body));
+            reply->deleteLater();
+            fallback();
+        });
+    });
+}
+
 void SmapiService::runMetadataRequest(QNetworkReply *reply, const QString &requestDescription, ResultCallback callback,
                                        std::function<QNetworkReply *()> reissue, bool isRetry)
 {
+    if (!reply) {
+        callback(false, tr("This service request could not be started."), {});
+        return;
+    }
+
     connect(reply, &QNetworkReply::finished, this, [this, reply, requestDescription, callback, reissue, isRetry]() {
         SoapResponse response(reply);
         reply->deleteLater();
@@ -410,8 +826,7 @@ void SmapiService::runMetadataRequest(QNetworkReply *reply, const QString &reque
                 // credential actually in use) changes here.
                 m_token = response.refreshedAuthToken();
                 m_key = response.refreshedPrivateKey();
-                m_smapi.setLoginTokenCredentials(m_household->serviceDeviceSerial(), QStringLiteral("Sonos"), m_token,
-                                                  m_key, m_household->householdId());
+                applyStoredCredentials();
                 runMetadataRequest(reissue(), requestDescription, callback, reissue, /*isRetry=*/true);
                 return;
             }
@@ -421,7 +836,42 @@ void SmapiService::runMetadataRequest(QNetworkReply *reply, const QString &reque
             return;
         }
 
-        const QVariantList items = parseMetadataBody(response.rawBody(), m_smapiId, m_serviceId, m_username);
+        const QVariantList items = parseMetadataBody(response, m_smapiId, m_serviceId, m_username);
+        if (items.isEmpty()) {
+            if (!hasSoapBodyPayload(response.rawBody())) {
+                const QString requestXml = response.reply() ? response.reply()->property("soapBody").toString() : QString();
+                QWARN() << title() << requestDescription << "returned empty SMAPI SOAP body from" << replyUrlForLog(response.reply());
+                const QString headers = responseHeadersForLog(response.reply());
+                if (!headers.isEmpty())
+                    QWARN().noquote() << title() << requestDescription << "SMAPIHDR:" << headers;
+                if (!requestXml.isEmpty())
+                    QWARN().noquote() << title() << requestDescription << "SMAPIENV:" << compactXmlForLog(requestXml);
+                QWARN().noquote() << title() << requestDescription
+                                  << "SMAPIXML:" << compactXmlForLog(QString::fromUtf8(response.rawBody()));
+                callback(false, tr("This service returned no browse data."), {});
+                return;
+            }
+
+            if (hasNilMetadataResponse(response.rawBody())) {
+                const QString requestXml = response.reply() ? response.reply()->property("soapBody").toString() : QString();
+                QWARN() << title() << requestDescription << "returned nil SMAPI metadata response";
+                if (!requestXml.isEmpty())
+                    QWARN().noquote() << title() << requestDescription << "SMAPIENV:" << compactXmlForLog(requestXml);
+                QWARN().noquote() << title() << requestDescription
+                                  << "SMAPIXML:" << compactXmlForLog(QString::fromUtf8(response.rawBody()));
+                callback(false, tr("This service returned no browse data."), {});
+                return;
+            }
+
+            const QString body = QString::fromUtf8(response.rawBody());
+            QWARN() << title() << requestDescription << "parsed zero SMAPI items; body has mediaCollection="
+                    << body.contains(QStringLiteral("mediaCollection"))
+                    << "mediaMetadata=" << body.contains(QStringLiteral("mediaMetadata"));
+            const QString requestXml = response.reply() ? response.reply()->property("soapBody").toString() : QString();
+            if (!requestXml.isEmpty())
+                QWARN().noquote() << title() << requestDescription << "SMAPIENV:" << compactXmlForLog(requestXml);
+            QWARN().noquote() << title() << requestDescription << "SMAPIXML:" << compactXmlForLog(body);
+        }
         QLOG() << title() << requestDescription << "OK," << items.size() << "item(s)";
         callback(true, QString(), items);
     });
@@ -429,23 +879,42 @@ void SmapiService::runMetadataRequest(QNetworkReply *reply, const QString &reque
 
 void SmapiService::beginSignIn()
 {
-    requestDeviceLinkCode(m_household->householdId(), [this](bool ok, const QString &linkCode, const QString &regUrl) {
+    if (m_household->householdId().isEmpty() || m_household->serviceDeviceSerial().isEmpty()) {
+        emit authorizationFailed(tr("Sonos is still preparing music services."));
+        return;
+    }
+
+    m_pendingLinkDeviceId.clear();
+    m_pendingShowLinkCode = true;
+    m_smapi.setDeviceCredentials(m_household->serviceDeviceSerial(), QStringLiteral("Sonos"));
+
+    auto onLinkReady = [this](bool ok, const QString &linkCode, const QString &regUrl) {
         if (ok)
-            emit deviceLinkCodeReady(linkCode, regUrl);
-    });
+            emit deviceLinkCodeReady(linkCode, regUrl, m_pendingShowLinkCode);
+    };
+
+    if (m_authPolicy == QStringLiteral("AppLink"))
+        requestAppLinkCode(m_household->householdId(), onLinkReady);
+    else if (m_authPolicy == QStringLiteral("DeviceLink"))
+        requestDeviceLinkCode(m_household->householdId(), onLinkReady);
+    else
+        emit authorizationFailed(tr("This service does not use link-code sign-in."));
 }
 
 void SmapiService::completeSignIn(const QString &linkCode)
 {
-    exchangeDeviceLinkCode(m_household->householdId(), linkCode, [this](bool ok, const QString &token, const QString &key) {
-        if (!ok)
-            return;
+    exchangeDeviceLinkCode(
+        m_household->householdId(), linkCode, m_pendingLinkDeviceId,
+        [this](bool ok, const QString &token, const QString &key) {
+            if (!ok)
+                return;
 
-        m_token = token;
-        m_key = key;
-        setDeviceLinkToken(m_household->serviceDeviceSerial(), token, key, m_household->householdId());
-        emit needsSignInChanged();
-    });
+            m_pendingLinkDeviceId.clear();
+            m_token = token;
+            m_key = key;
+            setDeviceLinkToken(m_household->serviceDeviceSerial(), token, key, m_household->householdId());
+            emit needsSignInChanged();
+        });
 }
 
 void SmapiService::requestDeviceLinkCode(const QString &householdId,
@@ -464,15 +933,57 @@ void SmapiService::requestDeviceLinkCode(const QString &householdId,
             return;
         }
 
+        m_pendingShowLinkCode =
+            response.value(QStringLiteral("ShowLinkCode")).compare(QStringLiteral("false"), Qt::CaseInsensitive) != 0;
         if (callback)
             callback(true, response.value(QStringLiteral("LinkCode")), response.value(QStringLiteral("RegUrl")));
     });
 }
 
+void SmapiService::requestAppLinkCode(
+    const QString &householdId,
+    std::function<void(bool, const QString &, const QString &)> callback)
+{
+    // RoomTunes is a desktop controller, so identify it with Sonos'
+    // documented WDCR prefix. AppLink services then return their browser
+    // DeviceLink fallback instead of requiring the provider's mobile app.
+    QNetworkReply *reply = m_smapi.getAppLink(
+        householdId, QSysInfo::prettyProductName(), QSysInfo::productVersion(),
+        QStringLiteral("WDCR_RoomTunes"), QStringLiteral("roomtunes://x-callback-url/addAccount"));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+        SoapResponse response(reply);
+        const DeviceLinkDetails details = parseAppLinkDeviceLink(response.rawBody());
+        reply->deleteLater();
+
+        if (response.error()) {
+            QWARN() << title() << "getAppLink failed:" << response.faultString();
+            emit authorizationFailed(response.faultString());
+            if (callback)
+                callback(false, QString(), QString());
+            return;
+        }
+
+        if (details.linkCode.isEmpty() || details.registrationUrl.isEmpty()) {
+            const QString message = tr("This service did not provide a browser sign-in option.");
+            QWARN() << title() << "getAppLink returned no DeviceLink browser fallback";
+            emit authorizationFailed(message);
+            if (callback)
+                callback(false, QString(), QString());
+            return;
+        }
+
+        m_pendingLinkDeviceId = details.linkDeviceId;
+        m_pendingShowLinkCode = details.showLinkCode;
+        if (callback)
+            callback(true, details.linkCode, details.registrationUrl);
+    });
+}
+
 void SmapiService::exchangeDeviceLinkCode(const QString &householdId, const QString &linkCode,
+                                           const QString &linkDeviceId,
                                            std::function<void(bool, const QString &, const QString &)> callback)
 {
-    QNetworkReply *reply = m_smapi.getDeviceAuthToken(householdId, linkCode);
+    QNetworkReply *reply = m_smapi.getDeviceAuthToken(householdId, linkCode, linkDeviceId);
     connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
         SoapResponse response(reply);
         reply->deleteLater();

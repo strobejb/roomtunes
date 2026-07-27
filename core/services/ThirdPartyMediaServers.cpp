@@ -5,6 +5,7 @@
 #include <QHash>
 #include <QRegularExpression>
 #include <QXmlStreamReader>
+#include <QXmlStreamWriter>
 
 #include "../Logging.h"
 #include "../crypto/Aes128Cbc.h"
@@ -107,6 +108,35 @@ QByteArray decrypt(const QString &householdId, const QByteArray &encoded)
     return content;
 }
 
+QString redactedFormattedXml(QString xml)
+{
+    // TPMSX contains account passwords and AppLink/DeviceLink token/key
+    // material. Keep the startup dump structurally complete but safe to
+    // paste into bug reports/logs.
+    xml.replace(QRegularExpression(QStringLiteral(R"(\b((?:Password|Password0|Token|Token0|Key|Key0|AuthToken|PrivateKey|SessionId)\d*)="[^"]*")"),
+                                   QRegularExpression::CaseInsensitiveOption),
+                QStringLiteral(R"(\1="<redacted>")"));
+    xml.replace(QRegularExpression(QStringLiteral("<((?:[A-Za-z_][\\w.-]*:)?(?:authToken|privateKey|sessionId|password|token|key))([^>]*)>.*?</\\1>"),
+                                   QRegularExpression::CaseInsensitiveOption),
+                QStringLiteral("<\\1\\2><redacted></\\1>"));
+
+    QString output;
+    QXmlStreamReader reader(xml);
+    QXmlStreamWriter writer(&output);
+    writer.setAutoFormatting(true);
+    writer.setAutoFormattingIndent(2);
+
+    while (!reader.atEnd()) {
+        reader.readNext();
+        if (reader.hasError())
+            break;
+        if (reader.tokenType() != QXmlStreamReader::StartDocument)
+            writer.writeCurrentToken(reader);
+    }
+
+    return output.isEmpty() ? xml : output;
+}
+
 }
 
 QList<InstalledService> ThirdPartyMediaServers::parse(const QString &householdId, const QString &encoded)
@@ -118,6 +148,9 @@ QList<InstalledService> ThirdPartyMediaServers::parse(const QString &householdId
     const QByteArray xml = decrypt(householdId, encoded.toUtf8());
     if (xml.isEmpty())
         return services;
+
+    QLOG() << "ThirdPartyMediaServersX decrypted XML:";
+    QLOG().noquote() << redactedFormattedXml(QString::fromUtf8(xml));
 
     static const QRegularExpression kUdnPattern(QStringLiteral("^SA_RINCON(\\d+)_(.*)$"));
 

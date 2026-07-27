@@ -48,6 +48,7 @@ class SonosLibraryService;
 class Household : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(bool musicServicesReady READ musicServicesReady NOTIFY musicServicesReadyChanged)
 
 public:
     explicit Household(QObject *parent = nullptr);
@@ -60,6 +61,8 @@ public:
     // own root category list happens to enumerate). Null until a zone is
     // reachable (see rebuildMusicServices()).
     Q_INVOKABLE MusicService *libraryService() const;
+    Q_INVOKABLE MusicService *serviceById(int serviceId) const;
+    bool musicServicesReady() const { return m_musicServicesReady; }
 
     bool startDiscovery(quint16 localPort = Ssdp::kDefaultRecvPort) { return m_discovery.start(localPort); }
 
@@ -106,6 +109,7 @@ signals:
     void zoneListChanged();
     void discoveryTimedOut();
     void musicServicesChanged();
+    void musicServicesReadyChanged();
     // See ZoneDiscovery::aboutToResetZones() -- forwarded as-is so QML can
     // drop any raw ZonePlayer* it's holding (e.g. the selected zone)
     // before a network-change-triggered restart() destroys it.
@@ -122,6 +126,7 @@ private:
     void fetchServiceIcons();
     void fetchServiceDeviceSerial();
     void rebuildMusicServices();
+    void updateMusicServicesReady();
     void logServiceMap() const;
 
 private:
@@ -133,6 +138,9 @@ private:
     NetworkWatcher m_networkWatcher;
 
     bool m_catalogFetched = false;
+    bool m_smapiCatalogReady = false;
+    bool m_installedServicesDecoded = false;
+    bool m_musicServicesReady = false;
     QSet<QString> m_catalogFailedZoneUdns; // zones ListAvailableServices has already failed against this session
     QString m_serviceDeviceSerial;
     QHash<int, SmapiCatalogEntry> m_smapiCatalog;

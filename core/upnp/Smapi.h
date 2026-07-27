@@ -1,10 +1,13 @@
 #pragma once
 
 #include <QMap>
+#include <QDateTime>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QSslConfiguration>
 #include <QString>
+
+#include <cstdlib>
 
 #include "Soap.h"
 
@@ -15,7 +18,7 @@ namespace RoomTunes {
 class Smapi
 {
 public:
-    enum class CredentialType { None, LoginToken, SessionId };
+    enum class CredentialType { None, Basic, LoginToken, SessionId };
 
     Smapi(QNetworkAccessManager *netMgr, const QString &serviceUrl)
         : m_netMgr(netMgr)
@@ -32,6 +35,14 @@ public:
     }
 
     void setLanguage(const QString &lang) { m_language = lang; }
+    void setContextEnabled(bool enabled) { m_contextEnabled = enabled; }
+
+    void setDeviceCredentials(const QString &deviceId, const QString &deviceProvider)
+    {
+        m_credType = CredentialType::Basic;
+        m_cred[QStringLiteral("deviceId")] = deviceId;
+        m_cred[QStringLiteral("deviceProvider")] = deviceProvider;
+    }
 
     void setSessionIdCredentials(const QString &deviceId, const QString &deviceProvider, const QString &sessionId)
     {
@@ -57,6 +68,7 @@ public:
     QNetworkReply *getSessionId(const QString &username, const QString &password)
     {
         SoapRequest request(m_netMgr, m_soapAction, QStringLiteral("getSessionId"), m_language, &m_sslConfig);
+        configureSmapiRequest(request);
         request.openEnvelope();
         writeCredentials(request, false);
         request.openCommand();
@@ -70,6 +82,7 @@ public:
     QNetworkReply *getMetadata(const QString &id, int index, int count)
     {
         SoapRequest request(m_netMgr, m_soapAction, QStringLiteral("getMetadata"), m_language, &m_sslConfig);
+        configureSmapiRequest(request);
         request.openEnvelope();
         writeCredentials(request);
         request.openCommand();
@@ -84,6 +97,7 @@ public:
     QNetworkReply *search(const QString &id, const QString &term, int index, int count)
     {
         SoapRequest request(m_netMgr, m_soapAction, QStringLiteral("search"), m_language, &m_sslConfig);
+        configureSmapiRequest(request);
         request.openEnvelope();
         writeCredentials(request);
         request.openCommand();
@@ -99,6 +113,7 @@ public:
     QNetworkReply *getMediaMetadata(const QString &id)
     {
         SoapRequest request(m_netMgr, m_soapAction, QStringLiteral("getMediaMetadata"), m_language, &m_sslConfig);
+        configureSmapiRequest(request);
         request.openEnvelope();
         writeCredentials(request);
         request.openCommand();
@@ -111,6 +126,7 @@ public:
     QNetworkReply *rateItem(const QString &id, const QString &rating)
     {
         SoapRequest request(m_netMgr, m_soapAction, QStringLiteral("rateItem"), m_language, &m_sslConfig);
+        configureSmapiRequest(request);
         request.openEnvelope();
         writeCredentials(request);
         request.openCommand();
@@ -127,6 +143,7 @@ public:
     QNetworkReply *getDeviceLinkCode(const QString &householdId)
     {
         SoapRequest request(m_netMgr, m_soapAction, QStringLiteral("getDeviceLinkCode"), m_language, &m_sslConfig);
+        configureSmapiRequest(request);
         request.openEnvelope();
         writeCredentials(request);
         request.openCommand();
@@ -136,9 +153,28 @@ public:
         return request.send(m_soapUrl);
     }
 
+    QNetworkReply *getAppLink(const QString &householdId, const QString &hardware, const QString &osVersion,
+                              const QString &sonosAppName, const QString &callbackPath)
+    {
+        SoapRequest request(m_netMgr, m_soapAction, QStringLiteral("getAppLink"), m_language, &m_sslConfig);
+        configureSmapiRequest(request);
+        request.openEnvelope();
+        writeCredentials(request);
+        request.openCommand();
+        request.writeStrParameter(QStringLiteral("householdId"), householdId);
+        request.writeStrParameter(QStringLiteral("hardware"), hardware);
+        request.writeStrParameter(QStringLiteral("osVersion"), osVersion);
+        request.writeStrParameter(QStringLiteral("sonosAppName"), sonosAppName);
+        request.writeStrParameter(QStringLiteral("callbackPath"), callbackPath);
+        request.closeCommand();
+        request.closeEnvelope();
+        return request.send(m_soapUrl);
+    }
+
     QNetworkReply *getDeviceAuthToken(const QString &householdId, const QString &linkCode, const QString &linkDeviceId = QString())
     {
         SoapRequest request(m_netMgr, m_soapAction, QStringLiteral("getDeviceAuthToken"), m_language, &m_sslConfig);
+        configureSmapiRequest(request);
         request.openEnvelope();
         writeCredentials(request);
         request.openCommand();
@@ -152,11 +188,37 @@ public:
     }
 
 private:
+    static void configureBaseSmapiRequest(SoapRequest &request)
+    {
+        // SMAPI is an internet SOAP service, not a UPnP control endpoint.
+        // Modern partners such as BBC Sounds can be stricter than speakers;
+        // Sonos' own SMAPI examples use a plain SOAP envelope without the
+        // SOAP encodingStyle attribute that UPnP actions traditionally carry.
+        request.setSoapEncodingStyleEnabled(false);
+    }
+
+    void configureSmapiRequest(SoapRequest &request) const
+    {
+        configureBaseSmapiRequest(request);
+    }
+
     void writeCredentials(SoapRequest &request, bool full = true)
     {
         QXmlStreamWriter &xml = request.xmlWriter();
 
         switch (m_credType) {
+        case CredentialType::Basic:
+            xml.writeStartElement(QStringLiteral("s:Header"));
+            xml.writeStartElement(QStringLiteral("credentials"));
+            xml.writeDefaultNamespace(QStringLiteral("http://www.sonos.com/Services/1.1"));
+            writeCredential(xml, QStringLiteral("deviceId"));
+            writeCredential(xml, QStringLiteral("deviceProvider"));
+            xml.writeEndElement();
+            if (m_contextEnabled)
+                writeContext(xml);
+            xml.writeEndElement();
+            break;
+
         case CredentialType::SessionId:
             xml.writeStartElement(QStringLiteral("s:Header"));
             xml.writeStartElement(QStringLiteral("credentials"));
@@ -166,6 +228,8 @@ private:
             if (full)
                 writeCredential(xml, QStringLiteral("sessionId"));
             xml.writeEndElement();
+            if (m_contextEnabled)
+                writeContext(xml);
             xml.writeEndElement();
             break;
 
@@ -183,12 +247,35 @@ private:
                 xml.writeEndElement();
             }
             xml.writeEndElement();
+            if (m_contextEnabled)
+                writeContext(xml);
             xml.writeEndElement();
             break;
 
         case CredentialType::None:
+            if (m_contextEnabled) {
+                xml.writeStartElement(QStringLiteral("s:Header"));
+                writeContext(xml);
+                xml.writeEndElement();
+            }
             break;
         }
+    }
+
+    void writeContext(QXmlStreamWriter &xml)
+    {
+        const int offsetSeconds = QDateTime::currentDateTime().offsetFromUtc();
+        const QChar sign = offsetSeconds < 0 ? QLatin1Char('-') : QLatin1Char('+');
+        const int offsetMinutes = std::abs(offsetSeconds) / 60;
+        const QString timeZone = QStringLiteral("%1%2:%3")
+                                     .arg(sign)
+                                     .arg(offsetMinutes / 60, 2, 10, QLatin1Char('0'))
+                                     .arg(offsetMinutes % 60, 2, 10, QLatin1Char('0'));
+
+        xml.writeStartElement(QStringLiteral("context"));
+        xml.writeDefaultNamespace(QStringLiteral("http://www.sonos.com/Services/1.1"));
+        xml.writeTextElement(QStringLiteral("timeZone"), timeZone);
+        xml.writeEndElement();
     }
 
     void writeCredential(QXmlStreamWriter &xml, const QString &name)
@@ -205,6 +292,7 @@ private:
 
     QMap<QString, QString> m_cred;
     CredentialType m_credType = CredentialType::None;
+    bool m_contextEnabled = false;
 };
 
 }

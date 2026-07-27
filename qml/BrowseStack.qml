@@ -59,6 +59,11 @@ StackView {
         pop()
     }
 
+    onCurrentItemChanged: {
+        if (depth === 1 && currentItem && currentItem.refreshOnReturn)
+            currentItem.refreshOnReturn()
+    }
+
     // Horizontal slide -- StackView's own built-in default push transition,
     // spelled out explicitly rather than left implicit, since pushEnter/
     // pushExit/popEnter/popExit now get reassigned per-navigation-kind

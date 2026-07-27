@@ -13,17 +13,23 @@ struct SmapiCatalogEntry
     int smapiId = 0;
     QString title;
     QString uri;
+    QString secureUri;
     QString auth;          // raw Policy/@Auth text: "Anonymous"/"Stateless"/"UserId"/"DeviceLink"
+    QString pollInterval;  // raw Policy/@PollInterval, useful for AppLink/DeviceLink diagnostics
     QString containerType; // "MService"/"SoundLab"
+    QString capabilities;  // raw Service/@Capabilities bitfield from ListAvailableServices
+    QString manifestUri;   // modern AppLink services can advertise app-link metadata here
 };
 
 // Resolves a bare serviceId (from ThirdPartyMediaServersX, see
 // ThirdPartyMediaServers.h) to a usable title/uri/auth via Sonos' global
-// SMAPI catalog. Ported from ServiceDiscovery.cpp's buildSmapiMap()/
-// availableServiceName() -- the serviceId->smapiId pairing isn't given
-// directly by the SOAP response; it has to be reconstructed by sorting
-// both lists and pairing them in ascending order (undocumented but
-// load-bearing quirk of the original protocol reverse-engineering).
+// SMAPI catalog. Sonos exposes two ids for the same modern service:
+// AvailableServiceDescriptorList/@Id is the compact SMAPI id used by
+// getSessionId/URI metadata, while ThirdPartyMediaServersX and favourites
+// use the Sonos service type id. The legacy BB10 code noted the stable
+// encoding: serviceTypeId = smapiId * 256 + 7. Prefer that direct mapping;
+// keep sorted-list pairing only as a compatibility fallback for any service
+// whose ids do not follow the normal encoding.
 class MusicServiceCatalog
 {
 public:
