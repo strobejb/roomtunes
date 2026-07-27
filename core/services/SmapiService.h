@@ -39,7 +39,7 @@ public:
                  const QString &authPolicy, const QString &username, const QString &token, const QString &key,
                  const QString &title, const QString &iconUrl, QObject *parent = nullptr);
 
-    int serviceId() const { return m_serviceId; }
+    int serviceId() const override { return m_serviceId; }
     int smapiId() const { return m_smapiId; }
 
     bool canSearch() const override { return true; }

@@ -46,6 +46,23 @@ MusicService *Household::libraryService() const
     return m_libraryService;
 }
 
+ZonePlayer *Household::contentDirectoryZone() const
+{
+    for (ZonePlayer *zone : m_discovery.zones()) {
+        if (!zone || !zone->ready() || zone->invisible())
+            continue;
+        if (zone->modelName().compare(QStringLiteral("DOCK"), Qt::CaseInsensitive) == 0)
+            continue;
+        if (zone->modelName().contains(QStringLiteral("BRIDGE"), Qt::CaseInsensitive))
+            continue;
+        if (zone->modelName().contains(QStringLiteral("Sub"), Qt::CaseInsensitive))
+            continue;
+        return zone;
+    }
+
+    return m_discovery.topologyZone();
+}
+
 void Household::onNetworkChanged()
 {
     // ZoneDiscovery handles unsubscribing/tearing down zones and restarting

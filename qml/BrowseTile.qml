@@ -31,6 +31,18 @@ Item {
         onClicked: root.clicked()
     }
 
+    Rectangle {
+        anchors.top: parent.top
+        anchors.topMargin: -8
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: parent.width
+        height: Math.min(parent.height - anchors.topMargin, iconArea.height + titleLabel.anchors.topMargin
+                         + Math.ceil(titleLabel.font.pixelSize * 1.25) * 2 + 16)
+        radius: 12
+        color: "#E8E8E8"
+        visible: mouseArea.containsMouse
+    }
+
     Item {
         id: iconArea
         anchors.top: parent.top
@@ -38,23 +50,10 @@ Item {
         width: 48
         height: 48
 
-        // Always a rounded rectangle (not circular even when the icon
-        // itself is), sized bigger than the icon and centered behind it --
-        // declared first so it paints underneath everything else in this
-        // Item, with the icon drawn on top of it.
-        Rectangle {
-            anchors.centerIn: parent
-            width: parent.width + 16
-            height: parent.height + 16
-            radius: 12
-            color: "#E8E8E8"
-            visible: mouseArea.containsMouse
-        }
-
         Rectangle {
             anchors.fill: parent
             radius: root.circularIcon ? width / 2 : 8
-            color: "#E8E8E8"
+            color: "#BDBDBD"
             visible: iconImage.status !== Image.Ready
         }
 
@@ -99,11 +98,12 @@ Item {
             visible: iconImage.status !== Image.Ready
             text: "♪"
             font.pixelSize: 18
-            color: "#BDBDBD"
+            color: "#7A7A7A"
         }
     }
 
     Text {
+        id: titleLabel
         anchors.top: iconArea.bottom
         anchors.topMargin: 6
         anchors.left: parent.left

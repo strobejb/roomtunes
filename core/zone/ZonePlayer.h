@@ -226,6 +226,7 @@ private:
     MediaItem *m_currentTrack = nullptr;
     QColor m_accentColor;
     QString m_accentColorRequestUrl; // guards against a stale reply landing after currentTrack changed again
+    QString m_tvAudioInfo;
     int m_positionSeconds = 0;
     int m_durationSeconds = 0;
 

@@ -83,6 +83,8 @@ DidlItem Didl::parseOneItem(QXmlStreamReader &xml, bool isContainer)
             item.album = xml.readElementText(QXmlStreamReader::SkipChildElements);
         else if (name == QStringLiteral("albumArtURI"))
             item.albumArtUri = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (name == QStringLiteral("streamInfo"))
+            item.streamInfo = xml.readElementText(QXmlStreamReader::SkipChildElements);
         else if (name == QStringLiteral("originalTrackNumber"))
             item.trackNumber = xml.readElementText(QXmlStreamReader::SkipChildElements);
         else if (name == QStringLiteral("res"))

@@ -12,7 +12,7 @@ QtObject {
             return "volume_x"
         if (volume < 5)
             return "volume_0"
-        if (volume < 20)
+        if (volume < 50)
             return "volume_1"
         return "volume_2"
     }

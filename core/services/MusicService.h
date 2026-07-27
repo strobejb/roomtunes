@@ -37,6 +37,7 @@ class MusicService : public QObject
     // Household::rebuildMusicServices() -> updateResolved()).
     Q_PROPERTY(QString title READ title NOTIFY titleChanged)
     Q_PROPERTY(QString iconSource READ iconSource NOTIFY iconSourceChanged)
+    Q_PROPERTY(int serviceId READ serviceId CONSTANT)
     Q_PROPERTY(bool canSearch READ canSearch CONSTANT)
     Q_PROPERTY(bool needsSignIn READ needsSignIn NOTIFY needsSignInChanged)
     // {id, title} pairs a search-capable service offers to filter by (e.g.
@@ -56,6 +57,7 @@ public:
     ~MusicService() override = default;
 
     const QString &serviceKey() const { return m_serviceKey; }
+    virtual int serviceId() const { return -1; }
     QString title() const { return m_title; }
     QString iconSource() const { return m_iconSource; }
 

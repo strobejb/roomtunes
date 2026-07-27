@@ -189,6 +189,17 @@ Item {
         })
     }
 
+    function openServiceItem(item) {
+        browseRecency.recordUse(item.serviceKey)
+        root.browseStack.pushFolder(root.pageComponent, {
+            title: item.title,
+            service: item.serviceObject,
+            objectId: item.objectId,
+            stack: root.browseStack,
+            pageComponent: root.pageComponent
+        })
+    }
+
     // Below this, three sections each wrapping their up-to-5 items into
     // 2 rows would need more vertical room than a short window actually
     // has, forcing the Flickable below into constant scrolling just to
@@ -331,12 +342,22 @@ Item {
                     spacing: 10
                     visible: root.libraryService !== null
 
-                    Label {
+                    RowLayout {
                         Layout.fillWidth: true
-                        text: qsTr("Sonos Sources")
-                        font.pixelSize: 14
-                        font.weight: Typography.emphasisWeight
-                        color: "#212121"
+                        spacing: 4
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Sonos Sources")
+                            font.pixelSize: 14
+                            font.weight: Typography.emphasisWeight
+                            color: "#212121"
+                        }
+
+                        Item {
+                            Layout.preferredWidth: 32
+                            Layout.preferredHeight: 32
+                        }
                     }
 
                     GridLayout {
@@ -509,19 +530,10 @@ Item {
                                 // doesn't leave a gap.
                                 visible: index < (root.compactSections ? servicesGrid.columnCount : 5)
                                 Layout.preferredWidth: servicesGrid.tileWidth
-                                title: model.title
-                                imageUrl: model.imageUrl
+                                title: model.item.title
+                                imageUrl: model.item.imageUrl
 
-                                onClicked: {
-                                    browseRecency.recordUse(model.serviceKey)
-                                    root.browseStack.pushFolder(root.pageComponent, {
-                                        title: model.title,
-                                        service: model.serviceObject,
-                                        objectId: "root",
-                                        stack: root.browseStack,
-                                        pageComponent: root.pageComponent
-                                    })
-                                }
+                                onClicked: root.openServiceItem(model.item)
                             }
                         }
                     }

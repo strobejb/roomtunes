@@ -3,9 +3,9 @@ import QtQuick.Layouts
 import QtQuick.Window
 
 // One caption button (minimize / maximize-restore / close) for the custom
-// title bar. Same reusable-glyph-button idea as TransportIconButton.qml,
-// but sized/shaped like a native Windows/GNOME caption button (wide
-// rectangle, not a circle) and with the close button's red hover state.
+// title bar. Same reusable-glyph-button idea as TransportIconButton.qml:
+// Windows keeps wide rectangular caption buttons, while GNOME/Linux uses
+// compact circular hover buttons.
 Item {
     id: button
 
@@ -44,7 +44,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: button.linuxHeaderBar ? 6 : 0
+        radius: button.linuxHeaderBar ? width / 2 : 0
         color: {
             if (!mouseArea.containsMouse)
                 return "transparent"

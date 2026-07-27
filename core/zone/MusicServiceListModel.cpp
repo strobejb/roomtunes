@@ -8,11 +8,32 @@
 
 namespace RoomTunes {
 
+namespace {
+
+QVariantMap serviceItem(MusicService *service)
+{
+    QVariantMap item;
+    item[QStringLiteral("id")] = service->serviceKey();
+    item[QStringLiteral("objectId")] = QStringLiteral("root");
+    item[QStringLiteral("root")] = QStringLiteral("root");
+    item[QStringLiteral("title")] = service->title();
+    item[QStringLiteral("imageUrl")] = service->iconSource();
+    item[QStringLiteral("serviceId")] = service->serviceId();
+    item[QStringLiteral("serviceKey")] = service->serviceKey();
+    item[QStringLiteral("serviceObject")] = QVariant::fromValue<QObject *>(service);
+    item[QStringLiteral("container")] = true;
+    item[QStringLiteral("kind")] = QStringLiteral("service");
+    return item;
+}
+
+}
+
 MusicServiceListModel::MusicServiceListModel(Household *household, BrowseRecencyStore *recencyStore, QObject *parent)
     : QAbstractListModel(parent)
     , m_household(household)
     , m_recencyStore(recencyStore)
 {
+    m_services = orderedServices();
     connect(household, &Household::musicServicesChanged, this, &MusicServiceListModel::rebuild);
 }
 
@@ -23,6 +44,7 @@ void MusicServiceListModel::rebuild()
     // Household::rebuildMusicServices()), so a reset just re-reads the
     // same pointers -- nothing a QML delegate is bound to actually dangles.
     beginResetModel();
+    m_services = orderedServices();
     endResetModel();
 }
 
@@ -31,7 +53,7 @@ int MusicServiceListModel::rowCount(const QModelIndex &parent) const
     if (parent.isValid())
         return 0;
 
-    return services().size();
+    return m_services.size();
 }
 
 QVariant MusicServiceListModel::data(const QModelIndex &index, int role) const
@@ -52,6 +74,10 @@ QVariant MusicServiceListModel::data(const QModelIndex &index, int role) const
         return service->iconSource();
     case ServiceKeyRole:
         return service->serviceKey();
+    case ServiceIdRole:
+        return service->serviceId();
+    case ItemRole:
+        return serviceItem(service);
     default:
         return {};
     }
@@ -64,19 +90,20 @@ QHash<int, QByteArray> MusicServiceListModel::roleNames() const
         { TitleRole, "title" },
         { ImageUrlRole, "imageUrl" },
         { ServiceKeyRole, "serviceKey" },
+        { ServiceIdRole, "serviceId" },
+        { ItemRole, "item" },
     };
 }
 
 MusicService *MusicServiceListModel::serviceAt(int row) const
 {
-    const QList<MusicService *> ordered = services();
-    if (row < 0 || row >= ordered.size())
+    if (row < 0 || row >= m_services.size())
         return nullptr;
 
-    return ordered.at(row);
+    return m_services.at(row);
 }
 
-QList<MusicService *> MusicServiceListModel::services() const
+QList<MusicService *> MusicServiceListModel::orderedServices() const
 {
     QList<MusicService *> ordered;
     for (MusicService *service : m_household->services()) {

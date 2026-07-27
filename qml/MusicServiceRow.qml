@@ -96,7 +96,7 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 radius: root.circularIcon ? width / 2 : 6
-                color: "#E8E8E8"
+                color: "#BDBDBD"
                 visible: iconImage.status !== Image.Ready
             }
 
@@ -155,7 +155,7 @@ Item {
                 visible: iconImage.status !== Image.Ready
                 text: "♪"
                 font.pixelSize: 18
-                color: "#BDBDBD"
+                color: "#7A7A7A"
             }
 
             // Hover-to-play cue -- a plain darkening rect (not a mask) plus

@@ -152,7 +152,7 @@ Item {
                         Rectangle {
                             anchors.fill: parent
                             radius: 6
-                            color: "#E8E8E8"
+                            color: "#BDBDBD"
                             visible: artImage.status !== Image.Ready
                         }
 
@@ -195,7 +195,7 @@ Item {
                             visible: artImage.status !== Image.Ready
                             text: "♪"
                             font.pixelSize: 16
-                            color: "#BDBDBD"
+                            color: "#7A7A7A"
                         }
 
                         // Hover-to-play cue -- same darkening-rect-plus-

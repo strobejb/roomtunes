@@ -18,6 +18,7 @@ struct DidlItem
     QString upnpClass;
     QString res;          // playable URI (the <res> element text)
     QString albumArtUri;
+    QString streamInfo;   // Sonos r:streamInfo, used by TV/line-in sources
     QString trackNumber;
     bool container = false;
 };

@@ -432,7 +432,7 @@ Item {
                 Rectangle {
                     anchors.fill: parent
                     radius: 8
-                    color: "#E8E8E8"
+                    color: "#BDBDBD"
                     visible: folderArtImage.status !== Image.Ready
                 }
 

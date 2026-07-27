@@ -75,15 +75,16 @@ Item {
 
             delegate: MusicServiceRow {
                 width: listView.width - 20
-                title: model.title
-                imageUrl: model.imageUrl
+                title: model.item.title
+                imageUrl: model.item.imageUrl
 
                 onClicked: {
-                    browseRecency.recordUse(model.serviceKey)
+                    const item = model.item
+                    browseRecency.recordUse(item.serviceKey)
                     root.stack.pushFolder(root.pageComponent, {
-                        title: model.title,
-                        service: model.serviceObject,
-                        objectId: "root",
+                        title: item.title,
+                        service: item.serviceObject,
+                        objectId: item.objectId,
                         stack: root.stack,
                         pageComponent: root.pageComponent
                     })

@@ -25,6 +25,8 @@ public:
         TitleRole,
         ImageUrlRole,
         ServiceKeyRole,
+        ServiceIdRole,
+        ItemRole,
     };
 
     explicit MusicServiceListModel(Household *household, BrowseRecencyStore *recencyStore, QObject *parent = nullptr);
@@ -38,10 +40,11 @@ private slots:
 
 private:
     MusicService *serviceAt(int row) const;
-    QList<MusicService *> services() const;
+    QList<MusicService *> orderedServices() const;
 
     Household *m_household;
     BrowseRecencyStore *m_recencyStore;
+    QList<MusicService *> m_services;
 };
 
 }

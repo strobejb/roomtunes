@@ -7,6 +7,7 @@
 #include <QNetworkRequest>
 #include <QSslConfiguration>
 #include <QSslError>
+#include <QStringList>
 #include <QUrl>
 #include <QXmlStreamWriter>
 
@@ -62,8 +63,18 @@ public:
 
     void closeEnvelope() { m_xml.writeEndElement(); }
 
-    void writeIntParameter(const QString &name, qint64 value) { m_xml.writeTextElement(name, QString::number(value)); }
-    void writeStrParameter(const QString &name, const QString &value) { m_xml.writeTextElement(name, value); }
+    void writeIntParameter(const QString &name, qint64 value)
+    {
+        const QString text = QString::number(value);
+        recordParameter(name, text, false);
+        m_xml.writeTextElement(name, text);
+    }
+
+    void writeStrParameter(const QString &name, const QString &value)
+    {
+        recordParameter(name, value, true);
+        m_xml.writeTextElement(name, value);
+    }
 
     QNetworkReply *subscribe(const QString &url, const QString &notifyUrl, int timeoutSeconds)
     {
@@ -140,7 +151,7 @@ public:
         // ZonePlayer's own IP for a UPnP action (ZonePlayer::baseUrl() is
         // built directly as "http://<ip>:1400/", no DNS involved) or the
         // SMAPI partner's hostname for a music-service call.
-        qCDebug(logSoap) << QUrl(url).host() << m_method;
+        qCDebug(logSoap).noquote() << QUrl(url).host() << callSummary();
 
         QNetworkReply *reply = m_netMgr->post(request, m_envelope);
         reply->setProperty("soapMethod", m_method);
@@ -159,6 +170,64 @@ public:
     }
 
 private:
+    static bool isSensitiveParameter(const QString &name)
+    {
+        const QString lower = name.toLower();
+        return lower.contains(QStringLiteral("password")) || lower.contains(QStringLiteral("token"))
+            || lower.contains(QStringLiteral("key"));
+    }
+
+    static bool isLargeXmlParameter(const QString &name)
+    {
+        const QString lower = name.toLower();
+        return lower.contains(QStringLiteral("metadata")) || lower == QStringLiteral("elements");
+    }
+
+    static QString compactLogValue(QString value)
+    {
+        value.replace(QLatin1Char('\r'), QLatin1Char(' '));
+        value.replace(QLatin1Char('\n'), QLatin1Char(' '));
+        value.replace(QLatin1Char('\t'), QLatin1Char(' '));
+
+        constexpr qsizetype maxLength = 180;
+        if (value.size() > maxLength)
+            value = value.left(maxLength - 3) + QStringLiteral("...");
+        return value;
+    }
+
+    static QString quoteLogValue(QString value)
+    {
+        value.replace(QLatin1Char('\\'), QStringLiteral("\\\\"));
+        value.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+        return QLatin1Char('"') + value + QLatin1Char('"');
+    }
+
+    void recordParameter(const QString &name, const QString &value, bool quote)
+    {
+        QString display;
+        bool forceUnquoted = false;
+
+        if (isSensitiveParameter(name)) {
+            display = QStringLiteral("<redacted>");
+            forceUnquoted = true;
+        } else if (isLargeXmlParameter(name)) {
+            display = QStringLiteral("<%1 chars>").arg(value.size());
+            forceUnquoted = true;
+        } else {
+            display = compactLogValue(value);
+        }
+
+        if (quote && !forceUnquoted)
+            display = quoteLogValue(display);
+
+        m_parameters.append(name + QLatin1Char('=') + display);
+    }
+
+    QString callSummary() const
+    {
+        return m_method + QLatin1Char('(') + m_parameters.join(QStringLiteral(", ")) + QLatin1Char(')');
+    }
+
     QNetworkAccessManager *m_netMgr;
     QString m_action;
     QString m_method;
@@ -166,6 +235,7 @@ private:
     QXmlStreamWriter m_xml;
     QString m_language;
     QSslConfiguration *m_sslConfig;
+    QStringList m_parameters;
 };
 
 }

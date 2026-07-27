@@ -72,8 +72,9 @@ public:
     // The zone holding the ZoneGroupTopology subscription -- also the zone
     // SmapiService issues MusicServices:1 GetSessionId calls against
     // (any zone would do; this one's already known-reachable), and the
-    // zone SonosLibraryService browses.
+    // initial fallback zone for household-level service calls.
     ZonePlayer *topologyZone() const { return m_discovery.topologyZone(); }
+    ZonePlayer *contentDirectoryZone() const;
 
     // R_TrialZPSerial, a per-household serial Sonos itself uses as the
     // "deviceId" for SMAPI loginToken/sessionId credentials (see

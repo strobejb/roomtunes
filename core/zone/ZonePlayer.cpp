@@ -19,6 +19,8 @@ namespace RoomTunes {
 
 namespace {
 
+QString genaProperty(const QByteArray &body, const QString &propertyName);
+
 // UPnP RelTime/TrackDuration are "H+:MM:SS" (one or more hour digits) --
 // parses to total seconds, or 0 for anything that doesn't fit that shape
 // (e.g. the literal "NOT_IMPLEMENTED" some sources report when they don't
@@ -49,6 +51,100 @@ QString formatUpnpTime(int totalSeconds)
         .arg(hours)
         .arg(minutes, 2, 10, QLatin1Char('0'))
         .arg(seconds, 2, 10, QLatin1Char('0'));
+}
+
+bool isTvStreamUri(const QString &uri)
+{
+    return uri.startsWith(QStringLiteral("x-sonos-htastream:"));
+}
+
+bool isLineInStreamUri(const QString &uri)
+{
+    return uri.startsWith(QStringLiteral("x-rincon-stream:"));
+}
+
+QString tvInputNameFromUri(const QString &uri)
+{
+    const int separator = uri.lastIndexOf(QLatin1Char(':'));
+    if (separator < 0 || separator == uri.size() - 1)
+        return {};
+
+    const QString input = uri.mid(separator + 1);
+    if (input.compare(QStringLiteral("spdif"), Qt::CaseInsensitive) == 0)
+        return QStringLiteral("SPDIF");
+
+    return input.toUpper();
+}
+
+QString tvAudioInfoFromStreamCode(const QString &streamInfo)
+{
+    bool ok = false;
+    const int code = streamInfo.trimmed().toInt(&ok);
+    if (!ok)
+        return {};
+
+    // Sonos exposes TV input details as a Rincon stream code in
+    // CurrentTrackMetaData/r:streamInfo. The old Playbar capture has 19 for
+    // the SPDIF input; newer HT players also report codec-style HT audio
+    // codes here/status endpoints. Keep this mapping deliberately explicit so
+    // unknown firmware values fall back to the URI input name instead.
+    switch (code) {
+    case 19:
+        return QStringLiteral("SPDIF");
+    case 22:
+        return QStringLiteral("Silence");
+    case 33554434:
+        return QStringLiteral("Stereo PCM 2.0");
+    case 33554488:
+        return QStringLiteral("Dolby Digital 2.0");
+    case 84934713:
+        return QStringLiteral("Dolby Digital 5.1");
+    case 84934714:
+        return QStringLiteral("Dolby Digital Plus 5.1");
+    case 32:
+    case 84934721:
+        return QStringLiteral("DTS");
+    case 59:
+    case 63:
+        return QStringLiteral("Dolby Atmos");
+    default:
+        return {};
+    }
+}
+
+QString tvAudioInfoFromMetadata(const QString &trackMetaData, const QString &trackUri)
+{
+    const QList<DidlItem> items = Didl::parseItems(trackMetaData.toUtf8());
+    const QString streamInfo = items.isEmpty() ? QString() : items.first().streamInfo;
+    const QString audioInfo = tvAudioInfoFromStreamCode(streamInfo);
+    return audioInfo.isEmpty() ? tvInputNameFromUri(trackUri) : audioInfo;
+}
+
+struct AvTransportTrackSnapshot
+{
+    QString uri;
+    QString metadata;
+};
+
+AvTransportTrackSnapshot avTransportTrackSnapshot(const QByteArray &body)
+{
+    AvTransportTrackSnapshot snapshot;
+    const QString lastChange = genaProperty(body, QStringLiteral("LastChange"));
+    if (lastChange.isEmpty())
+        return snapshot;
+
+    QXmlStreamReader xml(lastChange);
+    while (!xml.atEnd()) {
+        if (!xml.readNextStartElement())
+            continue;
+
+        if (xml.name() == QLatin1String("CurrentTrackURI"))
+            snapshot.uri = xml.attributes().value(QStringLiteral("val")).toString();
+        else if (xml.name() == QLatin1String("CurrentTrackMetaData"))
+            snapshot.metadata = xml.attributes().value(QStringLiteral("val")).toString();
+    }
+
+    return snapshot;
 }
 
 // Shared by playItem()/playItemNext()/addItemToQueue()/replaceQueueWithItem()
@@ -578,8 +674,17 @@ void ZonePlayer::handleRenderingControlEvent(const QByteArray &body)
     }
 }
 
-void ZonePlayer::handleAVTransportEvent(const QByteArray &)
+void ZonePlayer::handleAVTransportEvent(const QByteArray &body)
 {
+    const AvTransportTrackSnapshot snapshot = avTransportTrackSnapshot(body);
+    if (isTvStreamUri(snapshot.uri)) {
+        const QString audioInfo = tvAudioInfoFromMetadata(snapshot.metadata, snapshot.uri);
+        if (!audioInfo.isEmpty() && m_tvAudioInfo != audioInfo)
+            m_tvAudioInfo = audioInfo;
+    } else if (!snapshot.uri.isEmpty() && !isTvStreamUri(snapshot.uri)) {
+        m_tvAudioInfo.clear();
+    }
+
     refreshTransportState();
 }
 
@@ -637,6 +742,35 @@ void ZonePlayer::refreshTransportState()
         // own address so QML's Image can just load it directly.
         if (!didl.albumArtUri.isEmpty() && didl.albumArtUri.startsWith(QLatin1Char('/')))
             didl.albumArtUri = baseUrl().chopped(1) + didl.albumArtUri;
+
+        const QString sourceUri = trackUri.isEmpty() ? didl.res : trackUri;
+        QString sourceTitle;
+        QString sourceArtist;
+        QString sourceImageUrl;
+        if (isTvStreamUri(sourceUri)) {
+            // BB10 detected Playbar/Beam TV input from AVTransportURI and
+            // displayed a synthetic "TV" track with the bundled TV icon. The
+            // Qt 6 app polls TrackURI here, which carries the same Sonos URI.
+            sourceTitle = tr("TV");
+            sourceArtist = m_tvAudioInfo.isEmpty() ? tvInputNameFromUri(sourceUri) : m_tvAudioInfo;
+            sourceImageUrl = QStringLiteral("qrc:/qt/qml/RoomTunes/resources/icons/tv.svg");
+        } else if (isLineInStreamUri(sourceUri)) {
+            sourceTitle = didl.title.isEmpty() ? tr("Line-In") : didl.title;
+            sourceImageUrl = QStringLiteral("qrc:/qt/qml/RoomTunes/resources/icons/line_in.svg");
+        }
+
+        if (!sourceTitle.isEmpty()) {
+            if (!m_currentTrack || m_currentTrack->id() != sourceUri || m_currentTrack->uri() != sourceUri
+                || m_currentTrack->title() != sourceTitle || m_currentTrack->artist() != sourceArtist
+                || m_currentTrack->imageUrl() != sourceImageUrl) {
+                setCurrentTrack(new MediaItem(sourceUri, QString(), sourceTitle, sourceArtist, QString(), QString(),
+                                              sourceUri, QStringLiteral("object.item.audioItem"), sourceImageUrl,
+                                              false, this));
+            }
+            setPosition(parseUpnpTime(response.value(QStringLiteral("RelTime"))),
+                        parseUpnpTime(response.value(QStringLiteral("TrackDuration"))));
+            return;
+        }
 
         // GetPositionInfo is polled every second while playing (see
         // NowPlayingPanel.qml) purely to track playback position --

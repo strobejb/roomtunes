@@ -103,9 +103,9 @@ void SonosLibraryService::doBrowse(const QString &objectId, ResultCallback callb
         return;
     }
 
-    ZonePlayer *zone = m_household->topologyZone();
+    ZonePlayer *zone = m_household->contentDirectoryZone();
     if (!zone) {
-        QWARN() << "browse" << objectId << "failed: no topology zone available";
+        QWARN() << "browse" << objectId << "failed: no ContentDirectory zone available";
         callback(false, tr("No Sonos zone available to browse with."), {});
         return;
     }
