@@ -561,6 +561,7 @@ Rectangle {
                             id: cardSettingsMouseArea
                             anchors.fill: cardSettingsHoverCircle
                             hoverEnabled: true
+                            preventStealing: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: zoneSettingsMenu.open()
                         }

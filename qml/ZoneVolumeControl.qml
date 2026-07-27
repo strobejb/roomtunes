@@ -196,6 +196,7 @@ Item {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: true
+        preventStealing: true
         cursorShape: Qt.PointingHandCursor
 
         // Which region the button went down in -- decides whether onClicked
@@ -216,6 +217,19 @@ Item {
             // mid-animation) width.
             var sliderLeft = root.width - root.iconSize - root.sliderGap - root.sliderLength
             return Math.max(0, Math.min(1, (mouseX - sliderLeft) / root.sliderLength))
+        }
+
+        function finishSliderDrag(mouseX) {
+            if (!slider.dragging)
+                return
+            slider.dragRatio = ratioFor(mouseX)
+            slider.dragging = false
+            if (root.zone)
+                root.zone.setVolume(Math.round(slider.dragRatio * 100))
+            if (!containsMouse) {
+                root.opened = false
+                hoverOpened = false
+            }
         }
 
         onContainsMouseChanged: {
@@ -241,10 +255,13 @@ Item {
                 slider.dragRatio = ratioFor(mouse.x)
         }
         onReleased: mouse => {
-            if (slider.dragging) {
-                slider.dragRatio = ratioFor(mouse.x)
-                slider.dragging = false
-                root.zone.setVolume(Math.round(slider.dragRatio * 100))
+            finishSliderDrag(mouse.x)
+        }
+        onCanceled: {
+            finishSliderDrag(mouseX)
+            if (!containsMouse) {
+                root.opened = false
+                hoverOpened = false
             }
         }
         onClicked: {
