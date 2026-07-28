@@ -6,6 +6,17 @@
 
 namespace RoomTunes {
 
+namespace {
+
+QString peerAddressForLog(const QTcpSocket *socket)
+{
+    bool ok = false;
+    const quint32 ipv4 = socket->peerAddress().toIPv4Address(&ok);
+    return ok ? QHostAddress(ipv4).toString() : socket->peerAddress().toString();
+}
+
+}
+
 GenaNotifyServer::GenaNotifyServer(QObject *parent)
     : QObject(parent)
     , m_server(new QTcpServer(this))
@@ -76,12 +87,13 @@ void GenaNotifyServer::tryParse(QTcpSocket *socket)
 
     const QByteArray body = buffer.mid(bodyStart, contentLength);
     m_buffers.remove(socket);
+    const QString peerAddress = peerAddressForLog(socket);
 
     socket->write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
     socket->flush();
     socket->disconnectFromHost();
 
-    emit notified(socket->peerAddress().toString(), sid, body);
+    emit notified(peerAddress, sid, body);
 }
 
 }

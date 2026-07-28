@@ -128,6 +128,7 @@ private:
     void rebuildMusicServices();
     void updateMusicServicesReady();
     void logServiceMap() const;
+    void logUnavailableInstalledServices();
 
 private:
     // Declaration order matters: m_discovery holds a pointer to m_netMgr,
@@ -140,6 +141,7 @@ private:
     bool m_catalogFetched = false;
     bool m_smapiCatalogReady = false;
     bool m_installedServicesDecoded = false;
+    bool m_unavailableInstalledServicesLogged = false;
     bool m_musicServicesReady = false;
     QSet<QString> m_catalogFailedZoneUdns; // zones ListAvailableServices has already failed against this session
     QString m_serviceDeviceSerial;

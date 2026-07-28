@@ -149,8 +149,10 @@ QList<InstalledService> ThirdPartyMediaServers::parse(const QString &householdId
     if (xml.isEmpty())
         return services;
 
-    QLOG() << "ThirdPartyMediaServersX decrypted XML:";
-    QLOG().noquote() << redactedFormattedXml(QString::fromUtf8(xml));
+    if (verboseLoggingEnabled()) {
+        QLOG() << "ThirdPartyMediaServersX decrypted XML:";
+        QLOG() << redactedFormattedXml(QString::fromUtf8(xml));
+    }
 
     static const QRegularExpression kUdnPattern(QStringLiteral("^SA_RINCON(\\d+)_(.*)$"));
 

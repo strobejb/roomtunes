@@ -722,15 +722,54 @@ Item {
                 }
             }
 
-            Label {
+            ColumnLayout {
                 anchors.centerIn: parent
-                width: parent.width - 32
+                spacing: 18
                 visible: !root.loading && !!root.errorMessage
-                text: root.errorMessage
-                color: "#D32F2F"
-                font.pixelSize: 13
-                wrapMode: Text.WordWrap
-                horizontalAlignment: Text.AlignHCenter
+
+                Label {
+                    Layout.fillWidth: true
+                    width: parent.width - 32
+                    text: root.errorMessage
+                    color: "#D32F2F"
+                    font.pixelSize: 13
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                Item {
+                    id: reauthorizeButton
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: !!root.service && root.service.shouldOfferReauthorize(root.errorMessage)
+                    implicitWidth: reauthorizeLabel.implicitWidth + 40
+                    implicitHeight: reauthorizeLabel.implicitHeight + 16
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: height / 2
+                        color: reauthorizeMouseArea.pressed ? "#D0D0D0"
+                                                            : (reauthorizeMouseArea.containsMouse ? "#E8E8E8" : "#F0F0F0")
+                    }
+
+                    Text {
+                        id: reauthorizeLabel
+                        anchors.centerIn: parent
+                        text: qsTr("Reauthorize")
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
+                        color: "#212121"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+
+                    MouseArea {
+                        id: reauthorizeMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: signInDialog.open()
+                    }
+                }
             }
 
             ColumnLayout {
@@ -748,7 +787,9 @@ Item {
                 Button {
                     Layout.alignment: Qt.AlignHCenter
                     text: qsTr("Sign In")
-                    onClicked: signInDialog.open()
+                    onClicked: {
+                        signInDialog.open()
+                    }
                 }
             }
 

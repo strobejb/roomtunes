@@ -24,6 +24,7 @@ Popup {
     property string linkCode: ""
     property string regUrl: ""
     property bool showLinkCode: true
+    property bool browserOpened: false
     property string errorMessage: ""
     property bool waiting: true
 
@@ -31,6 +32,7 @@ Popup {
         linkCode = ""
         regUrl = ""
         showLinkCode = true
+        browserOpened = false
         errorMessage = ""
         waiting = true
         if (service)
@@ -50,6 +52,9 @@ Popup {
             dialog.regUrl = url
             dialog.showLinkCode = showCode
             dialog.waiting = false
+            if (dialog.regUrl.length > 0 && !dialog.browserOpened) {
+                dialog.browserOpened = Qt.openUrlExternally(dialog.regUrl)
+            }
         }
 
         function onAuthorized() {
@@ -102,9 +107,13 @@ Popup {
 
             Label {
                 Layout.fillWidth: true
-                text: dialog.showLinkCode
-                    ? qsTr("Go to %1 and enter this code:").arg(dialog.regUrl)
-                    : qsTr("Continue sign-in at %1.").arg(dialog.regUrl)
+                text: dialog.browserOpened
+                    ? (dialog.showLinkCode
+                        ? qsTr("A browser window has opened. Enter this code there if needed:")
+                        : qsTr("A browser window has opened. Finish sign-in there."))
+                    : (dialog.showLinkCode
+                        ? qsTr("Open the browser and enter this code:")
+                        : qsTr("Open the browser to finish sign-in."))
                 wrapMode: Text.WordWrap
                 font.pixelSize: 13
                 color: "#212121"
@@ -119,12 +128,79 @@ Popup {
                 color: "#212121"
             }
 
-            Button {
+            RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                text: qsTr("I've signed in")
-                onClicked: {
-                    dialog.waiting = true
-                    dialog.service.completeSignIn(dialog.linkCode)
+                spacing: 10
+
+                Item {
+                    id: signedInButton
+                    implicitWidth: signedInLabel.implicitWidth + 40
+                    implicitHeight: signedInLabel.implicitHeight + 16
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: height / 2
+                        color: signedInMouseArea.pressed ? "#D0D0D0"
+                                                         : (signedInMouseArea.containsMouse ? "#E8E8E8" : "#F0F0F0")
+                    }
+
+                    Text {
+                        id: signedInLabel
+                        anchors.centerIn: parent
+                        text: qsTr("I've signed in")
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
+                        color: "#212121"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+
+                    MouseArea {
+                        id: signedInMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            dialog.waiting = true
+                            dialog.service.completeSignIn(dialog.linkCode)
+                        }
+                    }
+                }
+
+                Item {
+                    id: cancelButton
+                    implicitWidth: cancelLabel.implicitWidth + 36
+                    implicitHeight: cancelLabel.implicitHeight + 16
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: height / 2
+                        color: cancelMouseArea.pressed ? "#D0D0D0"
+                                                       : (cancelMouseArea.containsMouse ? "#E8E8E8" : "#F0F0F0")
+                    }
+
+                    Text {
+                        id: cancelLabel
+                        anchors.centerIn: parent
+                        text: qsTr("Cancel")
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
+                        color: "#212121"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+
+                    MouseArea {
+                        id: cancelMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (dialog.service)
+                                dialog.service.cancelSignIn()
+                            dialog.close()
+                        }
+                    }
                 }
             }
         }

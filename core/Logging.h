@@ -10,6 +10,37 @@ Q_DECLARE_LOGGING_CATEGORY(logZone)
 Q_DECLARE_LOGGING_CATEGORY(logSoap)
 Q_DECLARE_LOGGING_CATEGORY(logSmapi)
 
+enum class LogDirection {
+    Inbound,
+    Outbound
+};
+
+enum class LogVerbosity {
+    Normal,
+    Verbose
+};
+
+void setLogVerbosity(LogVerbosity verbosity);
+LogVerbosity logVerbosity();
+bool verboseLoggingEnabled();
+
+// Temporarily attaches a network peer to all QLOG()/QWARN() calls made on
+// this thread. This is the Qt-category equivalent of bb10's ZLOG(host):
+// call sites keep writing ordinary log messages, while the installed
+// message handler prints "< peer" or "> peer" after the standard prefix.
+class ScopedLogEndpoint
+{
+public:
+    ScopedLogEndpoint(QString address, LogDirection direction);
+    ~ScopedLogEndpoint();
+
+    ScopedLogEndpoint(const ScopedLogEndpoint &) = delete;
+    ScopedLogEndpoint &operator=(const ScopedLogEndpoint &) = delete;
+
+private:
+    QString m_previousEndpoint;
+};
+
 // Call once, as early as possible in main() (before constructing
 // QGuiApplication/QCoreApplication is fine -- qInstallMessageHandler()
 // doesn't need one). Installs a custom message handler (deliberately not
@@ -18,9 +49,10 @@ Q_DECLARE_LOGGING_CATEGORY(logSmapi)
 // prefixes every log line with elapsed time since process start. Directed
 // network logs pass ">dest" or "<source" as the first message field; the
 // handler moves that into the prefix so lines use
-// "[SSS.mmm|category|>dest] Method(...)" or
-// "[SSS.mmm|category|<source] NOTIFY ...", while ordinary logs stay
-// "[SSS.mmm|category] message".
+// "[SSS.mmm|category] > dest  Method(...)" or
+// "[SSS.mmm|category] < source  NOTIFY ...", while ordinary logs stay
+// "[SSS.mmm|category] message". Category and endpoint fields are padded
+// for readability.
 void installLogMessagePattern();
 
 // Call once, right after installLogMessagePattern(). Matches
@@ -45,5 +77,5 @@ void logStartupBanner(const QString &appName);
 // automatically. A file that uses QLOG()/QWARN() without defining
 // QLOG_CATEGORY first fails to compile at the first call site, naming the
 // missing macro -- not silent/wrong-category output.
-#define QLOG() qCDebug(QLOG_CATEGORY)
-#define QWARN() qCWarning(QLOG_CATEGORY)
+#define QLOG() qCDebug(QLOG_CATEGORY).noquote()
+#define QWARN() qCWarning(QLOG_CATEGORY).noquote()

@@ -141,6 +141,7 @@ private:
     struct ZoneEventSubscription {
         QString zoneUdn;
         ZoneEventService service;
+        QString serviceName;
     };
 
     ZonePlayer *allocateZone(const QString &deviceIp, const QString &udn);

@@ -19,6 +19,25 @@ Q_LOGGING_CATEGORY(logSmapi, "roomtunes.core.smapi")
 namespace {
 
 qint64 g_startMsecs = 0;
+thread_local QString g_logEndpoint;
+LogVerbosity g_logVerbosity = LogVerbosity::Normal;
+constexpr qsizetype kCategoryWidth = 24;
+constexpr qsizetype kEndpointWidth = 22;
+
+QString directedEndpoint(const QString &address, LogDirection direction)
+{
+    if (address.isEmpty())
+        return {};
+    const QChar marker = direction == LogDirection::Outbound ? QLatin1Char('>') : QLatin1Char('<');
+    return QString(marker) + address;
+}
+
+LogVerbosity verbosityFromEnvironment()
+{
+    const QString value = qEnvironmentVariable("ROOMTUNES_LOG").trimmed();
+    return value.compare(QStringLiteral("verbose"), Qt::CaseInsensitive) == 0 ? LogVerbosity::Verbose
+                                                                              : LogVerbosity::Normal;
+}
 
 QString takeFirstLogField(QString *message)
 {
@@ -85,18 +104,30 @@ void logMessageHandler(QtMsgType type, const QMessageLogContext &context, const 
     const bool isSoap = context.category && qstrcmp(context.category, "roomtunes.core.soap") == 0;
     const bool hasDirectedEndpoint = outputMessage.startsWith(QLatin1Char('>')) || outputMessage.startsWith(QLatin1Char('<'));
 
-    // Directed network logs pass their endpoint as the first message field.
-    // Pull it into the prefix so lines read "[time|source|>dest] Method(...)"
-    // or "[time|source|<dest] NOTIFY ...", without every call site needing
-    // custom formatting.
-    const QString destination = (isSoap || hasDirectedEndpoint) ? takeFirstLogField(&outputMessage) : QString();
+    // Directed network logs pass their endpoint as the first message field
+    // or via ScopedLogEndpoint. Pull it out of the message and render it
+    // after the fixed-width header as "[time|source] < peer message", so
+    // scan-heavy logs keep both the message and endpoint columns aligned.
+    const QString destination = !g_logEndpoint.isEmpty()
+        ? g_logEndpoint
+        : ((isSoap || hasDirectedEndpoint) ? takeFirstLogField(&outputMessage) : QString());
 
-    if (context.category && qstrcmp(context.category, "default") != 0)
-        bracket += QLatin1Char('|') + QString::fromUtf8(context.category);
-    if (!destination.isEmpty())
-        bracket += QLatin1Char('|') + destination;
+    if (context.category && qstrcmp(context.category, "default") != 0) {
+        const QString category = QString::fromUtf8(context.category);
+        bracket += QLatin1Char('|') + category.leftJustified(kCategoryWidth);
+    }
 
-    const QString line = QStringLiteral("[%1] %2").arg(bracket, outputMessage);
+    QString line = QStringLiteral("[%1]").arg(bracket);
+    if (!destination.isEmpty()) {
+        const QChar direction = destination.front();
+        const QString endpoint = destination.mid(1);
+        line += QStringLiteral(" %1 %2 %3")
+                    .arg(direction)
+                    .arg(endpoint.leftJustified(kEndpointWidth))
+                    .arg(outputMessage);
+    } else {
+        line += QLatin1Char(' ') + outputMessage;
+    }
 
     // Routing everything through stderr made Qt Creator's Application
     // Output color every single line red (it colors by stream, not by
@@ -109,8 +140,35 @@ void logMessageHandler(QtMsgType type, const QMessageLogContext &context, const 
 
 }
 
+ScopedLogEndpoint::ScopedLogEndpoint(QString address, LogDirection direction)
+    : m_previousEndpoint(g_logEndpoint)
+{
+    g_logEndpoint = directedEndpoint(address, direction);
+}
+
+ScopedLogEndpoint::~ScopedLogEndpoint()
+{
+    g_logEndpoint = m_previousEndpoint;
+}
+
+void setLogVerbosity(LogVerbosity verbosity)
+{
+    g_logVerbosity = verbosity;
+}
+
+LogVerbosity logVerbosity()
+{
+    return g_logVerbosity;
+}
+
+bool verboseLoggingEnabled()
+{
+    return g_logVerbosity == LogVerbosity::Verbose;
+}
+
 void installLogMessagePattern()
 {
+    g_logVerbosity = verbosityFromEnvironment();
     g_startMsecs = QDateTime::currentMSecsSinceEpoch();
     qInstallMessageHandler(logMessageHandler);
 }

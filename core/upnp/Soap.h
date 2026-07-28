@@ -81,8 +81,6 @@ public:
 
     QNetworkReply *subscribe(const QString &url, const QString &notifyUrl, int timeoutSeconds)
     {
-        qCDebug(logSoap).noquote() << directedHost(url, QLatin1Char('>')) << "SUBSCRIBE" << QUrl(url).path()
-                                    << "callback=" << notifyUrl << "timeout=" << timeoutSeconds;
         QNetworkRequest request{QUrl(url)};
         request.setRawHeader("CALLBACK", notifyUrl.toUtf8());
         request.setRawHeader("NT", "upnp:event");
@@ -92,8 +90,6 @@ public:
 
     QNetworkReply *resubscribe(const QString &url, const QString &sid, int timeoutSeconds)
     {
-        qCDebug(logSoap).noquote() << directedHost(url, QLatin1Char('>')) << "SUBSCRIBE (renew)" << QUrl(url).path()
-                                    << "sid=" << sid << "timeout=" << timeoutSeconds;
         QNetworkRequest request{QUrl(url)};
         request.setRawHeader("SID", sid.toUtf8());
         request.setRawHeader("TIMEOUT", QStringLiteral("Second-%1").arg(timeoutSeconds).toUtf8());

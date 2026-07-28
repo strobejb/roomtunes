@@ -11,6 +11,7 @@
 #include <QSettings>
 #include <QSysInfo>
 #include <QUrl>
+#include <QTimer>
 #include <QUuid>
 #include <QXmlStreamReader>
 
@@ -30,6 +31,8 @@ namespace RoomTunes {
 namespace {
 
 constexpr quint32 kContextCapability = 1u << 16;
+constexpr int kDeviceAuthTokenPollIntervalMs = 3000;
+constexpr int kDeviceAuthTokenPollTimeoutMs = 7 * 60 * 1000;
 
 struct DeviceLinkDetails
 {
@@ -116,6 +119,30 @@ bool hasSoapBodyPayload(const QByteArray &body)
         return xml.readNextStartElement();
     }
     return false;
+}
+
+bool looksLikeAuthExpiredError(const QString &errorMessage)
+{
+    // Sonos services are not consistent about how they report an expired
+    // account. Some return a direct "token expired" fault string, others
+    // surface a more user-facing "account access has expired" message.
+    // Treat the common variants as the same browser reauthorization case.
+    const QString lower = errorMessage.toLower();
+    return lower.contains(QStringLiteral("account access has expired"))
+        || lower.contains(QStringLiteral("token expired"))
+        || lower.contains(QStringLiteral("unauthoriz"))
+        || (lower.contains(QStringLiteral("expired"))
+            && (lower.contains(QStringLiteral("token"))
+                || lower.contains(QStringLiteral("account"))
+                || lower.contains(QStringLiteral("access"))))
+        || (lower.contains(QStringLiteral("auth")) && lower.contains(QStringLiteral("expired")));
+}
+
+bool isRetryableDeviceAuthTokenError(const SoapResponse &response)
+{
+    const QString faultCode = response.faultCode();
+    return faultCode == QStringLiteral("Client.NOT_LINKED_RETRY")
+        || faultCode == QStringLiteral("Client.AuthTokenExpired");
 }
 
 QString responseHeadersForLog(const QNetworkReply *reply)
@@ -482,6 +509,13 @@ bool SmapiService::needsSignIn() const
         && (m_token.isEmpty() || m_key.isEmpty());
 }
 
+bool SmapiService::shouldOfferReauthorize(const QString &errorMessage) const
+{
+    if (m_authPolicy != QStringLiteral("DeviceLink") && m_authPolicy != QStringLiteral("AppLink"))
+        return false;
+    return looksLikeAuthExpiredError(errorMessage);
+}
+
 void SmapiService::updateResolved(int smapiId, const QString &serviceUri, const QString &authPolicy,
                                    const QString &username, const QString &token, const QString &key,
                                    const QString &title, const QString &iconUrl, quint32 capabilities,
@@ -776,6 +810,9 @@ void SmapiService::browseRootViaManifest(ResultCallback callback, std::function<
         connect(reply, &QNetworkReply::finished, this, [this, reply, callback, fallback]() {
             const QByteArray body = reply->readAll();
             const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            const bool authExpired = reply->error() != QNetworkReply::NoError
+                && (status == 401 || status == 403 || looksLikeAuthExpiredError(QString::fromUtf8(body))
+                    || looksLikeAuthExpiredError(reply->errorString()));
             const QVariantList items = reply->error() == QNetworkReply::NoError
                 ? parseManifestBrowseItems(body, m_smapiId, m_serviceId, m_username)
                 : QVariantList();
@@ -787,11 +824,21 @@ void SmapiService::browseRootViaManifest(ResultCallback callback, std::function<
                 return;
             }
 
+            if (authExpired) {
+                QWARN() << title() << "manifest browse returned an authorization error"
+                        << "http=" << status << "network=" << reply->errorString();
+                if (!body.isEmpty())
+                    QWARN() << title() << "manifest browse response:" << compactXmlForLog(QString::fromUtf8(body));
+                reply->deleteLater();
+                callback(false, tr("Account access has expired."), {});
+                return;
+            }
+
             QWARN() << title() << "manifest browse failed or returned no items:"
                     << "http=" << status << "network=" << reply->errorString()
                     << "-- falling back to SMAPI getMetadata";
             if (!body.isEmpty())
-                QWARN().noquote() << title() << "manifest browse response:" << compactXmlForLog(QString::fromUtf8(body));
+                QWARN() << title() << "manifest browse response:" << compactXmlForLog(QString::fromUtf8(body));
             reply->deleteLater();
             fallback();
         });
@@ -831,6 +878,19 @@ void SmapiService::runMetadataRequest(QNetworkReply *reply, const QString &reque
                 return;
             }
 
+            const bool authPolicySupportsReauth =
+                m_authPolicy == QStringLiteral("DeviceLink") || m_authPolicy == QStringLiteral("AppLink");
+            const bool authExpired = authPolicySupportsReauth
+                && (response.httpStatusCode() == 401 || response.httpStatusCode() == 403
+                    || response.upnpErrorCode() == QStringLiteral("401")
+                    || looksLikeAuthExpiredError(response.faultString())
+                    || looksLikeAuthExpiredError(response.diagnosticText()));
+            if (authExpired) {
+                QWARN() << title() << requestDescription << "reported expired account access";
+                callback(false, tr("Account access has expired."), {});
+                return;
+            }
+
             QWARN() << title() << requestDescription << "failed:" << response.faultCode() << response.faultString();
             callback(false, response.faultString(), {});
             return;
@@ -843,10 +903,10 @@ void SmapiService::runMetadataRequest(QNetworkReply *reply, const QString &reque
                 QWARN() << title() << requestDescription << "returned empty SMAPI SOAP body from" << replyUrlForLog(response.reply());
                 const QString headers = responseHeadersForLog(response.reply());
                 if (!headers.isEmpty())
-                    QWARN().noquote() << title() << requestDescription << "SMAPIHDR:" << headers;
+                    QWARN() << title() << requestDescription << "SMAPIHDR:" << headers;
                 if (!requestXml.isEmpty())
-                    QWARN().noquote() << title() << requestDescription << "SMAPIENV:" << compactXmlForLog(requestXml);
-                QWARN().noquote() << title() << requestDescription
+                    QWARN() << title() << requestDescription << "SMAPIENV:" << compactXmlForLog(requestXml);
+                QWARN() << title() << requestDescription
                                   << "SMAPIXML:" << compactXmlForLog(QString::fromUtf8(response.rawBody()));
                 callback(false, tr("This service returned no browse data."), {});
                 return;
@@ -856,8 +916,8 @@ void SmapiService::runMetadataRequest(QNetworkReply *reply, const QString &reque
                 const QString requestXml = response.reply() ? response.reply()->property("soapBody").toString() : QString();
                 QWARN() << title() << requestDescription << "returned nil SMAPI metadata response";
                 if (!requestXml.isEmpty())
-                    QWARN().noquote() << title() << requestDescription << "SMAPIENV:" << compactXmlForLog(requestXml);
-                QWARN().noquote() << title() << requestDescription
+                    QWARN() << title() << requestDescription << "SMAPIENV:" << compactXmlForLog(requestXml);
+                QWARN() << title() << requestDescription
                                   << "SMAPIXML:" << compactXmlForLog(QString::fromUtf8(response.rawBody()));
                 callback(false, tr("This service returned no browse data."), {});
                 return;
@@ -869,8 +929,8 @@ void SmapiService::runMetadataRequest(QNetworkReply *reply, const QString &reque
                     << "mediaMetadata=" << body.contains(QStringLiteral("mediaMetadata"));
             const QString requestXml = response.reply() ? response.reply()->property("soapBody").toString() : QString();
             if (!requestXml.isEmpty())
-                QWARN().noquote() << title() << requestDescription << "SMAPIENV:" << compactXmlForLog(requestXml);
-            QWARN().noquote() << title() << requestDescription << "SMAPIXML:" << compactXmlForLog(body);
+                QWARN() << title() << requestDescription << "SMAPIENV:" << compactXmlForLog(requestXml);
+            QWARN() << title() << requestDescription << "SMAPIXML:" << compactXmlForLog(body);
         }
         QLOG() << title() << requestDescription << "OK," << items.size() << "item(s)";
         callback(true, QString(), items);
@@ -879,47 +939,160 @@ void SmapiService::runMetadataRequest(QNetworkReply *reply, const QString &reque
 
 void SmapiService::beginSignIn()
 {
+    QWARN() << title() << "beginSignIn requested:"
+            << "authPolicy=" << m_authPolicy
+            << "householdId=" << !m_household->householdId().isEmpty()
+            << "deviceSerial=" << !m_household->serviceDeviceSerial().isEmpty();
+
     if (m_household->householdId().isEmpty() || m_household->serviceDeviceSerial().isEmpty()) {
+        QWARN() << title() << "beginSignIn blocked: Sonos service prerequisites are not ready";
         emit authorizationFailed(tr("Sonos is still preparing music services."));
         return;
     }
 
     m_pendingLinkDeviceId.clear();
+    m_pendingAuthLinkCode.clear();
     m_pendingShowLinkCode = true;
+    m_authTokenPolling = false;
+    m_authTokenPollInFlight = false;
     m_smapi.setDeviceCredentials(m_household->serviceDeviceSerial(), QStringLiteral("Sonos"));
 
     auto onLinkReady = [this](bool ok, const QString &linkCode, const QString &regUrl) {
-        if (ok)
-            emit deviceLinkCodeReady(linkCode, regUrl, m_pendingShowLinkCode);
+        if (!ok)
+            return;
+
+        startDeviceAuthTokenPolling(linkCode);
+        emit deviceLinkCodeReady(linkCode, regUrl, m_pendingShowLinkCode);
     };
 
     if (m_authPolicy == QStringLiteral("AppLink"))
         requestAppLinkCode(m_household->householdId(), onLinkReady);
     else if (m_authPolicy == QStringLiteral("DeviceLink"))
         requestDeviceLinkCode(m_household->householdId(), onLinkReady);
-    else
+    else {
+        QWARN() << title() << "beginSignIn blocked: unsupported auth policy" << m_authPolicy;
         emit authorizationFailed(tr("This service does not use link-code sign-in."));
+    }
 }
 
 void SmapiService::completeSignIn(const QString &linkCode)
 {
-    exchangeDeviceLinkCode(
-        m_household->householdId(), linkCode, m_pendingLinkDeviceId,
-        [this](bool ok, const QString &token, const QString &key) {
-            if (!ok)
-                return;
+    QWARN() << title() << "completeSignIn requested:"
+            << "linkCodeEmpty=" << linkCode.isEmpty()
+            << "linkDeviceId=" << (m_pendingLinkDeviceId.isEmpty() ? QStringLiteral("<empty>") : m_pendingLinkDeviceId);
 
-            m_pendingLinkDeviceId.clear();
-            m_token = token;
-            m_key = key;
-            setDeviceLinkToken(m_household->serviceDeviceSerial(), token, key, m_household->householdId());
-            emit needsSignInChanged();
-        });
+    if (linkCode.isEmpty()) {
+        QWARN() << title() << "completeSignIn blocked: no link code";
+        emit authorizationFailed(tr("This service did not provide a sign-in code."));
+        return;
+    }
+
+    if (m_authTokenPolling) {
+        QWARN() << title() << "completeSignIn check requested while getDeviceAuthToken polling is already active";
+    } else {
+        startDeviceAuthTokenPolling(linkCode);
+    }
+    pollDeviceAuthToken();
+}
+
+void SmapiService::cancelSignIn()
+{
+    if (m_authTokenPolling)
+        QWARN() << title() << "cancel sign-in polling";
+    m_authTokenPolling = false;
+    m_authTokenPollInFlight = false;
+    m_pendingAuthLinkCode.clear();
+    m_pendingLinkDeviceId.clear();
+}
+
+void SmapiService::startDeviceAuthTokenPolling(const QString &linkCode)
+{
+    if (linkCode.isEmpty()) {
+        QWARN() << title() << "getDeviceAuthToken polling not started: no link code";
+        return;
+    }
+
+    m_pendingAuthLinkCode = linkCode;
+    m_authTokenPolling = true;
+    m_authTokenPollInFlight = false;
+    m_authTokenPollStarted.restart();
+    QWARN() << title() << "begin polling getDeviceAuthToken after sign-in link was issued";
+    pollDeviceAuthToken();
+}
+
+void SmapiService::pollDeviceAuthToken()
+{
+    if (!m_authTokenPolling)
+        return;
+
+    if (m_authTokenPollInFlight) {
+        QWARN() << title() << "getDeviceAuthToken poll skipped: request already in flight";
+        return;
+    }
+
+    if (m_authTokenPollStarted.elapsed() > kDeviceAuthTokenPollTimeoutMs) {
+        QWARN() << title() << "getDeviceAuthToken polling timed out after"
+                << m_authTokenPollStarted.elapsed() << "ms";
+        m_authTokenPolling = false;
+        m_authTokenPollInFlight = false;
+        emit authorizationFailed(tr("Sign-in timed out."));
+        return;
+    }
+
+    QWARN() << title() << "polling getDeviceAuthToken"
+           << "elapsed=" << m_authTokenPollStarted.elapsed() << "ms";
+    m_authTokenPollInFlight = true;
+    QNetworkReply *reply =
+        m_smapi.getDeviceAuthToken(m_household->householdId(), m_pendingAuthLinkCode, m_pendingLinkDeviceId);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
+        m_authTokenPollInFlight = false;
+
+        if (!m_authTokenPolling)
+            return;
+
+        if (response.error()) {
+            if (isRetryableDeviceAuthTokenError(response)) {
+                QWARN() << title() << "getDeviceAuthToken pending; retrying in"
+                       << kDeviceAuthTokenPollIntervalMs << "ms";
+                QTimer::singleShot(kDeviceAuthTokenPollIntervalMs, this, [this]() { pollDeviceAuthToken(); });
+                return;
+            }
+
+            QWARN() << title() << "getDeviceAuthToken failed:" << response.faultCode() << response.faultString();
+            m_authTokenPolling = false;
+            m_authTokenPollInFlight = false;
+            emit authorizationFailed(response.faultString());
+            return;
+        }
+
+        const QString token = response.value(QStringLiteral("AuthToken"));
+        const QString key = response.value(QStringLiteral("Key"));
+        if (token.isEmpty() || key.isEmpty()) {
+            QWARN() << title() << "getDeviceAuthToken returned no token/key";
+            m_authTokenPolling = false;
+            m_authTokenPollInFlight = false;
+            emit authorizationFailed(tr("This service did not return a valid sign-in token."));
+            return;
+        }
+
+        QWARN() << title() << "getDeviceAuthToken succeeded; applying refreshed credentials";
+        m_authTokenPolling = false;
+        m_authTokenPollInFlight = false;
+        m_pendingLinkDeviceId.clear();
+        m_pendingAuthLinkCode.clear();
+        m_token = token;
+        m_key = key;
+        setDeviceLinkToken(m_household->serviceDeviceSerial(), token, key, m_household->householdId());
+        emit needsSignInChanged();
+    });
 }
 
 void SmapiService::requestDeviceLinkCode(const QString &householdId,
                                           std::function<void(bool, const QString &, const QString &)> callback)
 {
+    QWARN() << title() << "requesting getDeviceLinkCode";
     QNetworkReply *reply = m_smapi.getDeviceLinkCode(householdId);
     connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
         SoapResponse response(reply);
@@ -937,6 +1110,8 @@ void SmapiService::requestDeviceLinkCode(const QString &householdId,
             response.value(QStringLiteral("ShowLinkCode")).compare(QStringLiteral("false"), Qt::CaseInsensitive) != 0;
         if (callback)
             callback(true, response.value(QStringLiteral("LinkCode")), response.value(QStringLiteral("RegUrl")));
+        QLOG() << title() << "sign-in browser url:" << response.value(QStringLiteral("RegUrl"))
+               << "showCode=" << m_pendingShowLinkCode;
     });
 }
 
@@ -947,6 +1122,7 @@ void SmapiService::requestAppLinkCode(
     // RoomTunes is a desktop controller, so identify it with Sonos'
     // documented WDCR prefix. AppLink services then return their browser
     // DeviceLink fallback instead of requiring the provider's mobile app.
+    QWARN() << title() << "requesting getAppLink";
     QNetworkReply *reply = m_smapi.getAppLink(
         householdId, QSysInfo::prettyProductName(), QSysInfo::productVersion(),
         QStringLiteral("WDCR_RoomTunes"), QStringLiteral("roomtunes://x-callback-url/addAccount"));
@@ -976,28 +1152,7 @@ void SmapiService::requestAppLinkCode(
         m_pendingShowLinkCode = details.showLinkCode;
         if (callback)
             callback(true, details.linkCode, details.registrationUrl);
-    });
-}
-
-void SmapiService::exchangeDeviceLinkCode(const QString &householdId, const QString &linkCode,
-                                           const QString &linkDeviceId,
-                                           std::function<void(bool, const QString &, const QString &)> callback)
-{
-    QNetworkReply *reply = m_smapi.getDeviceAuthToken(householdId, linkCode, linkDeviceId);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (response.error()) {
-            QWARN() << title() << "getDeviceAuthToken failed:" << response.faultString();
-            emit authorizationFailed(response.faultString());
-            if (callback)
-                callback(false, QString(), QString());
-            return;
-        }
-
-        if (callback)
-            callback(true, response.value(QStringLiteral("AuthToken")), response.value(QStringLiteral("Key")));
+        QLOG() << title() << "sign-in browser url:" << details.registrationUrl << "showCode=" << details.showLinkCode;
     });
 }
 

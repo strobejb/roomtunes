@@ -75,6 +75,12 @@ public:
     // services with no stored token/key yet.
     virtual bool needsSignIn() const { return false; }
 
+    // Reauthorization is only meaningful for services whose auth policy
+    // supports a browser/link-code flow. The default implementation is
+    // false; SmapiService overrides it so QML can offer a "Reauthorize"
+    // action when browse() returns an expired-account style error.
+    Q_INVOKABLE virtual bool shouldOfferReauthorize(const QString &errorMessage) const;
+
     // Empty on the base -- see the Q_PROPERTY comments above.
     virtual QVariantList searchCategories() const { return {}; }
     virtual QString activeSearchCategory() const { return {}; }

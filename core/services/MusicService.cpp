@@ -29,6 +29,11 @@ void MusicService::browseDirect(const QString &objectId, ResultCallback callback
     doBrowse(objectId, std::move(callback));
 }
 
+bool MusicService::shouldOfferReauthorize(const QString &) const
+{
+    return false;
+}
+
 void MusicService::search(const QString &requestToken, const QString &category, const QString &term)
 {
     doSearch(category, term, [this, requestToken](bool ok, const QString &errorMessage, const QVariantList &items) {

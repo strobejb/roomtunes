@@ -133,6 +133,7 @@ void Household::onNetworkChanged()
     m_catalogFetched = false;
     m_smapiCatalogReady = false;
     m_installedServicesDecoded = false;
+    m_unavailableInstalledServicesLogged = false;
     updateMusicServicesReady();
     m_catalogFailedZoneUdns.clear();
     m_serviceDeviceSerial.clear();
@@ -221,6 +222,7 @@ void Household::tryProcessThirdPartyMediaServersX()
     m_rawInstalledServices = ThirdPartyMediaServers::parse(m_discovery.householdId(), m_pendingTpmsxRaw);
     m_installedServicesDecoded = true;
     QLOG() << "tryProcessThirdPartyMediaServersX: decrypted" << m_rawInstalledServices.size() << "raw installed service(s)";
+    logUnavailableInstalledServices();
     rebuildMusicServices();
 }
 
@@ -277,51 +279,91 @@ void Household::fetchMusicServiceCatalog()
         const QByteArray descriptorList = response.value(QStringLiteral("AvailableServiceDescriptorList")).toUtf8();
         const QString typeList = response.value(QStringLiteral("AvailableServiceTypeList"));
         QLOG() << "AvailableServiceTypeList:";
-        QLOG().noquote() << typeList;
-        QLOG() << "AvailableServiceDescriptorList XML:";
-        QLOG().noquote() << redactedFormattedXml(QString::fromUtf8(descriptorList));
+        QLOG() << typeList;
+        if (verboseLoggingEnabled()) {
+            QLOG() << "AvailableServiceDescriptorList XML:";
+            QLOG() << redactedFormattedXml(QString::fromUtf8(descriptorList));
+        }
 
         m_smapiCatalog = MusicServiceCatalog::build(descriptorList, typeList);
         m_smapiCatalogReady = true;
 
         logServiceMap();
+        logUnavailableInstalledServices();
         rebuildMusicServices();
     });
 }
 
 // Matches roomtunes-bb10's "building service map:" dump (ServiceDiscovery.cpp)
 // -- one line per catalog entry: household-scoped serviceId -> smapiId,
-// title, auth policy, capabilities, container type, SMAPI endpoints, and
-// AppLink manifest location.
+// title, auth policy, capabilities, container type, selected SMAPI
+// endpoint, and AppLink manifest location.
 void Household::logServiceMap() const
 {
     QLOG() << "--------------------------------------------------------------------------------";
     QLOG() << "building service map:" << m_smapiCatalog.size() << "SMAPI service(s)";
+    QLOG() << QStringLiteral("      id smapi  %1 %2 %3 %4 %5 %6 %7")
+                             .arg(QStringLiteral("title"), -32)
+                             .arg(QStringLiteral("auth"), -12)
+                             .arg(QStringLiteral("poll"), -6)
+                             .arg(QStringLiteral("caps"), -12)
+                             .arg(QStringLiteral("type"), -10)
+                             .arg(QStringLiteral("endpoint"), -42)
+                             //.arg(QStringLiteral("manifest"));
+        ;
 
     QList<int> serviceIds = m_smapiCatalog.keys();
     std::sort(serviceIds.begin(), serviceIds.end());
     for (int serviceId : std::as_const(serviceIds)) {
         const SmapiCatalogEntry &entry = m_smapiCatalog.value(serviceId);
-        QLOG().noquote() << QStringLiteral("  %1 -> %2  %3 auth=%4 poll=%5 capabilities=%6 type=%7 uri=%8 secureUri=%9 manifest=%10")
+        const QString endpoint = entry.secureUri.isEmpty() ? entry.uri : entry.secureUri;
+        QLOG() << QStringLiteral("  %1 %2  %3 %4 %5 %6 %7 %8")// %9")
                                  .arg(serviceId, 6)
                                  .arg(entry.smapiId, 5)
                                  .arg(entry.title, -32)
-                                 .arg(entry.auth.isEmpty() ? QStringLiteral("<none>") : entry.auth)
-                                 .arg(entry.pollInterval.isEmpty() ? QStringLiteral("<none>") : entry.pollInterval)
-                                 .arg(entry.capabilities.isEmpty() ? QStringLiteral("<none>") : entry.capabilities)
-                                 .arg(entry.containerType.isEmpty() ? QStringLiteral("<none>") : entry.containerType)
-                                 .arg(entry.uri.isEmpty() ? QStringLiteral("<none>") : entry.uri)
-                                 .arg(entry.secureUri.isEmpty() ? QStringLiteral("<none>") : entry.secureUri)
-                                 .arg(entry.manifestUri.isEmpty() ? QStringLiteral("<none>") : entry.manifestUri);
+                                 .arg(entry.auth.isEmpty() ? QStringLiteral("-") : entry.auth, -12)
+                                 .arg(entry.pollInterval.isEmpty() ? QStringLiteral("-") : entry.pollInterval, -6)
+                                 .arg(entry.capabilities.isEmpty() ? QStringLiteral("-") : entry.capabilities, -12)
+                                 .arg(entry.containerType.isEmpty() ? QStringLiteral("-") : entry.containerType, -10)
+                                 .arg(endpoint.isEmpty() ? QStringLiteral("-") : endpoint, -42)
+                                 //.arg(entry.manifestUri.isEmpty() ? QStringLiteral("<none>") : entry.manifestUri);
+                                 ;
     }
 
     for (int legacyId : {1, 2, 3, 11, 13, 14}) {
         const QString name = MusicServiceCatalog::legacyServiceName(legacyId);
         if (!name.isEmpty())
-            QLOG().noquote() << QStringLiteral("  %1 ->     -  %2 (legacy, no SMAPI endpoint)").arg(legacyId, 6).arg(name);
+            QLOG() << QStringLiteral("  %1 %2  %3 %4 %5 %6 %7 %8 %9")
+                                     .arg(legacyId, 6)
+                                     .arg(QStringLiteral("-"), 5)
+                                     .arg(name, -32)
+                                     .arg(QStringLiteral("legacy"), -12)
+                                     .arg(QStringLiteral("-"), -6)
+                                     .arg(QStringLiteral("-"), -12)
+                                     .arg(QStringLiteral("-"), -10)
+                                     .arg(QStringLiteral("-"), -42)
+                                     .arg(QStringLiteral("no SMAPI endpoint"));
     }
 
     QLOG() << "--------------------------------------------------------------------------------";
+}
+
+void Household::logUnavailableInstalledServices()
+{
+    if (m_unavailableInstalledServicesLogged || !m_installedServicesDecoded || !m_smapiCatalogReady
+        || m_rawInstalledServices.isEmpty()) {
+        return;
+    }
+
+    QStringList unavailable;
+    for (const InstalledService &service : m_rawInstalledServices) {
+        if (!m_smapiCatalog.contains(service.serviceId))
+            unavailable.append(QString::number(service.serviceId));
+    }
+
+    if (!unavailable.isEmpty())
+        QLOG() << "installed services absent from current SMAPI catalog:" << unavailable.join(QStringLiteral(", "));
+    m_unavailableInstalledServicesLogged = true;
 }
 
 void Household::fetchServiceIcons()
@@ -401,11 +443,8 @@ void Household::rebuildMusicServices()
         // catalog, which gives us the SMAPI endpoint/auth policy needed to
         // browse them anyway.
         const auto catalogEntry = m_smapiCatalog.constFind(service.serviceId);
-        if (catalogEntry == m_smapiCatalog.constEnd()) {
-            QLOG() << "service skipped: serviceId=" << service.serviceId
-                   << "(stored in TPMSX but not in current SMAPI catalog)";
+        if (catalogEntry == m_smapiCatalog.constEnd())
             continue;
-        }
 
         service.title = catalogEntry->title;
         service.serviceUri = catalogEntry->secureUri.isEmpty() ? catalogEntry->uri : catalogEntry->secureUri;
@@ -419,14 +458,6 @@ void Household::rebuildMusicServices()
         // directly. Looking icons up by smapiId (the old scheme) silently
         // found nothing for every catalog-resolved service.
         service.iconUrl = m_serviceIcons.value(service.serviceId);
-
-        QLOG() << "service:" << service.title << "serviceId=" << service.serviceId << "smapiId=" << smapiId
-               << "auth=" << service.authPolicy << "uri=" << service.serviceUri
-               << "capabilities=" << (catalogEntry->capabilities.isEmpty() ? QStringLiteral("<none>") : catalogEntry->capabilities)
-               << "manifest=" << (catalogEntry->manifestUri.isEmpty() ? QStringLiteral("<none>") : catalogEntry->manifestUri)
-               << "username=" << (service.username.isEmpty() ? QStringLiteral("<device-link>") : service.username)
-               << "token=" << (!service.token.isEmpty()) << "key=" << (!service.key.isEmpty())
-               << "icon=" << (service.iconUrl.isEmpty() ? QStringLiteral("<none found>") : service.iconUrl);
 
         // loginName mirrors the UDN suffix Sonos itself uses: a real
         // username for UserId-auth services, or the synthetic
@@ -467,7 +498,7 @@ void Household::rebuildMusicServices()
     if (!installedServiceLines.isEmpty()) {
         QLOG() << "installed services:";
         for (const QString &line : std::as_const(installedServiceLines))
-            QLOG().noquote() << line;
+            QLOG() << line;
     }
 
     // Drop instances for services that genuinely disappeared (e.g.

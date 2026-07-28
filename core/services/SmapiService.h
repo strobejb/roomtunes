@@ -4,6 +4,7 @@
 
 #include <QList>
 #include <QNetworkAccessManager>
+#include <QElapsedTimer>
 #include <QString>
 
 #include "../upnp/Smapi.h"
@@ -20,9 +21,10 @@ class Household;
 // DeviceLink/AppLink service reuses the credentials Sonos already stored
 // for it, a UserId service asks the zone itself for a sessionId via
 // MusicServices:1 GetSessionId, anything else browses directly) plus a
-// DeviceLink/AppLink sign-in flow (beginSignIn()/completeSignIn()). AppLink
-// obtains the service's browser fallback via getAppLink; both policies
-// finish by exchanging that link code through getDeviceAuthToken.
+// DeviceLink/AppLink sign-in flow. beginSignIn() obtains the service's
+// browser/link-code handoff and immediately starts C++-owned
+// getDeviceAuthToken polling; completeSignIn() is only a user-triggered
+// "check now" nudge from the dialog, not the owner of the exchange.
 class SmapiService : public MusicService
 {
     Q_OBJECT
@@ -48,6 +50,7 @@ public:
 
     bool canSearch() const override { return true; }
     bool needsSignIn() const override;
+    bool shouldOfferReauthorize(const QString &errorMessage) const override;
     QVariantList searchCategories() const override { return m_searchCategories; }
     QString activeSearchCategory() const override { return m_activeSearchCategoryId; }
 
@@ -63,6 +66,7 @@ public:
 
     Q_INVOKABLE void beginSignIn();
     Q_INVOKABLE void completeSignIn(const QString &linkCode);
+    Q_INVOKABLE void cancelSignIn();
 
 signals:
     void authorized();
@@ -75,15 +79,14 @@ protected:
 
 private:
     // DeviceLink and AppLink browser-fallback building blocks. Not
-    // QML-facing themselves -- beginSignIn()/completeSignIn() are the
-    // common public entry points.
+    // QML-facing themselves -- beginSignIn() owns the sequenced flow and
+    // starts getDeviceAuthToken polling once a link code exists.
     void requestDeviceLinkCode(const QString &householdId,
                                 std::function<void(bool ok, const QString &linkCode, const QString &regUrl)> callback);
     void requestAppLinkCode(const QString &householdId,
                             std::function<void(bool ok, const QString &linkCode, const QString &regUrl)> callback);
-    void exchangeDeviceLinkCode(const QString &householdId, const QString &linkCode,
-                                 const QString &linkDeviceId,
-                                 std::function<void(bool ok, const QString &token, const QString &key)> callback);
+    void startDeviceAuthTokenPolling(const QString &linkCode);
+    void pollDeviceAuthToken();
     void setDeviceLinkToken(const QString &deviceId, const QString &token, const QString &key, const QString &householdId);
 
     // Resolves credentials for the current authPolicy (reusing stored
@@ -151,7 +154,11 @@ private:
     QString m_tpmsxToken;
     QString m_tpmsxKey;
     QString m_pendingLinkDeviceId;
+    QString m_pendingAuthLinkCode;
     bool m_pendingShowLinkCode = true;
+    bool m_authTokenPolling = false;
+    bool m_authTokenPollInFlight = false;
+    QElapsedTimer m_authTokenPollStarted;
 
     enum class ManifestEndpointState { Unresolved, Resolving, Resolved, Unavailable };
     ManifestEndpointState m_manifestEndpointState = ManifestEndpointState::Unresolved;

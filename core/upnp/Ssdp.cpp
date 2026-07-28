@@ -220,7 +220,8 @@ void Ssdp::receiveDatagrams()
             continue;
 
         const QString response = QString::fromLatin1(packet.constData(), int(len));
-        QLOG() << "SSDP received" << len << "bytes from" << fromAddr.toString() << ":" << fromPort;
+        const ScopedLogEndpoint logEndpoint(fromAddr.toString(), LogDirection::Inbound);
+        //QLOG() << "SSDP received" << len << "bytes from port" << fromPort;
         emit discovered(fromAddr.toString(), parseHttpHeaders(response));
     }
 }
