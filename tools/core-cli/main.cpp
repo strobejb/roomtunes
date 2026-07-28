@@ -10,6 +10,7 @@
 #include <QNetworkAccessManager>
 
 #include "Logging.h"
+#include "Settings.h"
 #include "services/MusicService.h"
 #include "services/SmapiService.h"
 #include "services/SpotifyServiceConfig.h"
@@ -53,7 +54,7 @@ int main(int argc, char *argv[])
     logStartupBanner(QStringLiteral("core-cli"));
 
     QCoreApplication app(argc, argv);
-    QCoreApplication::setApplicationName(QStringLiteral("core-cli"));
+    configureApplicationSettings();
 
     QCommandLineParser parser;
     parser.setApplicationDescription(

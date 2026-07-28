@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "../Logging.h"
+#include "../Settings.h"
 #include "../upnp/SoapResponse.h"
 #include "../upnp/services/MusicServices.h"
 #include "../zone/Household.h"
@@ -261,7 +262,7 @@ QString sonosControllerId()
 
 QString deviceLinkCredentialGroup(int serviceId, const QString &householdId, const QString &deviceId)
 {
-    return QStringLiteral("network/smapiCredentials/%1/%2/%3")
+    return QStringLiteral("credentials/%1/%2/%3")
         .arg(serviceId)
         .arg(QString::fromLatin1(QUrl::toPercentEncoding(householdId)))
         .arg(QString::fromLatin1(QUrl::toPercentEncoding(deviceId)));
@@ -1244,7 +1245,7 @@ bool SmapiService::applyPersistedDeviceLinkToken()
     if (deviceId.isEmpty() || householdId.isEmpty())
         return false;
 
-    QSettings settings;
+    QSettings settings(smapiSettingsFilePath(), QSettings::IniFormat);
     settings.beginGroup(deviceLinkCredentialGroup(m_serviceId, householdId, deviceId));
     const QString baseToken = settings.value(QStringLiteral("baseToken")).toString();
     const QString baseKey = settings.value(QStringLiteral("baseKey")).toString();
@@ -1270,7 +1271,7 @@ bool SmapiService::applyPersistedDeviceLinkToken()
 void SmapiService::persistDeviceLinkToken(const QString &deviceId, const QString &token, const QString &key,
                                           const QString &householdId)
 {
-    QSettings settings;
+    QSettings settings(smapiSettingsFilePath(), QSettings::IniFormat);
     settings.beginGroup(deviceLinkCredentialGroup(m_serviceId, householdId, deviceId));
     // TPMSX can lag behind token refreshes and AppLink browser sign-ins, so
     // RoomTunes keeps its own override. The base token/key pins that override

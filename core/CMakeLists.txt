@@ -3,6 +3,8 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Network)
 qt_add_library(roomtunes_core STATIC
     Logging.h
     Logging.cpp
+    Settings.h
+    Settings.cpp
 
     xml/XmlUtils.h
 

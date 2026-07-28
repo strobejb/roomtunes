@@ -5,6 +5,7 @@
 #include <QQuickWindow>
 
 #include "Logging.h"
+#include "Settings.h"
 #include "chrome/PlatformChrome.h"
 #include "zone/BrowseRecencyStore.h"
 #include "chrome/WindowsChrome.h"
@@ -22,8 +23,7 @@ int main(int argc, char *argv[])
     logStartupBanner(QStringLiteral("RoomTunes"));
 
     QGuiApplication app(argc, argv);
-    app.setApplicationName(QStringLiteral("Room Tunes"));
-    app.setOrganizationName(QStringLiteral("Room Tunes"));
+    configureApplicationSettings();
 
     // Without an explicit style, Qt Quick Controls auto-selects a native
     // one on each platform (e.g. "Windows" here) -- native styles draw
