@@ -16,6 +16,7 @@
 #include <QXmlStreamReader>
 
 #include <cstdlib>
+#include <initializer_list>
 #include <utility>
 
 #include "../Logging.h"
@@ -40,6 +41,12 @@ struct DeviceLinkDetails
     QString linkCode;
     QString linkDeviceId;
     bool showLinkCode = true;
+};
+
+struct DeviceAuthTokenDetails
+{
+    QString token;
+    QString key;
 };
 
 DeviceLinkDetails parseAppLinkDeviceLink(const QByteArray &body)
@@ -72,7 +79,54 @@ DeviceLinkDetails parseAppLinkDeviceLink(const QByteArray &body)
     return details;
 }
 
-QString compactXmlForLog(QString xml)
+QString firstResponseValue(const SoapResponse &response, std::initializer_list<QString> names)
+{
+    for (const QString &name : names) {
+        const QString value = response.value(name);
+        if (!value.isEmpty())
+            return value;
+    }
+    return {};
+}
+
+DeviceAuthTokenDetails parseDeviceAuthTokenResponse(const SoapResponse &response)
+{
+    DeviceAuthTokenDetails details{
+        firstResponseValue(response, {QStringLiteral("AuthToken"), QStringLiteral("authToken"), QStringLiteral("Token"), QStringLiteral("token")}),
+        firstResponseValue(response, {QStringLiteral("Key"), QStringLiteral("key"), QStringLiteral("PrivateKey"), QStringLiteral("privateKey")})
+    };
+
+    if (!details.token.isEmpty() && !details.key.isEmpty())
+        return details;
+
+    // Some AppLink providers wrap the actual token/key one level below
+    // getDeviceAuthTokenResponse. SoapResponse::value() deliberately only
+    // flattens immediate response children, so scan this one specialised
+    // response shape here instead of changing generic SOAP parsing.
+    QXmlStreamReader xml(response.rawBody());
+    while (!xml.atEnd()) {
+        if (!xml.readNextStartElement())
+            continue;
+
+        const QString name = xml.name().toString();
+        if (details.token.isEmpty()
+            && (name.compare(QStringLiteral("AuthToken"), Qt::CaseInsensitive) == 0
+                || name.compare(QStringLiteral("token"), Qt::CaseInsensitive) == 0)) {
+            details.token = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        } else if (details.key.isEmpty()
+                   && (name.compare(QStringLiteral("Key"), Qt::CaseInsensitive) == 0
+                       || name.compare(QStringLiteral("PrivateKey"), Qt::CaseInsensitive) == 0)) {
+            details.key = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        }
+
+        if (!details.token.isEmpty() && !details.key.isEmpty())
+            break;
+    }
+
+    return details;
+}
+
+QString redactedXmlForLog(QString xml)
 {
     xml.replace(QRegularExpression(QStringLiteral("<((?:[A-Za-z_][\\w.-]*:)?(?:authToken|privateKey|sessionId|password|token|key))([^>]*)>.*?</\\1>"),
                                    QRegularExpression::CaseInsensitiveOption),
@@ -81,6 +135,12 @@ QString compactXmlForLog(QString xml)
     xml.replace(QLatin1Char('\n'), QLatin1Char(' '));
     xml.replace(QLatin1Char('\t'), QLatin1Char(' '));
     xml = xml.simplified();
+    return xml;
+}
+
+QString compactXmlForLog(QString xml)
+{
+    xml = redactedXmlForLog(std::move(xml));
 
     constexpr qsizetype maxLength = 4000;
     if (xml.size() > maxLength)
@@ -197,6 +257,14 @@ QString sonosControllerId()
         settings.setValue(QLatin1String(key), id);
     }
     return id;
+}
+
+QString deviceLinkCredentialGroup(int serviceId, const QString &householdId, const QString &deviceId)
+{
+    return QStringLiteral("network/smapiCredentials/%1/%2/%3")
+        .arg(serviceId)
+        .arg(QString::fromLatin1(QUrl::toPercentEncoding(householdId)))
+        .arg(QString::fromLatin1(QUrl::toPercentEncoding(deviceId)));
 }
 
 QString localUtcOffset()
@@ -501,6 +569,7 @@ SmapiService::SmapiService(Household *household, int serviceId, int smapiId, con
     , m_smapi(household->networkAccessManager(), serviceUri)
 {
     m_smapi.setContextEnabled(m_capabilities & kContextCapability);
+    applyPersistedDeviceLinkToken();
 }
 
 bool SmapiService::needsSignIn() const
@@ -553,6 +622,7 @@ void SmapiService::updateResolved(int smapiId, const QString &serviceUri, const 
         m_token = token;
         m_key = key;
     }
+    applyPersistedDeviceLinkToken();
 
     setTitle(title);
     setIconSource(iconUrl);
@@ -672,6 +742,7 @@ void SmapiService::withCredentials(const QString &requestDescription, ResultCall
             callback(false, tr("This service can't be browsed yet."), {});
             return;
         }
+        applyPersistedDeviceLinkToken();
         if (m_token.isEmpty() || m_key.isEmpty()) {
             QWARN() << title() << requestDescription << "failed: sign-in required (no stored DeviceLink token)";
             callback(false, tr("Sign-in required for this service."), {});
@@ -760,6 +831,8 @@ void SmapiService::resolveManifestBrowseEndpoint(std::function<void(const QStrin
         m_manifestEndpointState = m_manifestBrowseEndpoint.isEmpty() ? ManifestEndpointState::Unavailable
                                                                      : ManifestEndpointState::Resolved;
         if (m_manifestBrowseEndpoint.isEmpty()) {
+            if (reply->error() != QNetworkReply::NoError)
+                logNetworkReplyError(logSmapi(), title() + QStringLiteral(" manifest fetch failed"), reply, body);
             QWARN() << title() << "manifest has no usable browse endpoint:" << m_manifestUri
                     << reply->errorString();
         } else {
@@ -825,19 +898,18 @@ void SmapiService::browseRootViaManifest(ResultCallback callback, std::function<
             }
 
             if (authExpired) {
-                QWARN() << title() << "manifest browse returned an authorization error"
-                        << "http=" << status << "network=" << reply->errorString();
-                if (!body.isEmpty())
-                    QWARN() << title() << "manifest browse response:" << compactXmlForLog(QString::fromUtf8(body));
+                logNetworkReplyError(logSmapi(), title() + QStringLiteral(" manifest browse authorization error"), reply, body);
                 reply->deleteLater();
                 callback(false, tr("Account access has expired."), {});
                 return;
             }
 
+            if (reply->error() != QNetworkReply::NoError)
+                logNetworkReplyError(logSmapi(), title() + QStringLiteral(" manifest browse failed"), reply, body);
             QWARN() << title() << "manifest browse failed or returned no items:"
                     << "http=" << status << "network=" << reply->errorString()
                     << "-- falling back to SMAPI getMetadata";
-            if (!body.isEmpty())
+            if (reply->error() == QNetworkReply::NoError && !body.isEmpty())
                 QWARN() << title() << "manifest browse response:" << compactXmlForLog(QString::fromUtf8(body));
             reply->deleteLater();
             fallback();
@@ -873,6 +945,7 @@ void SmapiService::runMetadataRequest(QNetworkReply *reply, const QString &reque
                 // credential actually in use) changes here.
                 m_token = response.refreshedAuthToken();
                 m_key = response.refreshedPrivateKey();
+                persistDeviceLinkToken(m_household->serviceDeviceSerial(), m_token, m_key, m_household->householdId());
                 applyStoredCredentials();
                 runMetadataRequest(reissue(), requestDescription, callback, reissue, /*isRetry=*/true);
                 return;
@@ -1067,13 +1140,18 @@ void SmapiService::pollDeviceAuthToken()
             return;
         }
 
-        const QString token = response.value(QStringLiteral("AuthToken"));
-        const QString key = response.value(QStringLiteral("Key"));
-        if (token.isEmpty() || key.isEmpty()) {
-            QWARN() << title() << "getDeviceAuthToken returned no token/key";
-            m_authTokenPolling = false;
-            m_authTokenPollInFlight = false;
-            emit authorizationFailed(tr("This service did not return a valid sign-in token."));
+        const DeviceAuthTokenDetails authToken = parseDeviceAuthTokenResponse(response);
+        if (authToken.token.isEmpty() || authToken.key.isEmpty()) {
+            // BBC Sounds/AppLink can answer getDeviceAuthToken with HTTP 200
+            // before the browser-side authorization has fully completed, but
+            // without returning a token/key yet. Treat that response like the
+            // older DeviceLink NOT_LINKED_RETRY fault and let the existing
+            // poll timeout decide when to fail the sign-in attempt.
+            QWARN() << title() << "getDeviceAuthToken returned no token/key yet; retrying in"
+                    << kDeviceAuthTokenPollIntervalMs << "ms";
+            QWARN() << title() << "getDeviceAuthToken SMAPIXML:"
+                    << redactedXmlForLog(QString::fromUtf8(response.rawBody()));
+            QTimer::singleShot(kDeviceAuthTokenPollIntervalMs, this, [this]() { pollDeviceAuthToken(); });
             return;
         }
 
@@ -1082,9 +1160,9 @@ void SmapiService::pollDeviceAuthToken()
         m_authTokenPollInFlight = false;
         m_pendingLinkDeviceId.clear();
         m_pendingAuthLinkCode.clear();
-        m_token = token;
-        m_key = key;
-        setDeviceLinkToken(m_household->serviceDeviceSerial(), token, key, m_household->householdId());
+        m_token = authToken.token;
+        m_key = authToken.key;
+        setDeviceLinkToken(m_household->serviceDeviceSerial(), authToken.token, authToken.key, m_household->householdId());
         emit needsSignInChanged();
     });
 }
@@ -1156,8 +1234,59 @@ void SmapiService::requestAppLinkCode(
     });
 }
 
+bool SmapiService::applyPersistedDeviceLinkToken()
+{
+    if (m_authPolicy != QStringLiteral("DeviceLink") && m_authPolicy != QStringLiteral("AppLink"))
+        return false;
+
+    const QString deviceId = m_household->serviceDeviceSerial();
+    const QString householdId = m_household->householdId();
+    if (deviceId.isEmpty() || householdId.isEmpty())
+        return false;
+
+    QSettings settings;
+    settings.beginGroup(deviceLinkCredentialGroup(m_serviceId, householdId, deviceId));
+    const QString baseToken = settings.value(QStringLiteral("baseToken")).toString();
+    const QString baseKey = settings.value(QStringLiteral("baseKey")).toString();
+    const QString token = settings.value(QStringLiteral("token")).toString();
+    const QString key = settings.value(QStringLiteral("key")).toString();
+    settings.endGroup();
+
+    if (token.isEmpty() || key.isEmpty())
+        return false;
+
+    if (baseToken != m_tpmsxToken || baseKey != m_tpmsxKey) {
+        QLOG() << title() << "discarding persisted sign-in token because Sonos service credentials changed";
+        settings.remove(deviceLinkCredentialGroup(m_serviceId, householdId, deviceId));
+        return false;
+    }
+
+    m_token = token;
+    m_key = key;
+    QLOG() << title() << "using persisted sign-in token";
+    return true;
+}
+
+void SmapiService::persistDeviceLinkToken(const QString &deviceId, const QString &token, const QString &key,
+                                          const QString &householdId)
+{
+    QSettings settings;
+    settings.beginGroup(deviceLinkCredentialGroup(m_serviceId, householdId, deviceId));
+    // TPMSX can lag behind token refreshes and AppLink browser sign-ins, so
+    // RoomTunes keeps its own override. The base token/key pins that override
+    // to the TPMSX snapshot it was created from; if Sonos later reports a
+    // different snapshot, applyPersistedDeviceLinkToken() drops the override
+    // and trusts the network state again.
+    settings.setValue(QStringLiteral("baseToken"), m_tpmsxToken);
+    settings.setValue(QStringLiteral("baseKey"), m_tpmsxKey);
+    settings.setValue(QStringLiteral("token"), token);
+    settings.setValue(QStringLiteral("key"), key);
+    settings.endGroup();
+}
+
 void SmapiService::setDeviceLinkToken(const QString &deviceId, const QString &token, const QString &key, const QString &householdId)
 {
+    persistDeviceLinkToken(deviceId, token, key, householdId);
     m_smapi.setLoginTokenCredentials(deviceId, QStringLiteral("Sonos"), token, key, householdId);
     emit authorized();
 }

@@ -28,7 +28,7 @@ Popup {
     property string errorMessage: ""
     property bool waiting: true
 
-    onOpened: {
+    function restartSignIn() {
         linkCode = ""
         regUrl = ""
         showLinkCode = true
@@ -38,6 +38,8 @@ Popup {
         if (service)
             service.beginSignIn()
     }
+
+    onOpened: restartSignIn()
 
     Connections {
         target: dialog.service
@@ -214,14 +216,41 @@ Popup {
             wrapMode: Text.WordWrap
         }
 
-        Button {
+        Item {
+            id: retryButton
             Layout.alignment: Qt.AlignHCenter
             visible: !!dialog.errorMessage
-            text: qsTr("Retry")
-            onClicked: {
-                dialog.errorMessage = ""
-                dialog.waiting = true
-                dialog.service.beginSignIn()
+            implicitWidth: retryLabel.implicitWidth + 40
+            implicitHeight: retryLabel.implicitHeight + 16
+
+            Rectangle {
+                anchors.fill: parent
+                radius: height / 2
+                color: retryMouseArea.pressed ? "#D0D0D0"
+                                              : (retryMouseArea.containsMouse ? "#E8E8E8" : "#F0F0F0")
+            }
+
+            Text {
+                id: retryLabel
+                anchors.centerIn: parent
+                text: qsTr("Retry")
+                font.pixelSize: 14
+                font.weight: Font.DemiBold
+                color: "#212121"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+
+            MouseArea {
+                id: retryMouseArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    if (dialog.service)
+                        dialog.service.cancelSignIn()
+                    dialog.restartSignIn()
+                }
             }
         }
     }

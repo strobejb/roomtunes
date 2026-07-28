@@ -88,6 +88,9 @@ private:
     void startDeviceAuthTokenPolling(const QString &linkCode);
     void pollDeviceAuthToken();
     void setDeviceLinkToken(const QString &deviceId, const QString &token, const QString &key, const QString &householdId);
+    bool applyPersistedDeviceLinkToken();
+    void persistDeviceLinkToken(const QString &deviceId, const QString &token, const QString &key,
+                                const QString &householdId);
 
     // Resolves credentials for the current authPolicy (reusing stored
     // DeviceLink/AppLink credentials, or fetching a fresh UserId sessionId from

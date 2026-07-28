@@ -6,6 +6,8 @@
 #include <QLocale>
 #include <QNetworkAddressEntry>
 #include <QNetworkInterface>
+#include <QNetworkRequest>
+#include <QRegularExpression>
 #include <QSysInfo>
 #include <QtGlobal>
 
@@ -164,6 +166,66 @@ LogVerbosity logVerbosity()
 bool verboseLoggingEnabled()
 {
     return g_logVerbosity == LogVerbosity::Verbose;
+}
+
+QString redactedNetworkBodyForLog(QString body, qsizetype maxLength)
+{
+    body.replace(QRegularExpression(QStringLiteral("<((?:[A-Za-z_][\\w.-]*:)?(?:authToken|privateKey|sessionId|password|token|key))([^>]*)>.*?</\\1>"),
+                                    QRegularExpression::CaseInsensitiveOption),
+                 QStringLiteral("<\\1\\2><redacted></\\1>"));
+    body.replace(QRegularExpression(QStringLiteral("(\"?(?:authToken|privateKey|sessionId|password|token|key)\"?\\s*[:=]\\s*\")([^\"]*)(\")"),
+                                    QRegularExpression::CaseInsensitiveOption),
+                 QStringLiteral("\\1<redacted>\\3"));
+    body.replace(QLatin1Char('\r'), QLatin1Char(' '));
+    body.replace(QLatin1Char('\n'), QLatin1Char(' '));
+    body.replace(QLatin1Char('\t'), QLatin1Char(' '));
+    body = body.simplified();
+
+    if (maxLength > 0 && body.size() > maxLength)
+        body = body.left(maxLength - 3) + QStringLiteral("...");
+    return body;
+}
+
+QString networkReplyDiagnosticText(const QNetworkReply *reply)
+{
+    if (!reply)
+        return QStringLiteral("no QNetworkReply");
+
+    QStringList parts;
+    const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QString httpReason = reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString();
+    const QByteArray method = reply->operation() == QNetworkAccessManager::GetOperation ? QByteArrayLiteral("GET")
+        : reply->operation() == QNetworkAccessManager::PostOperation ? QByteArrayLiteral("POST")
+        : reply->operation() == QNetworkAccessManager::PutOperation ? QByteArrayLiteral("PUT")
+        : reply->operation() == QNetworkAccessManager::DeleteOperation ? QByteArrayLiteral("DELETE")
+        : reply->operation() == QNetworkAccessManager::CustomOperation
+            ? reply->request().attribute(QNetworkRequest::CustomVerbAttribute).toByteArray()
+            : QByteArrayLiteral("?");
+
+    if (!method.isEmpty())
+        parts << QStringLiteral("method=%1").arg(QString::fromLatin1(method));
+    parts << QStringLiteral("url=%1").arg(reply->url().toString());
+    parts << QStringLiteral("network=%1 %2").arg(int(reply->error())).arg(reply->errorString());
+    parts << QStringLiteral("http=%1%2")
+                 .arg(httpStatus)
+                 .arg(httpReason.isEmpty() ? QString() : QStringLiteral(" ") + httpReason);
+
+    return parts.join(QStringLiteral("; "));
+}
+
+void logNetworkReplyError(const QLoggingCategory &category, const QString &context, const QNetworkReply *reply,
+                          const QByteArray &body)
+{
+    const QString endpoint = reply ? reply->url().host() : QString();
+    ScopedLogEndpoint scoped(endpoint, LogDirection::Inbound);
+
+    QMessageLogger().warning(category).noquote()
+        << QStringLiteral("HTTPERR:") << context << networkReplyDiagnosticText(reply);
+
+    if (!body.isEmpty())
+        QMessageLogger().warning(category).noquote()
+            << QStringLiteral("HTTPXML:") << context
+            << redactedNetworkBodyForLog(QString::fromUtf8(body), 0);
 }
 
 void installLogMessagePattern()

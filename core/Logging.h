@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QLoggingCategory>
+#include <QNetworkReply>
 #include <QString>
 
 namespace RoomTunes {
@@ -23,6 +24,10 @@ enum class LogVerbosity {
 void setLogVerbosity(LogVerbosity verbosity);
 LogVerbosity logVerbosity();
 bool verboseLoggingEnabled();
+QString redactedNetworkBodyForLog(QString body, qsizetype maxLength = 4000);
+QString networkReplyDiagnosticText(const QNetworkReply *reply);
+void logNetworkReplyError(const QLoggingCategory &category, const QString &context, const QNetworkReply *reply,
+                          const QByteArray &body = {});
 
 // Temporarily attaches a network peer to all QLOG()/QWARN() calls made on
 // this thread. This is the Qt-category equivalent of bb10's ZLOG(host):
