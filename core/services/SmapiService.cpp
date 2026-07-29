@@ -900,8 +900,10 @@ void SmapiService::browseRootViaManifest(ResultCallback callback, std::function<
 
             if (authExpired) {
                 logNetworkReplyError(logSmapi(), title() + QStringLiteral(" manifest browse authorization error"), reply, body);
+                QWARN() << title()
+                        << "manifest browse authorization failed -- falling back to SMAPI getMetadata so token refresh can run";
                 reply->deleteLater();
-                callback(false, tr("Account access has expired."), {});
+                fallback();
                 return;
             }
 
