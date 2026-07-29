@@ -103,7 +103,8 @@ private:
     void withCredentials(const QString &requestDescription, ResultCallback callback, std::function<void()> onReady);
     void applyStoredCredentials();
     void browseViaSoap(const QString &objectId, const QString &requestDescription, ResultCallback callback);
-    void browseRootViaManifest(ResultCallback callback, std::function<void()> fallback);
+    void browseRootViaManifest(ResultCallback callback, std::function<void()> fallback, bool allowAuthRefresh = true);
+    void refreshAuthTokenForManifestBrowse(ResultCallback callback, std::function<void()> fallback);
     void resolveManifestBrowseEndpoint(std::function<void(const QString &)> callback);
 
     // reissue rebuilds and re-sends the exact same request (getMetadata or

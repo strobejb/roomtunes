@@ -847,9 +847,9 @@ void SmapiService::resolveManifestBrowseEndpoint(std::function<void(const QStrin
     });
 }
 
-void SmapiService::browseRootViaManifest(ResultCallback callback, std::function<void()> fallback)
+void SmapiService::browseRootViaManifest(ResultCallback callback, std::function<void()> fallback, bool allowAuthRefresh)
 {
-    resolveManifestBrowseEndpoint([this, callback, fallback](const QString &endpoint) {
+    resolveManifestBrowseEndpoint([this, callback, fallback, allowAuthRefresh](const QString &endpoint) {
         if (endpoint.isEmpty()) {
             fallback();
             return;
@@ -881,7 +881,7 @@ void SmapiService::browseRootViaManifest(ResultCallback callback, std::function<
 
         QLOG() << title() << "browse root via manifest JSON endpoint" << endpoint;
         QNetworkReply *reply = m_household->networkAccessManager()->get(request);
-        connect(reply, &QNetworkReply::finished, this, [this, reply, callback, fallback]() {
+        connect(reply, &QNetworkReply::finished, this, [this, reply, callback, fallback, allowAuthRefresh]() {
             const QByteArray body = reply->readAll();
             const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             const bool authExpired = reply->error() != QNetworkReply::NoError
@@ -900,10 +900,12 @@ void SmapiService::browseRootViaManifest(ResultCallback callback, std::function<
 
             if (authExpired) {
                 logNetworkReplyError(logSmapi(), title() + QStringLiteral(" manifest browse authorization error"), reply, body);
-                QWARN() << title()
-                        << "manifest browse authorization failed -- falling back to SMAPI getMetadata so token refresh can run";
+                QWARN() << title() << "manifest browse authorization failed";
                 reply->deleteLater();
-                fallback();
+                if (allowAuthRefresh)
+                    refreshAuthTokenForManifestBrowse(callback, fallback);
+                else
+                    fallback();
                 return;
             }
 
@@ -917,6 +919,31 @@ void SmapiService::browseRootViaManifest(ResultCallback callback, std::function<
             reply->deleteLater();
             fallback();
         });
+    });
+}
+
+void SmapiService::refreshAuthTokenForManifestBrowse(ResultCallback callback, std::function<void()> fallback)
+{
+    QLOG() << title() << "refreshing token via SMAPI getMetadata before retrying manifest browse";
+    QNetworkReply *reply = m_smapi.getMetadata(QStringLiteral("root"), 0, 1);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback, fallback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
+
+        if (response.error()
+            && response.faultCode() == QStringLiteral("Client.TokenRefreshRequired")
+            && !response.refreshedAuthToken().isEmpty() && !response.refreshedPrivateKey().isEmpty()) {
+            QLOG() << title() << "manifest browse token refresh required -- updating credentials and retrying";
+            m_token = response.refreshedAuthToken();
+            m_key = response.refreshedPrivateKey();
+            persistDeviceLinkToken(m_household->serviceDeviceSerial(), m_token, m_key, m_household->householdId());
+            applyStoredCredentials();
+            browseRootViaManifest(callback, fallback, /*allowAuthRefresh=*/false);
+            return;
+        }
+
+        QWARN() << title() << "manifest browse token refresh probe did not refresh credentials -- falling back to SMAPI getMetadata";
+        fallback();
     });
 }
 
