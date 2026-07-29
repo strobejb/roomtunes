@@ -23,6 +23,7 @@ Item {
     // Off for folders/containers (clicking one navigates, it doesn't
     // "play") -- BrowseListPage.qml turns it on only for playable leaf rows.
     property bool showPlayOverlay: false
+    property bool menuOpen: false
     // "01"/"02"/... shown before the icon -- empty (the default) shows
     // nothing and reclaims the space. Only set by BrowseListPage.qml when
     // viewing an actual album/playlist (root.hasFolderArt), not ordinary
@@ -32,31 +33,21 @@ Item {
     signal clicked()
     signal menuRequested()
 
-    implicitHeight: 44
+    implicitHeight: 52
+    readonly property bool rowHoverActive: mouseArea.containsMouse && !rowMenuButton.hovered && !root.menuOpen
 
-    // Bleeds a little into the surrounding panel margin (the "gutter")
-    // rather than stopping flush at the row's own edges -- purely a
-    // decorative overhang on the highlight itself, the row (and the
-    // ListView/panel it sits in) keeps its actual width unchanged. Left
-    // edge starts at the album art itself (not the row's own left edge)
-    // when a track number is showing, so the highlight doesn't cover it --
-    // same -10 bleed either way, just measured from a different edge.
-    //
-    // Plain x/width, not anchors.left/anchors.right + margins -- confirmed
-    // via a debug build (on-screen geometry readout) that mixing an
-    // anchors.left bound to a conditional target (iconArea.left vs
-    // parent.left) with an anchors.right bound to parent.right collapsed
-    // this Rectangle to width:0 in this Qt version, even though both edges
-    // individually resolved to sane values. Equivalent plain x/width
-    // bindings don't have that problem.
+    // Same gutter geometry as QueuePanel.qml: the highlight extends into
+    // the panel padding without moving row contents, while leaving enough
+    // space for rounded corners to remain visible. BrowseListPage gives
+    // the StackView 5px extra horizontal room so this overhang is not
+    // clipped by BrowseStack's slide-transition clip.
     Rectangle {
-        readonly property real leftEdge: (root.trackNumber.length > 0 ? iconArea.x : 0) - 10
         anchors.top: parent.top
         anchors.bottom: parent.bottom
-        x: leftEdge
-        width: parent.width - leftEdge + 10
+        x: root.trackNumber.length > 0 ? iconArea.x - 10 : 0
+        width: parent.width + 16 - x
         radius: 10
-        color: mouseArea.containsMouse ? "#F5F5F5" : "transparent"
+        color: root.rowHoverActive ? "#F5F5F5" : "transparent"
     }
 
     // Declared before the RowLayout so the row-wide click target sits
@@ -72,7 +63,12 @@ Item {
     }
 
     RowLayout {
-        anchors.fill: parent
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.leftMargin: 10
+        anchors.right: parent.right
+        anchors.rightMargin: -11
         spacing: 12
 
         Text {
@@ -191,11 +187,12 @@ Item {
         }
 
         IconButton {
+            id: rowMenuButton
             // Only while this row itself is hovered, not permanently --
             // an ActionMenu that's already open (rowMenu.parent set to
             // this row) can keep the button's own hover briefly true after
             // the mouse leaves, which is fine: closing the menu re-hides it.
-            visible: root.showMenu && mouseArea.containsMouse
+            visible: root.showMenu && (mouseArea.containsMouse || hovered || root.menuOpen)
             iconSource: "../resources/icons/three_dots_vertical.svg"
             iconSize: 16
             onClicked: root.menuRequested()

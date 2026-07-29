@@ -190,6 +190,8 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
+        anchors.leftMargin: 5
+        anchors.rightMargin: 5
         spacing: 8
 
         Item {
@@ -800,6 +802,8 @@ Item {
             ListView {
                 id: listView
                 anchors.fill: parent
+                anchors.leftMargin: -5
+                anchors.rightMargin: -5
                 visible: !root.loading && !root.errorMessage && !(root.service && root.service.needsSignIn)
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
@@ -886,12 +890,13 @@ Item {
 
                 delegate: MusicServiceRow {
                     id: rowItem
-                    width: listView.width - 20
+                    width: listView.width - 16
                     title: modelData.title
                     imageUrl: modelData.imageUrl
                     showChevron: !!modelData.container
                     showMenu: !!modelData.uri
                     showPlayOverlay: !modelData.container && !!modelData.uri
+                    menuOpen: rowMenu.visible && rowMenu.parent === rowItem
                     // Only within an actual album/playlist listing, and
                     // only for the playable tracks in it -- a list position
                     // isn't a meaningful "track number" for ordinary

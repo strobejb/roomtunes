@@ -361,7 +361,10 @@ ApplicationWindow {
                                 BrowseStack {
                                     id: browseStack
                                     anchors.fill: parent
-                                    anchors.margins: 20
+                                    anchors.topMargin: 20
+                                    anchors.bottomMargin: 20
+                                    anchors.leftMargin: 15
+                                    anchors.rightMargin: 15
                                     zone: window.selectedZone
                                 }
                             }
