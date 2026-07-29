@@ -91,59 +91,39 @@ QHash<int, QByteArray> RecentlyPlayedModel::roleNames() const
 
 void RecentlyPlayedModel::watchZone(ZonePlayer *zone)
 {
-    connect(zone, &ZonePlayer::currentTrackChanged, this, [this, zone]() { onTrackChanged(zone); });
-
-    // Seeds the list with whatever's already loaded on this zone, not
-    // just future changes -- a zone's currentTrack is very likely already
-    // set by the time this runs (zoneReady fires once the zone's own
-    // topology/transport state, including its current track, has already
-    // been fetched and parsed), so waiting only for the *next*
-    // currentTrackChanged would miss it entirely until something actually
-    // changes tracks again this session.
-    onTrackChanged(zone);
+    connect(zone, &ZonePlayer::playbackItemSelected, this, &RecentlyPlayedModel::recordSelectedItem,
+            Qt::UniqueConnection);
 }
 
-void RecentlyPlayedModel::onTrackChanged(ZonePlayer *zone)
+void RecentlyPlayedModel::recordSelectedItem(const QVariantMap &item)
 {
-    MediaItem *track = zone->currentTrack();
-    // No uri -- nothing playable was actually loaded (e.g. the zone just
-    // stopped) -- and a container entry can't be replayed via playItem()
-    // the same way a leaf track/station can, so neither belongs in a
-    // "recently played" list of playable things.
-    if (!track || track->uri().isEmpty() || track->isContainer())
+    const QString uri = item.value(QStringLiteral("uri")).toString();
+    if (uri.isEmpty() || item.value(QStringLiteral("container")).toBool())
         return;
 
-    recordPlay(track);
-}
-
-void RecentlyPlayedModel::recordPlay(MediaItem *track)
-{
-    // A metadata-only tick on what's already the most recent entry (e.g.
-    // Internet radio periodically re-announcing the same now-playing
-    // info via GENA) isn't a fresh play.
-    if (!m_entries.isEmpty()
-        && m_entries.first().toMap().value(QStringLiteral("uri")).toString() == track->uri())
+    if (!m_entries.isEmpty() && m_entries.first().toMap().value(QStringLiteral("uri")).toString() == uri)
         return;
 
     QVariantMap entry;
-    entry[QStringLiteral("id")] = track->id();
-    entry[QStringLiteral("parentId")] = track->parentId();
-    entry[QStringLiteral("title")] = track->title();
-    entry[QStringLiteral("artist")] = track->artist();
-    entry[QStringLiteral("album")] = track->album();
-    entry[QStringLiteral("imageUrl")] = track->imageUrl();
-    entry[QStringLiteral("uri")] = track->uri();
-    entry[QStringLiteral("upnpClass")] = track->upnpClass();
+    entry[QStringLiteral("id")] = item.value(QStringLiteral("id"));
+    entry[QStringLiteral("parentId")] = item.value(QStringLiteral("parentId"));
+    entry[QStringLiteral("title")] = item.value(QStringLiteral("title"));
+    entry[QStringLiteral("artist")] = item.value(QStringLiteral("artist"));
+    entry[QStringLiteral("album")] = item.value(QStringLiteral("album"));
+    entry[QStringLiteral("imageUrl")] = item.value(QStringLiteral("imageUrl"));
+    entry[QStringLiteral("uri")] = uri;
+    entry[QStringLiteral("upnpClass")] = item.value(QStringLiteral("upnpClass"));
     entry[QStringLiteral("container")] = false;
 
-    QLOG() << "recording play:" << track->title() << "--" << track->artist();
+    QLOG() << "recently played: selected track:" << entry.value(QStringLiteral("title")).toString()
+           << "--" << entry.value(QStringLiteral("artist")).toString();
 
     beginResetModel();
 
     // Any existing entry for the same uri moves back to the front rather
     // than appearing twice.
     for (int i = m_entries.size() - 1; i >= 0; --i) {
-        if (m_entries.at(i).toMap().value(QStringLiteral("uri")).toString() == track->uri())
+        if (m_entries.at(i).toMap().value(QStringLiteral("uri")).toString() == uri)
             m_entries.removeAt(i);
     }
 

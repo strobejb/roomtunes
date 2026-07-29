@@ -30,6 +30,7 @@ public:
         IdRole,
         ParentIdRole,
         UriRole,
+        ItemRole,
     };
 
     explicit QueueModel(QObject *parent = nullptr);

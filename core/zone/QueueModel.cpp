@@ -85,6 +85,8 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const
         return item->parentId();
     case UriRole:
         return item->uri();
+    case ItemRole:
+        return item->toVariantMap();
     default:
         return {};
     }
@@ -99,6 +101,7 @@ QHash<int, QByteArray> QueueModel::roleNames() const
         { IdRole, "id" },
         { ParentIdRole, "parentId" },
         { UriRole, "uri" },
+        { ItemRole, "item" },
     };
 }
 

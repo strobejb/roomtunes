@@ -8,6 +8,20 @@ Item {
     id: root
 
     property var queue // QueueModel* for the selected zone
+    property var failedImageUrls: ({})
+
+    function imageUrlAvailable(url) {
+        return !!url && !failedImageUrls[String(url)]
+    }
+
+    function markImageUrlFailed(url) {
+        if (!url)
+            return
+
+        var failed = Object.assign({}, failedImageUrls)
+        failed[String(url)] = true
+        failedImageUrls = failed
+    }
 
     // Shared by every row rather than one per delegate -- opened against
     // whichever row's dots button was clicked (see the delegate below),
@@ -16,13 +30,14 @@ Item {
         id: rowMenu
         property int trackIndex: -1
         property string trackId: ""
+        property var currentItem: ({})
         items: [qsTr("Favourite"), "-", qsTr("Play Now"), qsTr("Remove Track")]
 
         onItemClicked: (text) => {
             if (!root.queue || !root.queue.zone)
                 return
             if (text === qsTr("Play Now"))
-                root.queue.zone.playQueueTrack(rowMenu.trackIndex + 1)
+                root.queue.zone.playQueueItem(rowMenu.trackIndex + 1, rowMenu.currentItem)
             else if (text === qsTr("Remove Track"))
                 root.queue.zone.removeQueueTrack(rowMenu.trackId)
             // "Favourite" isn't wired to anything yet -- there's no
@@ -132,7 +147,7 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
                         if (root.queue && root.queue.zone)
-                            root.queue.zone.playQueueTrack(index + 1)
+                            root.queue.zone.playQueueItem(index + 1, model.item)
                     }
                 }
 
@@ -161,12 +176,17 @@ Item {
                             anchors.fill: parent
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
-                            source: model.imageUrl ? model.imageUrl : ""
+                            readonly property string requestedUrl: model.imageUrl ? String(model.imageUrl) : ""
+                            source: root.imageUrlAvailable(requestedUrl) ? requestedUrl : ""
                             sourceSize.width: width
                             sourceSize.height: height
                             smooth: true
                             mipmap: true
                             visible: false
+                            onStatusChanged: {
+                                if (status === Image.Error)
+                                    root.markImageUrlFailed(requestedUrl)
+                            }
                         }
 
                         Item {
@@ -249,6 +269,7 @@ Item {
                         onClicked: {
                             rowMenu.trackIndex = index
                             rowMenu.trackId = model.id
+                            rowMenu.currentItem = model.item
                             rowMenu.parent = rowItem
                             rowMenu.x = rowItem.width - rowMenu.width - 8
                             rowMenu.y = rowItem.height

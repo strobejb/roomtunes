@@ -535,9 +535,11 @@ void ZonePlayer::playItem(const QVariantMap &item)
 
     if (upnpClass.endsWith(QStringLiteral(".audioBroadcast"))) {
         // A stream isn't queueable -- swap the transport straight to it.
-        setAVTransportUri(uri, QString::fromUtf8(metaData), [this](bool ok) {
-            if (ok)
+        setAVTransportUri(uri, QString::fromUtf8(metaData), [this, item](bool ok) {
+            if (ok) {
+                emit playbackItemSelected(item);
                 play();
+            }
         });
         return;
     }
@@ -546,9 +548,9 @@ void ZonePlayer::playItem(const QVariantMap &item)
     // transport at this zone's own queue, seek to the newly-enqueued
     // position, then play -- roomtunes-bb10's play_track().
     addUriToQueue(uri, QString::fromUtf8(metaData), /*desiredFirstTrackNumberEnqueued=*/0, /*enqueueAsNext=*/true,
-                  [this](bool ok, int firstTrackNumberEnqueued) {
+                  [this, item](bool ok, int firstTrackNumberEnqueued) {
         if (ok)
-            playQueueTrack(firstTrackNumberEnqueued);
+            playQueueTrackInternal(firstTrackNumberEnqueued, item);
     });
 }
 
@@ -603,16 +605,26 @@ void ZonePlayer::removeQueueTrack(const QString &objectId)
 
 void ZonePlayer::playQueueTrack(int trackNumber)
 {
+    playQueueTrackInternal(trackNumber);
+}
+
+void ZonePlayer::playQueueItem(int trackNumber, const QVariantMap &item)
+{
+    playQueueTrackInternal(trackNumber, item);
+}
+
+void ZonePlayer::playQueueTrackInternal(int trackNumber, const QVariantMap &selectedItem)
+{
     // Unconditionally pointed at the queue rather than first checking
     // whether it's already there (roomtunes-bb10's skipto_track() checks
     // first, purely to skip a redundant round trip) -- simpler, and
     // re-selecting the same source a zone is already on doesn't restart it.
-    setAVTransportUri(queueUri(), QString(), [this, trackNumber](bool ok) {
+    setAVTransportUri(queueUri(), QString(), [this, trackNumber, selectedItem](bool ok) {
         if (!ok)
             return;
 
         QNetworkReply *reply = m_avTransport.Seek(0, QStringLiteral("TRACK_NR"), QString::number(trackNumber));
-        connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        connect(reply, &QNetworkReply::finished, this, [this, reply, selectedItem]() {
             SoapResponse response(reply);
             reply->deleteLater();
 
@@ -620,6 +632,8 @@ void ZonePlayer::playQueueTrack(int trackNumber)
                 QWARN() << m_roomName << "Seek failed:" << soapErrorDetail(response);
                 return;
             }
+            if (!selectedItem.isEmpty())
+                emit playbackItemSelected(selectedItem);
             play();
         });
     });

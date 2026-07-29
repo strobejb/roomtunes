@@ -172,6 +172,7 @@ public:
     // panel's click-to-play (roomtunes-bb10's skipto_track()); no
     // AddURIToQueue involved since the item's already in the queue.
     Q_INVOKABLE void playQueueTrack(int trackNumber);
+    Q_INVOKABLE void playQueueItem(int trackNumber, const QVariantMap &item);
     // Removes one already-queued track by its own DIDL object id (e.g.
     // "Q:0/5", as browsed -- see QueueModel's IdRole), matching
     // roomtunes-bb10's remove_track(), which likewise always passes
@@ -213,6 +214,7 @@ signals:
     void currentTrackChanged();
     void accentColorChanged();
     void positionChanged();
+    void playbackItemSelected(const QVariantMap &item);
     // Emitted after a queue-mutating action (add/remove/clear) actually
     // succeeds -- QueueModel listens to keep the "Up Next" list in sync
     // without polling.
@@ -223,6 +225,7 @@ private:
     void setCurrentTrack(MediaItem *track);
     void refreshAccentColor(const QString &imageUrl);
     void setPosition(int positionSeconds, int durationSeconds);
+    void playQueueTrackInternal(int trackNumber, const QVariantMap &selectedItem = {});
 
 private:
     QNetworkAccessManager *m_netMgr;

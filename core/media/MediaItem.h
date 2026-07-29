@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QVariantMap>
 
 #include "../upnp/Didl.h"
 
@@ -69,6 +70,20 @@ public:
     bool isContainer() const { return m_container; }
     bool isPlayable() const { return !m_container; }
     bool isStreamable() const { return m_upnpClass.endsWith(QStringLiteral(".audioBroadcast")); }
+    QVariantMap toVariantMap() const
+    {
+        return {
+            { QStringLiteral("id"), m_id },
+            { QStringLiteral("parentId"), m_parentId },
+            { QStringLiteral("title"), m_title },
+            { QStringLiteral("artist"), m_artist },
+            { QStringLiteral("album"), m_album },
+            { QStringLiteral("imageUrl"), m_imageUrl },
+            { QStringLiteral("uri"), m_uri },
+            { QStringLiteral("upnpClass"), m_upnpClass },
+            { QStringLiteral("container"), m_container },
+        };
+    }
 
     QString rating() const { return m_rating; }
     void setRating(const QString &rating)

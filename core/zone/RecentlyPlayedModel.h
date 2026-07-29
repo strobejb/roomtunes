@@ -14,15 +14,13 @@ class MediaItem;
 // real household lists only A:/S:/SQ:/R:/FV:/Q:, nothing else, and
 // RecentlyPlayedUpdateID (a real GENA LastChange variable, so Sonos does
 // track *something* internally) doesn't correspond to any browsable id.
-// This is RoomTunes' own client-side substitute instead: watches every
-// known zone's currentTrackChanged and keeps a persisted JSON,
+// This is RoomTunes' own client-side substitute instead: it records only
+// explicit play selections made through this UI, keeping a persisted JSON,
 // most-recent-first, deduplicated-by-uri history across the whole
 // household (not scoped to one room -- matches how a shared household
-// history reads in practice). A play event is recorded once per actual
-// track change; a GENA metadata tick that re-announces the same
-// track/station (e.g. Internet radio periodically resending "now playing"
-// info) doesn't count as a fresh play since it wouldn't change what's
-// already the most recent entry.
+// history reads in practice). It deliberately does not observe
+// currentTrackChanged, so startup, zone switching, Sonos-app changes, and
+// GENA metadata ticks cannot alter local history.
 class RecentlyPlayedModel : public QAbstractListModel
 {
     Q_OBJECT
@@ -47,8 +45,7 @@ public:
 
 private:
     void watchZone(ZonePlayer *zone);
-    void onTrackChanged(ZonePlayer *zone);
-    void recordPlay(MediaItem *track);
+    void recordSelectedItem(const QVariantMap &item);
     void load();
     void save();
 

@@ -684,10 +684,14 @@ void ZoneDiscovery::subscribeZoneEvents(ZonePlayer *zone)
     if (!zone || zone->invisible())
         return;
 
-    subscribeZoneEvent(zone, zone->avTransport(), ZoneEventService::AVTransport);
-    subscribeZoneEvent(zone, zone->renderingControl(), ZoneEventService::RenderingControl);
-    subscribeZoneEvent(zone, zone->contentDirectory(), ZoneEventService::ContentDirectory);
-    subscribeZoneEvent(zone, zone->audioIn(), ZoneEventService::AudioIn);
+    if (zone->hasDeviceService(QStringLiteral("AVTransport")))
+        subscribeZoneEvent(zone, zone->avTransport(), ZoneEventService::AVTransport);
+    if (zone->hasDeviceService(QStringLiteral("RenderingControl")))
+        subscribeZoneEvent(zone, zone->renderingControl(), ZoneEventService::RenderingControl);
+    if (zone->hasDeviceService(QStringLiteral("ContentDirectory")))
+        subscribeZoneEvent(zone, zone->contentDirectory(), ZoneEventService::ContentDirectory);
+    if (zone->hasDeviceService(QStringLiteral("AudioIn")))
+        subscribeZoneEvent(zone, zone->audioIn(), ZoneEventService::AudioIn);
 }
 
 void ZoneDiscovery::subscribeZoneEvent(ZonePlayer *zone, UpnpService &service, ZoneEventService serviceType)
