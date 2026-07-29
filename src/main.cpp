@@ -6,6 +6,7 @@
 
 #include "Logging.h"
 #include "Settings.h"
+#include "version.h"
 #include "chrome/PlatformChrome.h"
 #include "zone/BrowseHistoryStore.h"
 #include "chrome/WindowsChrome.h"
@@ -22,6 +23,8 @@ int main(int argc, char *argv[])
     installLogMessagePattern();
 
     QGuiApplication app(argc, argv);
+    app.setApplicationDisplayName(QStringLiteral("Room Tunes"));
+    app.setApplicationVersion(QStringLiteral(PRODUCT_VERSION_STRING));
     logStartupBanner(QStringLiteral("RoomTunes"));
     configureApplicationSettings();
 
@@ -56,6 +59,8 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("recentlyPlayedModel"), &recentlyPlayedModel);
     engine.rootContext()->setContextProperty(QStringLiteral("PlatformChrome"), &platformChrome);
     engine.rootContext()->setContextProperty(QStringLiteral("queueModel"), &queueModel);
+    engine.rootContext()->setContextProperty(QStringLiteral("appVersion"),
+                                             QStringLiteral(PRODUCT_VERSION_STRING));
 
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed, &app,

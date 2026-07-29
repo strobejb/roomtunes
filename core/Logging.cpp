@@ -2,6 +2,7 @@
 
 #include <cstdio>
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QFile>
 #include <QHash>
@@ -290,8 +291,22 @@ void installLogMessagePattern()
 
 void logStartupBanner(const QString &appName)
 {
-    qCDebug(logDiscovery) << appName << "-- Qt" << qVersion() << "on" << QSysInfo::prettyProductName();
-    qCDebug(logDiscovery) << "  locale:" << QLocale::system().name();
+    const QString version = QCoreApplication::applicationVersion().isEmpty()
+        ? QStringLiteral("(unknown)")
+        : QCoreApplication::applicationVersion();
+    const QString hostName = QSysInfo::machineHostName().isEmpty()
+        ? QStringLiteral("(unknown)")
+        : QSysInfo::machineHostName();
+
+    qCDebug(logDiscovery).noquote() << QStringLiteral("%1: %2").arg(appName, version);
+    qCDebug(logDiscovery).noquote() << QStringLiteral("  locale:       %1").arg(QLocale::system().name());
+    qCDebug(logDiscovery).noquote() << QStringLiteral("  os:           %1").arg(QSysInfo::prettyProductName());
+    qCDebug(logDiscovery).noquote() << QStringLiteral("  kernel:       %1 %2")
+                                            .arg(QSysInfo::kernelType(), QSysInfo::kernelVersion());
+    qCDebug(logDiscovery).noquote() << QStringLiteral("  qt:           %1").arg(qVersion());
+    qCDebug(logDiscovery).noquote() << QStringLiteral("  cpu:          %1").arg(QSysInfo::currentCpuArchitecture());
+    qCDebug(logDiscovery).noquote() << QStringLiteral("  build cpu:    %1").arg(QSysInfo::buildCpuArchitecture());
+    qCDebug(logDiscovery).noquote() << QStringLiteral("  host:         %1").arg(hostName);
     qCDebug(logDiscovery) << "--------------------------------------------------------------------------------";
 
     const QHash<QString, QStringList> gateways = defaultGatewaysByInterface();

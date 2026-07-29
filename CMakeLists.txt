@@ -1,5 +1,23 @@
 cmake_minimum_required(VERSION 3.21)
-project(RoomTunes LANGUAGES CXX)
+
+set(ROOMTUNES_VERSION_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h")
+file(STRINGS "${ROOMTUNES_VERSION_HEADER}" ROOMTUNES_VERSION_LINES
+    REGEX "^#define VERSION_(MAJOR|MINOR|PATCH|BUILD_COUNT)[ \t]+[0-9]+")
+foreach(_version_line IN LISTS ROOMTUNES_VERSION_LINES)
+    if(_version_line MATCHES "^#define VERSION_([A-Z_]+)[ \t]+([0-9]+)")
+        set(ROOMTUNES_VERSION_${CMAKE_MATCH_1} "${CMAKE_MATCH_2}")
+    endif()
+endforeach()
+foreach(_version_part MAJOR MINOR PATCH BUILD_COUNT)
+    if(NOT DEFINED ROOMTUNES_VERSION_${_version_part})
+        message(FATAL_ERROR "Missing VERSION_${_version_part} in ${ROOMTUNES_VERSION_HEADER}")
+    endif()
+endforeach()
+
+project(RoomTunes
+    VERSION ${ROOMTUNES_VERSION_MAJOR}.${ROOMTUNES_VERSION_MINOR}.${ROOMTUNES_VERSION_PATCH}
+    LANGUAGES CXX
+)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,6 +42,7 @@ add_subdirectory(tools/core-cli)
 
 qt_add_executable(RoomTunes
     src/main.cpp
+    src/version.h
     src/chrome/PlatformChrome.h
     src/chrome/PlatformChrome.cpp
     src/chrome/WindowsChrome.h

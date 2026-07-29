@@ -1,0 +1,72 @@
+import argparse
+import os
+import re
+from pathlib import Path
+
+
+SEMVER_CORE_RE = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+
+
+def replace_define(text: str, name: str, value: int) -> str:
+    pattern = rf"(?m)^#define {re.escape(name)}\s+\d+"
+    replacement = f"#define {name} {value}"
+    text, count = re.subn(pattern, replacement, text)
+    if count != 1:
+        raise RuntimeError(f"Expected exactly one {name} define")
+    return text
+
+
+def read_define(text: str, name: str) -> int:
+    match = re.search(rf"(?m)^#define {re.escape(name)}\s+(\d+)", text)
+    if not match:
+        raise RuntimeError(f"Missing {name} define")
+    return int(match.group(1))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--build-count", type=int, required=True)
+    parser.add_argument("--version", default="")
+    parser.add_argument("--ref-name", default="")
+    parser.add_argument("--version-header", default="src/version.h")
+    args = parser.parse_args()
+
+    header = Path(args.version_header).resolve()
+    text = header.read_text(encoding="utf-8")
+
+    version_match = re.fullmatch(SEMVER_CORE_RE, args.version, flags=re.ASCII)
+    tag_match = re.fullmatch(r"v" + SEMVER_CORE_RE, args.ref_name, flags=re.ASCII)
+    if version_match:
+        major, minor, patch = (int(part) for part in version_match.groups())
+    elif tag_match:
+        major, minor, patch = (int(part) for part in tag_match.groups())
+    elif args.version:
+        raise RuntimeError("--version must use MAJOR.MINOR.PATCH with no leading zeroes")
+    elif args.ref_name.startswith("v"):
+        raise RuntimeError("--ref-name must use vMAJOR.MINOR.PATCH with no leading zeroes")
+    else:
+        major = read_define(text, "VERSION_MAJOR")
+        minor = read_define(text, "VERSION_MINOR")
+        patch = read_define(text, "VERSION_PATCH")
+
+    text = replace_define(text, "VERSION_MAJOR", major)
+    text = replace_define(text, "VERSION_MINOR", minor)
+    text = replace_define(text, "VERSION_PATCH", patch)
+    text = replace_define(text, "VERSION_BUILD_COUNT", args.build_count)
+    header.write_text(text, encoding="utf-8", newline="")
+
+    product_version = f"{major}.{minor}.{patch}"
+    file_version = f"{product_version}.{args.build_count}"
+
+    github_env = os.environ.get("GITHUB_ENV")
+    if github_env:
+        with open(github_env, "a", encoding="utf-8") as env:
+            print(f"ROOMTUNES_PRODUCT_VERSION={product_version}", file=env)
+            print(f"ROOMTUNES_FILE_VERSION={file_version}", file=env)
+
+    print(f"Stamped RoomTunes version {file_version}")
+    print(f"Writing: {header}")
+
+
+if __name__ == "__main__":
+    main()
