@@ -6,6 +6,7 @@
 #include <QList>
 #include <QNetworkAccessManager>
 #include <QObject>
+#include <QSet>
 #include <QString>
 
 #include "../media/MediaItem.h"
@@ -38,6 +39,8 @@ class ZonePlayer : public QObject
     Q_PROPERTY(bool ready READ ready NOTIFY readyChanged)
     Q_PROPERTY(bool coordinator READ isCoordinator NOTIFY coordinatorChanged)
     Q_PROPERTY(bool invisible READ invisible NOTIFY invisibleChanged)
+    Q_PROPERTY(bool supportsTvSource READ supportsTvSource NOTIFY supportsTvSourceChanged)
+    Q_PROPERTY(bool supportsLineInSource READ supportsLineInSource NOTIFY supportsLineInSourceChanged)
     Q_PROPERTY(int volume READ volume NOTIFY volumeChanged)
     Q_PROPERTY(bool muted READ muted NOTIFY mutedChanged)
     Q_PROPERTY(QString playStateText READ playStateText NOTIFY playStateChanged)
@@ -63,7 +66,20 @@ public:
     void setRoomName(const QString &name);
 
     const QString &modelName() const { return m_modelName; }
-    void setModelName(const QString &name) { m_modelName = name; }
+    void setModelName(const QString &name);
+    bool supportsTvSource() const;
+    const QString &displayName() const { return m_displayName; }
+    const QString &displayVersion() const { return m_displayVersion; }
+    const QString &softwareVersion() const { return m_softwareVersion; }
+    const QString &zoneType() const { return m_zoneType; }
+    const QStringList &features() const { return m_features; }
+    void setDeviceDescriptionDetails(const QString &displayName, const QString &displayVersion,
+                                     const QString &softwareVersion, const QString &zoneType,
+                                     const QStringList &features);
+    void setDeviceServices(const QSet<QString> &services);
+    bool hasDeviceService(const QString &serviceName) const;
+    QStringList deviceServices() const;
+    bool supportsLineInSource() const;
 
     const QString &serialNumber() const { return m_serialNumber; }
     void setSerialNumber(const QString &serial) { m_serialNumber = serial; }
@@ -189,6 +205,8 @@ signals:
     void readyChanged();
     void coordinatorChanged();
     void invisibleChanged();
+    void supportsTvSourceChanged();
+    void supportsLineInSourceChanged();
     void playStateChanged();
     void volumeChanged();
     void mutedChanged();
@@ -214,6 +232,12 @@ private:
     QString m_householdId;
     QString m_roomName;
     QString m_modelName;
+    QString m_displayName;
+    QString m_displayVersion;
+    QString m_softwareVersion;
+    QString m_zoneType;
+    QStringList m_features;
+    QSet<QString> m_deviceServices;
     QString m_serialNumber;
     QString m_coordinatorUdn;
     bool m_invisible = false;

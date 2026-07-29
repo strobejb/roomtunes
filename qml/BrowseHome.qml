@@ -78,6 +78,17 @@ Item {
             "kind": "tv"
         }
     ]
+    readonly property bool selectedZoneSupportsTvSource: !!root.browseStack
+                                                         && !!root.browseStack.zone
+                                                         && root.browseStack.zone.supportsTvSource
+    readonly property bool selectedZoneSupportsLineInSource: !!root.browseStack
+                                                             && !!root.browseStack.zone
+                                                             && root.browseStack.zone.supportsLineInSource
+    readonly property var availableSonosSources: sonosSources.filter(function(source) {
+        if (source.kind === "lineIn")
+            return root.selectedZoneSupportsLineInSource
+        return source.kind !== "tv" || root.selectedZoneSupportsTvSource
+    })
 
     function recencyKey(section, id) {
         return "browse:" + section + ":" + id
@@ -99,7 +110,7 @@ Item {
     }
 
     readonly property var orderedSonosSources: sortedByRecency(
-        sonosSources, "source", function(source) { return source.kind })
+        availableSonosSources, "source", function(source) { return source.kind })
     readonly property var orderedFavourites: sortedByRecency(
         favouriteItems, "favourite", function(item) { return item.id })
 
@@ -356,53 +367,6 @@ Item {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 10
-                    visible: root.libraryService !== null
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-
-                        Label {
-                            Layout.fillWidth: true
-                            text: qsTr("Sonos Sources")
-                            font.pixelSize: 14
-                            font.weight: Typography.emphasisWeight
-                            color: "#212121"
-                        }
-
-                        Item {
-                            Layout.preferredWidth: 32
-                            Layout.preferredHeight: 32
-                        }
-                    }
-
-                    GridLayout {
-                        id: sonosSourcesGrid
-                        readonly property int columnCount: BrowseGrid.columnsFor(sectionsColumn.width)
-                        readonly property real tileWidth: (sectionsColumn.width - (columnCount - 1) * columnSpacing) / columnCount
-                        Layout.fillWidth: true
-                        columns: columnCount
-                        columnSpacing: 8
-                        rowSpacing: 8
-
-                        Repeater {
-                            model: root.orderedSonosSources
-
-                            BrowseTile {
-                                visible: index < (root.compactSections ? sonosSourcesGrid.columnCount : 5)
-                                Layout.preferredWidth: sonosSourcesGrid.tileWidth
-                                title: modelData.title
-                                imageUrl: modelData.imageUrl
-                                circularIcon: false
-                                onClicked: root.openSonosSource(modelData)
-                            }
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 10
                     visible: root.favouritesLoading || root.favouriteItems.length > 0 || root.favouritesError.length > 0
 
                     RowLayout {
@@ -566,6 +530,53 @@ Item {
                                 imageUrl: model.item.imageUrl
 
                                 onClicked: root.openServiceItem(model.item)
+                            }
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    visible: root.libraryService !== null
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Sonos Sources")
+                            font.pixelSize: 14
+                            font.weight: Typography.emphasisWeight
+                            color: "#212121"
+                        }
+
+                        Item {
+                            Layout.preferredWidth: 32
+                            Layout.preferredHeight: 32
+                        }
+                    }
+
+                    GridLayout {
+                        id: sonosSourcesGrid
+                        readonly property int columnCount: BrowseGrid.columnsFor(sectionsColumn.width)
+                        readonly property real tileWidth: (sectionsColumn.width - (columnCount - 1) * columnSpacing) / columnCount
+                        Layout.fillWidth: true
+                        columns: columnCount
+                        columnSpacing: 8
+                        rowSpacing: 8
+
+                        Repeater {
+                            model: root.orderedSonosSources
+
+                            BrowseTile {
+                                visible: index < (root.compactSections ? sonosSourcesGrid.columnCount : 5)
+                                Layout.preferredWidth: sonosSourcesGrid.tileWidth
+                                title: modelData.title
+                                imageUrl: modelData.imageUrl
+                                circularIcon: false
+                                onClicked: root.openSonosSource(modelData)
                             }
                         }
                     }

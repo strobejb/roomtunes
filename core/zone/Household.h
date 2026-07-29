@@ -31,12 +31,9 @@ class SonosLibraryService;
 // the GUI later) and passed by pointer to anything that needs it.
 //
 // ThirdPartyMediaServersX can only be decrypted once BOTH the household ID
-// and a reachable (topology) zone are known -- see
-// tryProcessThirdPartyMediaServersX(), which is deliberately self-gating
-// and re-attempted from two independent trigger points (a fresh TPMSX
-// payload arriving, and the topology zone first being picked) rather than
-// assumed to always arrive in a safe order, since which of those two
-// happens last isn't guaranteed.
+// and a topology subscription zone are known -- see
+// decodeInstalledServicesWhenReady(), which is called from the explicit
+// state transitions that provide those inputs.
 //
 // Also owns a NetworkWatcher: when the local network changes (disconnect,
 // reconnect, or silently switching interfaces on the same LAN), every
@@ -77,7 +74,7 @@ public:
     // (any zone would do; this one's already known-reachable), and the
     // initial fallback zone for household-level service calls.
     ZonePlayer *topologyZone() const { return m_discovery.topologyZone(); }
-    ZonePlayer *contentDirectoryZone() const;
+    ZonePlayer *browseCoordinator() const;
 
     // R_TrialZPSerial, a per-household serial Sonos itself uses as the
     // "deviceId" for SMAPI loginToken/sessionId credentials (see
@@ -116,15 +113,20 @@ signals:
     void aboutToResetZones();
 
 private:
-    void onTopologyZonePicked(ZonePlayer *zone);
+    void onTopologySubscriptionZonePicked(ZonePlayer *zone);
+    void onReadyCoordinator(ZonePlayer *zone);
     void onThirdPartyMediaServersXReceived(const QString &encoded);
-    void tryProcessThirdPartyMediaServersX();
     void onNetworkChanged();
 
     ZonePlayer *pickCatalogFetchZone() const;
+    void startMusicServiceStartup(ZonePlayer *coordinator);
     void fetchMusicServiceCatalog();
+    void onServiceCatalogFetched(const QByteArray &descriptorList, const QString &typeList);
     void fetchServiceIcons();
+    void onServiceIconsFetched(const QHash<int, QString> &icons);
     void fetchServiceDeviceSerial();
+    void onServiceDeviceSerialFetched(const QString &serial);
+    void decodeInstalledServicesWhenReady();
     void rebuildMusicServices();
     void updateMusicServicesReady();
     void logServiceMap() const;
@@ -138,12 +140,16 @@ private:
     ZoneDiscovery m_discovery;
     NetworkWatcher m_networkWatcher;
 
-    bool m_catalogFetched = false;
-    bool m_smapiCatalogReady = false;
-    bool m_installedServicesDecoded = false;
+    bool m_musicServiceStartupStarted = false;
+    bool m_serviceCatalogReady = false;
+    bool m_serviceIconsReady = false;
+    bool m_serviceDeviceSerialReady = false;
+    bool m_installedServicesReady = false;
     bool m_unavailableInstalledServicesLogged = false;
     bool m_musicServicesReady = false;
     QSet<QString> m_catalogFailedZoneUdns; // zones ListAvailableServices has already failed against this session
+    mutable QString m_loggedContentDirectoryCoordinatorUdn;
+    mutable QString m_loggedCatalogFetchCoordinatorUdn;
     QString m_serviceDeviceSerial;
     QHash<int, SmapiCatalogEntry> m_smapiCatalog;
     QHash<int, QString> m_serviceIcons; // keyed by smapiId (SMAPI) or raw legacy id
@@ -162,7 +168,7 @@ private:
 
     // Raw encrypted <ThirdPartyMediaServersX> payload, cached as soon as it
     // arrives regardless of whether the household ID/topology zone are
-    // known yet -- see tryProcessThirdPartyMediaServersX().
+    // known yet -- see decodeInstalledServicesWhenReady().
     QString m_pendingTpmsxRaw;
 };
 

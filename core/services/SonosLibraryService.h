@@ -23,7 +23,9 @@ class Household;
 // m_searchTerms was too -- three fixed root categories, not the full
 // browse set: no Genres/Playlists, matching SonosLibrary.cpp exactly),
 // not fetched from any getMetadata-equivalent call the way SmapiService's
-// SMAPI categories are.
+// SMAPI categories are. Non-root browse calls use Household's current
+// browseCoordinator(); UI requests fail immediately if discovery has not
+// produced one yet.
 class SonosLibraryService : public MusicService
 {
     Q_OBJECT
@@ -41,8 +43,6 @@ protected:
     void doSearch(const QString &category, const QString &term, ResultCallback callback) override;
 
 private:
-    void doBrowseWithReadyCoordinator(const QString &objectId, ResultCallback callback, int attemptsRemaining);
-
     Household *m_household;
     QString m_activeSearchCategoryId;
 };

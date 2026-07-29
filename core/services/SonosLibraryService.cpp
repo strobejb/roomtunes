@@ -5,17 +5,11 @@
 #include "../zone/Household.h"
 #include "../zone/ZonePlayer.h"
 
-#include <QTimer>
-
 #define QLOG_CATEGORY logZone
 
 namespace RoomTunes {
 
 namespace {
-
-constexpr int kReadyCoordinatorRetryMs = 500;
-constexpr int kReadyCoordinatorRetryAttempts = 20;
-
 QVariantMap categoryItem(const QString &id, const QString &title)
 {
     QVariantMap item;
@@ -153,21 +147,8 @@ void SonosLibraryService::doBrowse(const QString &objectId, ResultCallback callb
         return;
     }
 
-    doBrowseWithReadyCoordinator(objectId, callback, kReadyCoordinatorRetryAttempts);
-}
-
-void SonosLibraryService::doBrowseWithReadyCoordinator(const QString &objectId, ResultCallback callback, int attemptsRemaining)
-{
-    ZonePlayer *zone = m_household->contentDirectoryZone();
+    ZonePlayer *zone = m_household->browseCoordinator();
     if (!zone) {
-        if (attemptsRemaining > 0) {
-            QLOG() << "browse" << objectId << "waiting for ready coordinator";
-            QTimer::singleShot(kReadyCoordinatorRetryMs, this, [this, objectId, callback, attemptsRemaining]() {
-                doBrowseWithReadyCoordinator(objectId, callback, attemptsRemaining - 1);
-            });
-            return;
-        }
-
         QWARN() << "browse" << objectId << "failed: no ready coordinator available";
         callback(false, tr("No ready Sonos coordinator available to browse with."), {});
         return;

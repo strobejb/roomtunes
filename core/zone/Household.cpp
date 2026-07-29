@@ -17,6 +17,7 @@
 #include "../upnp/SoapResponse.h"
 
 #define QLOG_CATEGORY logDiscovery
+static const QString LOGSEPARATOR(80, QLatin1Char('-'));
 
 namespace RoomTunes {
 
@@ -64,7 +65,9 @@ Household::Household(QObject *parent)
     connect(&m_discovery, &ZoneDiscovery::zoneListChanged, this, &Household::zoneListChanged);
     connect(&m_discovery, &ZoneDiscovery::discoveryTimedOut, this, &Household::discoveryTimedOut);
     connect(&m_discovery, &ZoneDiscovery::aboutToResetZones, this, &Household::aboutToResetZones);
-    connect(&m_discovery, &ZoneDiscovery::topologyZonePicked, this, &Household::onTopologyZonePicked);
+    connect(&m_discovery, &ZoneDiscovery::topologySubscriptionZonePicked, this,
+            &Household::onTopologySubscriptionZonePicked);
+    connect(&m_discovery, &ZoneDiscovery::readyCoordinator, this, &Household::onReadyCoordinator);
     connect(&m_discovery, &ZoneDiscovery::thirdPartyMediaServersXReceived, this,
             &Household::onThirdPartyMediaServersXReceived);
     connect(&m_networkWatcher, &NetworkWatcher::networkChanged, this, &Household::onNetworkChanged);
@@ -96,7 +99,7 @@ MusicService *Household::serviceById(int serviceId) const
     return nullptr;
 }
 
-ZonePlayer *Household::contentDirectoryZone() const
+ZonePlayer *Household::browseCoordinator() const
 {
     // Match roomtunes-bb10's stable "gateway" choice:
     // findGatewayCandidate() picked a ready group coordinator, and
@@ -114,6 +117,11 @@ ZonePlayer *Household::contentDirectoryZone() const
             continue;
         if (zone->modelName().contains(QStringLiteral("Sub"), Qt::CaseInsensitive))
             continue;
+        if (m_loggedContentDirectoryCoordinatorUdn != zone->udn()) {
+            m_loggedContentDirectoryCoordinatorUdn = zone->udn();
+            QLOG() << "content-directory coordinator selected:"
+                   << QStringLiteral("%1 (%2 %3)").arg(zone->roomName(), zone->deviceIp(), zone->udn());
+        }
         return zone;
     }
 
@@ -130,12 +138,16 @@ void Household::onNetworkChanged()
     // be on the other end of a reconnect (different Wi-Fi network).
     m_discovery.restart();
 
-    m_catalogFetched = false;
-    m_smapiCatalogReady = false;
-    m_installedServicesDecoded = false;
+    m_musicServiceStartupStarted = false;
+    m_serviceCatalogReady = false;
+    m_serviceIconsReady = false;
+    m_serviceDeviceSerialReady = false;
+    m_installedServicesReady = false;
     m_unavailableInstalledServicesLogged = false;
     updateMusicServicesReady();
     m_catalogFailedZoneUdns.clear();
+    m_loggedContentDirectoryCoordinatorUdn.clear();
+    m_loggedCatalogFetchCoordinatorUdn.clear();
     m_serviceDeviceSerial.clear();
     m_smapiCatalog.clear();
     m_serviceIcons.clear();
@@ -163,14 +175,18 @@ void Household::onNetworkChanged()
     }
 }
 
-void Household::onTopologyZonePicked(ZonePlayer *)
+void Household::onTopologySubscriptionZonePicked(ZonePlayer *)
 {
-    if (!m_catalogFetched) {
-        m_catalogFetched = true;
-        fetchMusicServiceCatalog();
-        fetchServiceIcons();
-        fetchServiceDeviceSerial();
-    }
+    // Early topology subscription point only. A topology zone is reachable,
+    // but ZoneGroupState may not have been parsed yet, so no group
+    // coordinator is necessarily ready for ContentDirectory/MusicServices
+    // calls. Those continue from onReadyCoordinator().
+    decodeInstalledServicesWhenReady();
+}
+
+void Household::onReadyCoordinator(ZonePlayer *coordinator)
+{
+    startMusicServiceStartup(coordinator);
 
     // The Sonos Music Library doesn't depend on TPMSX at all -- make sure
     // it (and any already-resolved SMAPI services) show up as soon as a
@@ -179,49 +195,44 @@ void Household::onTopologyZonePicked(ZonePlayer *)
     rebuildMusicServices();
 
     // The household ID is guaranteed non-empty by this point (ZoneDiscovery
-    // only ever picks a topology zone once its household ID is known), so
-    // this is one of the two points a pending TPMSX payload can now
-    // successfully decrypt -- see tryProcessThirdPartyMediaServersX().
-    tryProcessThirdPartyMediaServersX();
+    // only emits readyCoordinator after HHID, device_description, and
+    // ZoneGroupState have all landed), so this is one of the points a
+    // pending TPMSX payload can now successfully decrypt -- see
+    // decodeInstalledServicesWhenReady().
+    decodeInstalledServicesWhenReady();
 }
 
 void Household::onThirdPartyMediaServersXReceived(const QString &encoded)
 {
     QLOG() << "ThirdPartyMediaServersX received," << encoded.size() << "byte(s) encoded";
 
-    // Cached unconditionally -- the household ID or topology zone might
-    // not be ready yet (in practice, by construction, they always are by
-    // the time any NOTIFY can arrive; this is the defensive path in case
-    // that ever stops being true, e.g. a future change adds a delay
-    // somewhere upstream). Either way, the raw payload isn't lost: it's
-    // retried from onTopologyZonePicked too.
+    // Cached unconditionally. The NOTIFY can arrive before the topology
+    // subscription zone has been committed locally; when that transition
+    // lands, decodeInstalledServicesWhenReady() runs again.
     m_pendingTpmsxRaw = encoded;
-    tryProcessThirdPartyMediaServersX();
+    decodeInstalledServicesWhenReady();
 }
 
-void Household::tryProcessThirdPartyMediaServersX()
+void Household::decodeInstalledServicesWhenReady()
 {
-    // Mirrors the original SonosApp::processThirdPartyMediaServersX()'s
-    // three preconditions -- topology zone known, raw payload received,
-    // household ID known -- and is safe to call redundantly from either
-    // trigger point (a fresh payload arriving, or the topology zone first
-    // being picked): it just no-ops until all three are actually true.
-    if (m_pendingTpmsxRaw.isEmpty()) {
-        QLOG() << "tryProcessThirdPartyMediaServersX: no payload received yet, nothing to do";
+    if (m_installedServicesReady)
         return;
-    }
-    if (m_discovery.householdId().isEmpty()) {
-        QLOG() << "tryProcessThirdPartyMediaServersX: waiting on household ID";
+
+    // Mirrors the original SonosApp::processThirdPartyMediaServersX()
+    // preconditions: encrypted payload, household ID, and a zone selected
+    // for topology/music-service household calls. Each input is delivered
+    // by a separate signal, so this method is intentionally callable from
+    // any of those state transitions.
+    if (m_pendingTpmsxRaw.isEmpty())
         return;
-    }
-    if (!m_discovery.topologyZone()) {
-        QLOG() << "tryProcessThirdPartyMediaServersX: waiting on a topology zone";
+    if (m_discovery.householdId().isEmpty())
         return;
-    }
+    if (!m_discovery.topologyZone())
+        return;
 
     m_rawInstalledServices = ThirdPartyMediaServers::parse(m_discovery.householdId(), m_pendingTpmsxRaw);
-    m_installedServicesDecoded = true;
-    QLOG() << "tryProcessThirdPartyMediaServersX: decrypted" << m_rawInstalledServices.size() << "raw installed service(s)";
+    m_installedServicesReady = true;
+    QLOG() << "installed services decoded:" << m_rawInstalledServices.size() << "raw installed service(s)";
     logUnavailableInstalledServices();
     rebuildMusicServices();
 }
@@ -239,11 +250,29 @@ ZonePlayer *Household::pickCatalogFetchZone() const
             continue;
         if (zone->modelName().contains(QStringLiteral("Sub"), Qt::CaseInsensitive))
             continue;
-        if (!m_catalogFailedZoneUdns.contains(zone->udn()))
+        if (!m_catalogFailedZoneUdns.contains(zone->udn())) {
+            if (m_loggedCatalogFetchCoordinatorUdn != zone->udn()) {
+                m_loggedCatalogFetchCoordinatorUdn = zone->udn();
+                QLOG() << "catalog-fetch coordinator selected:"
+                       << QStringLiteral("%1 (%2 %3)").arg(zone->roomName(), zone->deviceIp(), zone->udn());
+            }
             return zone;
+        }
     }
 
     return nullptr;
+}
+
+void Household::startMusicServiceStartup(ZonePlayer *)
+{
+    if (m_musicServiceStartupStarted)
+        return;
+
+    m_musicServiceStartupStarted = true;
+    QLOG() << "music-service startup: ready coordinator available";
+    fetchMusicServiceCatalog();
+    fetchServiceIcons();
+    fetchServiceDeviceSerial();
 }
 
 void Household::fetchMusicServiceCatalog()
@@ -274,24 +303,29 @@ void Household::fetchMusicServiceCatalog()
             return;
         }
 
-        m_catalogFailedZoneUdns.clear();
+        onServiceCatalogFetched(response.value(QStringLiteral("AvailableServiceDescriptorList")).toUtf8(),
+                                response.value(QStringLiteral("AvailableServiceTypeList")));
+    });
+}
 
-        const QByteArray descriptorList = response.value(QStringLiteral("AvailableServiceDescriptorList")).toUtf8();
-        const QString typeList = response.value(QStringLiteral("AvailableServiceTypeList"));
+void Household::onServiceCatalogFetched(const QByteArray &descriptorList, const QString &typeList)
+{
+    m_catalogFailedZoneUdns.clear();
+
+    if (verboseLoggingEnabled()) {
         QLOG() << "AvailableServiceTypeList:";
         QLOG() << typeList;
-        if (verboseLoggingEnabled()) {
-            QLOG() << "AvailableServiceDescriptorList XML:";
-            QLOG() << redactedFormattedXml(QString::fromUtf8(descriptorList));
-        }
 
-        m_smapiCatalog = MusicServiceCatalog::build(descriptorList, typeList);
-        m_smapiCatalogReady = true;
+        QLOG() << "AvailableServiceDescriptorList XML:";
+        QLOG() << redactedFormattedXml(QString::fromUtf8(descriptorList));
+    }
 
-        logServiceMap();
-        logUnavailableInstalledServices();
-        rebuildMusicServices();
-    });
+    m_smapiCatalog = MusicServiceCatalog::build(descriptorList, typeList);
+    m_serviceCatalogReady = true;
+
+    logServiceMap();
+    logUnavailableInstalledServices();
+    rebuildMusicServices();
 }
 
 // Matches roomtunes-bb10's "building service map:" dump (ServiceDiscovery.cpp)
@@ -309,7 +343,7 @@ void Household::logServiceMap() const
                              .arg(QStringLiteral("caps"), -12)
                              .arg(QStringLiteral("type"), -10)
                              .arg(QStringLiteral("endpoint"), -42)
-                             //.arg(QStringLiteral("manifest"));
+                             .arg(QStringLiteral("manifest"));
         ;
 
     QList<int> serviceIds = m_smapiCatalog.keys();
@@ -350,7 +384,7 @@ void Household::logServiceMap() const
 
 void Household::logUnavailableInstalledServices()
 {
-    if (m_unavailableInstalledServicesLogged || !m_installedServicesDecoded || !m_smapiCatalogReady
+    if (m_unavailableInstalledServicesLogged || !m_installedServicesReady || !m_serviceCatalogReady
         || m_rawInstalledServices.isEmpty()) {
         return;
     }
@@ -383,10 +417,16 @@ void Household::fetchServiceIcons()
             return;
         }
 
-        m_serviceIcons = ServiceLogoCatalog::parse(reply->readAll());
-        QLOG() << "service icon catalog built," << m_serviceIcons.size() << "icons";
-        rebuildMusicServices();
+        onServiceIconsFetched(ServiceLogoCatalog::parse(reply->readAll()));
     });
+}
+
+void Household::onServiceIconsFetched(const QHash<int, QString> &icons)
+{
+    m_serviceIcons = icons;
+    m_serviceIconsReady = true;
+    QLOG() << "service icon catalog built," << m_serviceIcons.size() << "icons";
+    rebuildMusicServices();
 }
 
 void Household::fetchServiceDeviceSerial()
@@ -403,13 +443,20 @@ void Household::fetchServiceDeviceSerial()
         // Falls back to the zone's own MAC-derived serial number, matching
         // SonosApp::getSerialFinished() -- R_TrialZPSerial can come back
         // empty on some systems.
-        m_serviceDeviceSerial = response.error() ? QString() : response.value(QStringLiteral("StringValue"));
-        if (m_serviceDeviceSerial.isEmpty())
-            m_serviceDeviceSerial = topZone->serialNumber();
+        QString serial = response.error() ? QString() : response.value(QStringLiteral("StringValue"));
+        if (serial.isEmpty())
+            serial = topZone->serialNumber();
 
-        QLOG() << "service device serial:" << m_serviceDeviceSerial;
-        updateMusicServicesReady();
+        onServiceDeviceSerialFetched(serial);
     });
+}
+
+void Household::onServiceDeviceSerialFetched(const QString &serial)
+{
+    m_serviceDeviceSerial = serial;
+    m_serviceDeviceSerialReady = !m_serviceDeviceSerial.isEmpty();
+    QLOG() << "service device serial:" << (m_serviceDeviceSerial.isEmpty() ? QStringLiteral("<empty>") : m_serviceDeviceSerial);
+    updateMusicServicesReady();
 }
 
 void Household::rebuildMusicServices()
@@ -419,7 +466,7 @@ void Household::rebuildMusicServices()
     // household with zero linked SMAPI accounts. Never recreated/replaced
     // once created (see onNetworkChanged() for the one case it's torn
     // down: the whole household changed out from under us).
-    if (!m_libraryService && m_discovery.topologyZone())
+    if (!m_libraryService && browseCoordinator())
         m_libraryService = new SonosLibraryService(this, this);
 
     QSet<QString> seenKeys;
@@ -499,6 +546,9 @@ void Household::rebuildMusicServices()
         QLOG() << "installed services:";
         for (const QString &line : std::as_const(installedServiceLines))
             QLOG() << line;
+
+        QLOG() << LOGSEPARATOR;
+
     }
 
     // Drop instances for services that genuinely disappeared (e.g.
@@ -525,11 +575,12 @@ void Household::updateMusicServicesReady()
     // Do not let QML browse SMAPI-backed entries until all BB10-era service
     // prerequisites are known: ListAvailableServices gives the catalog/ids,
     // ThirdPartyMediaServersX gives installed account credentials, and
-    // R_TrialZPSerial supplies the deviceId used in SMAPI credential headers.
+    // R_TrialZPSerial supplies the deviceId used in SMAPI credential
+    // headers. Service icons are tracked separately but deliberately do
+    // not block browsing.
     // Spotify is tolerant of a missing deviceId; BBC Sounds can return an
     // empty SOAP body, so this readiness gate must include the serial too.
-    const bool ready = m_libraryService && m_smapiCatalogReady && m_installedServicesDecoded
-        && !m_serviceDeviceSerial.isEmpty();
+    const bool ready = m_libraryService && m_serviceCatalogReady && m_installedServicesReady && m_serviceDeviceSerialReady;
     if (m_musicServicesReady == ready)
         return;
 

@@ -67,6 +67,10 @@ Item {
     // is, not a mutation of whatever page was already showing.
     property string searchTerm: ""
     readonly property bool isSearchResults: root.searchTerm.length > 0
+    readonly property bool isSmapiServiceRootPage: !root.isSearchResults
+                                                   && root.objectId === "root"
+                                                   && root.service
+                                                   && root.service.serviceId >= 0
 
     property bool loading: true
     property string errorMessage: ""
@@ -801,6 +805,84 @@ Item {
                 boundsBehavior: Flickable.StopAtBounds
                 spacing: 4
                 model: root.items
+
+                header: Item {
+                    width: listView.width
+                    height: root.isSmapiServiceRootPage ? 104 : 0
+                    visible: height > 0
+
+                    RowLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.topMargin: 10
+                        anchors.bottomMargin: 18
+                        spacing: 16
+
+                        Item {
+                            Layout.preferredWidth: 72
+                            Layout.preferredHeight: 72
+                            Layout.alignment: Qt.AlignVCenter
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 14
+                                color: "#BDBDBD"
+                                visible: serviceRootIconImage.status !== Image.Ready
+                            }
+
+                            Image {
+                                id: serviceRootIconImage
+                                anchors.fill: parent
+                                source: root.service ? root.service.iconSource : ""
+                                sourceSize.width: width
+                                sourceSize.height: height
+                                smooth: true
+                                mipmap: true
+                                visible: false
+                            }
+
+                            Item {
+                                id: serviceRootIconMask
+                                anchors.fill: parent
+                                layer.enabled: true
+                                visible: false
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 14
+                                    color: "black"
+                                }
+                            }
+
+                            MultiEffect {
+                                anchors.fill: parent
+                                visible: serviceRootIconImage.status === Image.Ready
+                                source: serviceRootIconImage
+                                maskEnabled: true
+                                maskSource: serviceRootIconMask
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                visible: serviceRootIconImage.status !== Image.Ready
+                                text: "♪"
+                                font.pixelSize: 28
+                                color: "#7A7A7A"
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                            text: root.service ? root.service.title : root.title
+                            font.pixelSize: Math.round(23 * UiScale.factor)
+                            font.weight: Typography.emphasisWeight
+                            color: "#212121"
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
 
                 delegate: MusicServiceRow {
                     id: rowItem

@@ -63,6 +63,21 @@ bool isLineInStreamUri(const QString &uri)
     return uri.startsWith(QStringLiteral("x-rincon-stream:"));
 }
 
+bool modelSupportsTvSource(const QString &modelName)
+{
+    // BB10 only checked for PLAYBAR because that was the only Sonos TV
+    // source product at the time. Modern home-theater players use the same
+    // x-sonos-htastream URI family, so keep this as a product capability
+    // list until we parse a richer device-description service capability.
+    return modelName.contains(QStringLiteral("PLAYBAR"), Qt::CaseInsensitive)
+        || modelName.contains(QStringLiteral("PLAYBASE"), Qt::CaseInsensitive)
+        || modelName.contains(QStringLiteral("Beam"), Qt::CaseInsensitive)
+        || modelName.contains(QStringLiteral("Arc"), Qt::CaseInsensitive)
+        || modelName.contains(QStringLiteral("Ray"), Qt::CaseInsensitive)
+        || modelName.compare(QStringLiteral("Amp"), Qt::CaseInsensitive) == 0
+        || modelName.contains(QStringLiteral("Sonos Amp"), Qt::CaseInsensitive);
+}
+
 QString tvInputNameFromUri(const QString &uri)
 {
     const int separator = uri.lastIndexOf(QLatin1Char(':'));
@@ -214,6 +229,68 @@ void ZonePlayer::setRoomName(const QString &name)
     }
 }
 
+void ZonePlayer::setModelName(const QString &name)
+{
+    if (m_modelName == name)
+        return;
+
+    const bool oldSupportsTvSource = supportsTvSource();
+    m_modelName = name;
+    if (oldSupportsTvSource != supportsTvSource())
+        emit supportsTvSourceChanged();
+}
+
+bool ZonePlayer::supportsTvSource() const
+{
+    if (modelSupportsTvSource(m_modelName))
+        return true;
+    return m_currentTrack && isTvStreamUri(m_currentTrack->uri());
+}
+
+void ZonePlayer::setDeviceDescriptionDetails(const QString &displayName, const QString &displayVersion,
+                                             const QString &softwareVersion, const QString &zoneType,
+                                             const QStringList &features)
+{
+    m_displayName = displayName;
+    m_displayVersion = displayVersion;
+    m_softwareVersion = softwareVersion;
+    m_zoneType = zoneType;
+    m_features = features;
+}
+
+void ZonePlayer::setDeviceServices(const QSet<QString> &services)
+{
+    if (m_deviceServices == services)
+        return;
+
+    const bool oldSupportsLineInSource = supportsLineInSource();
+    m_deviceServices = services;
+    if (oldSupportsLineInSource != supportsLineInSource())
+        emit supportsLineInSourceChanged();
+}
+
+bool ZonePlayer::hasDeviceService(const QString &serviceName) const
+{
+    return m_deviceServices.contains(serviceName);
+}
+
+QStringList ZonePlayer::deviceServices() const
+{
+    QStringList services;
+    for (const QString &service : m_deviceServices)
+        services.append(service);
+    services.sort(Qt::CaseInsensitive);
+    return services;
+}
+
+bool ZonePlayer::supportsLineInSource() const
+{
+    // Same capability test as roomtunes-bb10's SonosLibrary::browseLineIn():
+    // only zones that expose AudioIn and can browse ContentDirectory's AI:
+    // container should be offered as Line-In sources.
+    return hasDeviceService(QStringLiteral("AudioIn")) && hasDeviceService(QStringLiteral("ContentDirectory"));
+}
+
 void ZonePlayer::setCoordinatorUdn(const QString &udn)
 {
     if (m_coordinatorUdn != udn) {
@@ -263,10 +340,13 @@ QString ZonePlayer::playStateText() const
 
 void ZonePlayer::setCurrentTrack(MediaItem *track)
 {
+    const bool oldSupportsTvSource = supportsTvSource();
     if (m_currentTrack)
         m_currentTrack->deleteLater();
     m_currentTrack = track;
     emit currentTrackChanged();
+    if (oldSupportsTvSource != supportsTvSource())
+        emit supportsTvSourceChanged();
     refreshAccentColor(track ? track->imageUrl() : QString());
 }
 

@@ -2,9 +2,11 @@
 
 #include <algorithm>
 
+#include <QDateTime>
 #include <QHostAddress>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QSet>
 #include <QUdpSocket>
 #include <QUrl>
 #include <QXmlStreamReader>
@@ -13,7 +15,6 @@
 #include "../Logging.h"
 #include "../upnp/Soap.h"
 #include "../upnp/SoapResponse.h"
-#include "../xml/XmlUtils.h"
 
 #define QLOG_CATEGORY logDiscovery
 static const QString LOGSEPARATOR(80, QLatin1Char('-'));
@@ -21,6 +22,19 @@ static const QString LOGSEPARATOR(80, QLatin1Char('-'));
 namespace RoomTunes {
 
 namespace {
+struct DeviceDescription
+{
+    QString roomName;
+    QString displayName;
+    QString modelName;
+    QString serialNumber;
+    QString displayVersion;
+    QString softwareVersion;
+    QString zoneType;
+    QStringList features;
+    QSet<QString> services;
+};
+
 // The UDP source address of an SSDP reply can come back as an IPv4-mapped
 // IPv6 address ("::ffff:192.168.1.x") depending on the platform's socket
 // stack, which isn't valid to embed directly in an "http://<ip>:1400/" URL.
@@ -77,6 +91,128 @@ QString extractGenaProperty(const QByteArray &body, const QString &propertyName)
     return {};
 }
 
+QString serviceNameFromType(const QString &serviceType)
+{
+    const QString marker = QStringLiteral(":service:");
+    const int start = serviceType.indexOf(marker);
+    if (start < 0)
+        return {};
+
+    const int nameStart = start + marker.size();
+    const int nameEnd = serviceType.indexOf(QLatin1Char(':'), nameStart);
+    if (nameEnd < 0)
+        return {};
+
+    return serviceType.mid(nameStart, nameEnd - nameStart);
+}
+
+QSet<QString> parseServiceList(QXmlStreamReader &xml)
+{
+    QSet<QString> services;
+
+    while (xml.readNextStartElement()) {
+        if (xml.name() != QLatin1String("service")) {
+            xml.skipCurrentElement();
+            continue;
+        }
+
+        while (xml.readNextStartElement()) {
+            if (xml.name() == QLatin1String("serviceType")) {
+                const QString serviceName = serviceNameFromType(xml.readElementText(QXmlStreamReader::SkipChildElements));
+                if (!serviceName.isEmpty())
+                    services.insert(serviceName);
+            } else {
+                xml.skipCurrentElement();
+            }
+        }
+    }
+
+    return services;
+}
+
+DeviceDescription parseDeviceDescription(const QByteArray &body)
+{
+    DeviceDescription description;
+    QXmlStreamReader xml(body);
+
+    while (!xml.atEnd()) {
+        if (!xml.readNextStartElement())
+            continue;
+        if (xml.name() != QLatin1String("device"))
+            continue;
+
+        while (xml.readNextStartElement()) {
+            if (xml.name() == QLatin1String("roomName"))
+                description.roomName = xml.readElementText(QXmlStreamReader::SkipChildElements);
+            else if (xml.name() == QLatin1String("displayName"))
+                description.displayName = xml.readElementText(QXmlStreamReader::SkipChildElements);
+            else if (xml.name() == QLatin1String("modelName"))
+                description.modelName = xml.readElementText(QXmlStreamReader::SkipChildElements);
+            else if (xml.name() == QLatin1String("serialNum"))
+                description.serialNumber = xml.readElementText(QXmlStreamReader::SkipChildElements);
+            else if (xml.name() == QLatin1String("displayVersion"))
+                description.displayVersion = xml.readElementText(QXmlStreamReader::SkipChildElements);
+            else if (xml.name() == QLatin1String("softwareVersion"))
+                description.softwareVersion = xml.readElementText(QXmlStreamReader::SkipChildElements);
+            else if (xml.name() == QLatin1String("zoneType"))
+                description.zoneType = xml.readElementText(QXmlStreamReader::SkipChildElements);
+            else if (xml.name().startsWith(QLatin1String("feature")))
+                description.features.append(xml.readElementText(QXmlStreamReader::SkipChildElements));
+            else if (xml.name() == QLatin1String("serviceList"))
+                description.services = parseServiceList(xml);
+            else
+                xml.skipCurrentElement();
+        }
+        break;
+    }
+
+    return description;
+}
+
+QString featureAt(const ZonePlayer *zone, qsizetype index)
+{
+    return zone && index < zone->features().size() ? zone->features().at(index) : QString();
+}
+
+void logDeviceDescription(const QString &deviceIp, const DeviceDescription &description)
+{
+    ScopedLogEndpoint endpoint(deviceIp, LogDirection::Inbound);
+    const QString displayName = description.displayName.isEmpty() ? description.modelName : description.displayName;
+    QStringList services;
+    for (const QString &service : description.services)
+        services.append(service);
+    services.sort(Qt::CaseInsensitive);
+
+    QLOG() << "processDeviceDescription:";
+    QLOG() << "  roomName:   " << description.roomName;
+    QLOG() << "  modelName:  " << displayName << " (" << description.modelName << ")";
+    QLOG() << "  version:    " << description.displayVersion << " (" << description.softwareVersion << ")";
+    QLOG() << "  zoneType:   " << description.zoneType;
+    if (!description.features.isEmpty())
+        QLOG() << "  features:   " << description.features.join(QStringLiteral(", "));
+    QLOG() << "  services:   " << services.join(QStringLiteral(", "));
+}
+
+QString zoneDisplayName(const ZonePlayer *zone)
+{
+    if (!zone)
+        return {};
+    return zone->displayName().isEmpty() ? zone->modelName() : zone->displayName();
+}
+
+bool isUsableReadyCoordinator(const ZonePlayer *zone)
+{
+    if (!zone || !zone->ready() || zone->invisible() || !zone->isCoordinator())
+        return false;
+    if (zone->modelName().compare(QStringLiteral("DOCK"), Qt::CaseInsensitive) == 0)
+        return false;
+    if (zone->modelName().contains(QStringLiteral("BRIDGE"), Qt::CaseInsensitive))
+        return false;
+    if (zone->modelName().contains(QStringLiteral("Sub"), Qt::CaseInsensitive))
+        return false;
+    return true;
+}
+
 // ZoneGroupState arrives as compact, unindented XML -- reformat it for
 // logging via the standard Qt round-trip (read token-by-token, write back
 // out with auto-formatting on) rather than trying to hand-indent it.
@@ -104,8 +240,8 @@ constexpr int kTopologySubscriptionTimeoutSeconds = 3600;
 // GetHouseholdID can fail transiently during the SSDP flood (a dozen+
 // zones all being hit with device_description/GetHouseholdID/etc requests
 // at once), and until *some* zone succeeds, nothing downstream can proceed
-// -- no topology zone can be picked (maybePickTopologyZone skips zones
-// with no household ID) and ThirdPartyMediaServersX can't be decrypted.
+// -- no topology zone can be picked (topology selection skips zones with
+// no household ID) and ThirdPartyMediaServersX can't be decrypted.
 // Retrying (rather than the one-shot attempt this used to be) matters more
 // here than almost anywhere else in discovery.
 constexpr int kHouseholdIdRetrySeconds = 5;
@@ -170,8 +306,11 @@ void ZoneDiscovery::restart()
     m_zones.clear();
     m_householdId.clear();
     m_topologyZoneUdn.clear();
+    m_readyCoordinatorUdn.clear();
     m_topologySubscriptionSid.clear();
     m_zoneEventSubscriptions.clear();
+    m_lastSsdpResponseLogTimeMs.clear();
+    m_zoneCapabilitySummaryLogged = false;
 
     emit zoneListChanged();
 
@@ -202,17 +341,25 @@ void ZoneDiscovery::onSsdpDiscovered(const QString &fromAddr, const QMap<QString
     if (uuidStart < 0)
         return;
 
-    // Full header dump, matching roomtunes-bb10's own SSDP response block
-    // (household ID/USN/LOCATION) -- useful on its own for diagnosing a
-    // zone that never gets past discovery (wrong household, unreachable
-    // LOCATION, ...), not just the one-line summary below.
-    QLOG() << LOGSEPARATOR;
-    QLOG() << "SSDP response from" << fromAddr;
-    QLOG() << "  X-RINCON-HOUSEHOLD:" << headers.value(QStringLiteral("X-RINCON-HOUSEHOLD"));
-    QLOG() << "  USN:" << usn;
-    QLOG() << "  LOCATION:" << headers.value(QStringLiteral("LOCATION"));
     const int separator = usn.indexOf(QStringLiteral("::"), uuidStart);
     const QString udn = separator < 0 ? usn.mid(uuidStart) : usn.mid(uuidStart, separator - uuidStart);
+
+    constexpr qint64 kSsdpResponseLogSuppressMs = 30 * 1000;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const qint64 lastLog = m_lastSsdpResponseLogTimeMs.value(udn, -kSsdpResponseLogSuppressMs);
+    const bool shouldLogResponse = now - lastLog >= kSsdpResponseLogSuppressMs;
+    if (shouldLogResponse) {
+        // Full header dump, matching roomtunes-bb10's own SSDP response
+        // block (household ID/USN/LOCATION). Repeated NOTIFY/M-SEARCH
+        // replies for already-known zones are noisy, so the block is
+        // rate-limited per UDN while discovery behavior itself is unchanged.
+        m_lastSsdpResponseLogTimeMs.insert(udn, now);
+        QLOG() << LOGSEPARATOR;
+        QLOG() << "SSDP response from" << fromAddr;
+        QLOG() << "  X-RINCON-HOUSEHOLD:" << headers.value(QStringLiteral("X-RINCON-HOUSEHOLD"));
+        QLOG() << "  USN:" << usn;
+        QLOG() << "  LOCATION:" << headers.value(QStringLiteral("LOCATION"));
+    }
 
     // Future SSDP messages for a player already known (whether first seen
     // via SSDP or allocated from topology) are ignored.
@@ -252,6 +399,7 @@ ZonePlayer *ZoneDiscovery::allocateZone(const QString &deviceIp, const QString &
 {
     auto *zone = new ZonePlayer(m_netMgr, deviceIp, udn, this);
     m_zones.insert(udn, zone);
+    m_zoneCapabilitySummaryLogged = false;
     emit zoneListChanged();
     return zone;
 }
@@ -275,20 +423,17 @@ void ZoneDiscovery::fetchDeviceDescription(ZonePlayer *zone)
         if (!zone)
             return;
 
-        QXmlStreamReader xml(reply->readAll());
+        const DeviceDescription description = parseDeviceDescription(reply->readAll());
+        zone->setRoomName(description.roomName);
+        zone->setModelName(description.modelName);
+        zone->setSerialNumber(description.serialNumber);
+        zone->setDeviceDescriptionDetails(description.displayName, description.displayVersion,
+                                          description.softwareVersion, description.zoneType,
+                                          description.features);
+        zone->setDeviceServices(description.services);
 
-        while (!xml.atEnd()) {
-            if (!xml.readNextStartElement())
-                continue;
-            if (xml.name() != QLatin1String("device"))
-                continue;
-
-            const QMap<QString, QString> fields = flattenElement(xml);
-            zone->setRoomName(fields.value(QStringLiteral("roomName")));
-            zone->setModelName(fields.value(QStringLiteral("modelName")));
-            zone->setSerialNumber(fields.value(QStringLiteral("serialNum")));
-            break;
-        }
+        logDeviceDescription(deviceIp, description);
+        logZoneCapabilitySummaryWhenComplete();
 
         // deviceDescriptionUpdated, conceptually: HHID + device_description
         // are the two of three ready-conditions this resolves. The HHID
@@ -304,7 +449,7 @@ void ZoneDiscovery::fetchHouseholdId(ZonePlayer *zone)
     if (!m_householdId.isEmpty()) {
         zone->setHouseholdId(m_householdId);
         checkZoneReady(zone);
-        maybePickTopologyZone();
+        updateTopologySubscriptionSelection();
         return;
     }
 
@@ -316,7 +461,7 @@ void ZoneDiscovery::fetchHouseholdId(ZonePlayer *zone)
     if (!zone->householdId().isEmpty()) {
         m_householdId = zone->householdId();
         checkZoneReady(zone);
-        maybePickTopologyZone();
+        updateTopologySubscriptionSelection();
         return;
     }
 
@@ -347,7 +492,7 @@ void ZoneDiscovery::fetchHouseholdId(ZonePlayer *zone)
         m_householdId = response.value(QStringLiteral("CurrentHouseholdID"));
         zone->setHouseholdId(m_householdId);
         checkZoneReady(zone);
-        maybePickTopologyZone();
+        updateTopologySubscriptionSelection();
     });
 }
 
@@ -359,14 +504,48 @@ void ZoneDiscovery::checkZoneReady(ZonePlayer *zone)
         zone->setReady(true);
         emit zoneReady(zone);
         subscribeZoneEvents(zone);
+        if (isUsableReadyCoordinator(zone))
+            publishReadyCoordinator(zone);
     }
 }
 
-void ZoneDiscovery::maybePickTopologyZone()
+ZonePlayer *ZoneDiscovery::findReadyCoordinator() const
 {
-    if (!m_topologyZoneUdn.isEmpty())
+    for (ZonePlayer *zone : std::as_const(m_zones)) {
+        if (!isUsableReadyCoordinator(zone))
+            continue;
+        return zone;
+    }
+
+    return nullptr;
+}
+
+void ZoneDiscovery::publishReadyCoordinator(ZonePlayer *zone)
+{
+    Q_ASSERT(zone);
+    Q_ASSERT(isUsableReadyCoordinator(zone));
+
+    if (m_readyCoordinatorUdn == zone->udn())
         return;
 
+    m_readyCoordinatorUdn = zone->udn();
+    QLOG() << "ready coordinator selected:"
+           << QStringLiteral("%1 (%2 %3)").arg(zone->roomName(), zone->deviceIp(), zone->udn());
+    emit readyCoordinator(zone);
+}
+
+void ZoneDiscovery::updateReadyCoordinatorSelection()
+{
+    if (ZonePlayer *zone = findReadyCoordinator()) {
+        publishReadyCoordinator(zone);
+        return;
+    }
+
+    m_readyCoordinatorUdn.clear();
+}
+
+ZonePlayer *ZoneDiscovery::findTopologySubscriptionCandidate() const
+{
     for (ZonePlayer *zone : std::as_const(m_zones)) {
         if (zone->householdId().isEmpty())
             continue;
@@ -388,11 +567,29 @@ void ZoneDiscovery::maybePickTopologyZone()
         if (zone->modelName().contains(QStringLiteral("Sub"), Qt::CaseInsensitive))
             continue;
 
-        m_topologyZoneUdn = zone->udn();
-        QLOG() << "picked topology zone" << m_topologyZoneUdn;
-        subscribeTopology();
-        break;
+        return zone;
     }
+
+    return nullptr;
+}
+
+void ZoneDiscovery::selectTopologySubscriptionZone(ZonePlayer *zone)
+{
+    Q_ASSERT(zone);
+    Q_ASSERT(!zone->householdId().isEmpty());
+
+    m_topologyZoneUdn = zone->udn();
+    QLOG() << "picked topology zone" << m_topologyZoneUdn;
+    subscribeTopology();
+}
+
+void ZoneDiscovery::updateTopologySubscriptionSelection()
+{
+    if (!m_topologyZoneUdn.isEmpty())
+        return;
+
+    if (ZonePlayer *zone = findTopologySubscriptionCandidate())
+        selectTopologySubscriptionZone(zone);
 }
 
 void ZoneDiscovery::subscribeTopology()
@@ -403,15 +600,16 @@ void ZoneDiscovery::subscribeTopology()
 
     // Fired right here -- before the SUBSCRIBE reply even comes back --
     // since by this point m_householdId is already guaranteed non-empty
-    // (maybePickTopologyZone only ever picks a zone once its household ID
-    // is known) and topologyZoneVal is now a reachable, known-good zone.
+    // (updateTopologySubscriptionSelection only ever picks a zone once its
+    // household ID is known) and topologyZoneVal is now a reachable,
+    // known-good zone.
     // Household uses this as the single trigger for its one-time
     // music-service catalog/icon/serial fetches, and as one of the two
     // retry points for ThirdPartyMediaServersX processing (the other being
     // whenever a fresh TPMSX payload itself arrives) -- see the class
     // comment on why both a household ID AND a topology zone have to be in
     // hand before either of those can proceed.
-    emit topologyZonePicked(topologyZoneVal);
+    emit topologySubscriptionZonePicked(topologyZoneVal);
 
     const QString localAddress = localAddressForPeer(topologyZoneVal->deviceIp());
     QLOG() << "ZoneGroupTopology SUBSCRIBE to" << topologyZoneVal->deviceIp() << "callback" << localAddress
@@ -628,8 +826,8 @@ void ZoneDiscovery::onGenaNotify(const QString &peerAddress, const QString &sid,
     // link). Just forwarded, not processed here -- decrypting it needs the
     // household ID, which is a music-services concern handled by
     // Household, not discovery. Household re-attempts processing both when
-    // this arrives AND when topologyZonePicked fires, since either could
-    // be the one still missing when the other happens.
+    // this arrives AND when topologySubscriptionZonePicked fires, since
+    // either could be the one still missing when the other happens.
     const QString tpmsx = extractGenaProperty(body, QStringLiteral("ThirdPartyMediaServersX"));
     if (!tpmsx.isEmpty())
         emit thirdPartyMediaServersXReceived(tpmsx);
@@ -772,6 +970,61 @@ void ZoneDiscovery::parseZoneGroupState(const QByteArray &xmlBody)
                                  .arg(zone->hasValidTopology() ? 1 : 0)
                                  .arg(zone->modelName());
     }
+    logZoneCapabilitySummaryWhenComplete();
+    updateReadyCoordinatorSelection();
+}
+
+bool ZoneDiscovery::zoneCapabilitySummaryAvailable() const
+{
+    if (m_zoneCapabilitySummaryLogged || m_zones.isEmpty())
+        return false;
+
+    for (ZonePlayer *zone : m_zones) {
+        if (!zone->hasValidTopology() || zone->modelName().isEmpty())
+            return false;
+    }
+
+    return true;
+}
+
+void ZoneDiscovery::logZoneCapabilitySummary()
+{
+    Q_ASSERT(zoneCapabilitySummaryAvailable());
+
+    QList<ZonePlayer *> zones = m_zones.values();
+    std::sort(zones.begin(), zones.end(),
+              [](ZonePlayer *a, ZonePlayer *b) { return a->roomName().compare(b->roomName(), Qt::CaseInsensitive) < 0; });
+
+    QLOG() << LOGSEPARATOR;
+    QLOG() << "zone capability summary:" << zones.size() << "zone(s)";
+    QLOG() << QStringLiteral("  %1 %2 %3 %4 %5 %6 %7 %8")
+                  .arg(QStringLiteral("room"), -18)
+                  .arg(QStringLiteral("model"), -16)
+                  .arg(QStringLiteral("type"), -6)
+                  .arg(QStringLiteral("feature1"), -10)
+                  .arg(QStringLiteral("feature2"), -10)
+                  .arg(QStringLiteral("feature3"), -10)
+                  .arg(QStringLiteral("feature4"), -10)
+                  .arg(QStringLiteral("feature5"), -10);
+    for (ZonePlayer *zone : std::as_const(zones)) {
+        QLOG() << QStringLiteral("  %1 %2 %3 %4 %5 %6 %7 %8")
+                      .arg(zone->roomName(), -18)
+                      .arg(zoneDisplayName(zone), -16)
+                      .arg(zone->zoneType(), -6)
+                      .arg(featureAt(zone, 0), -10)
+                      .arg(featureAt(zone, 1), -10)
+                      .arg(featureAt(zone, 2), -10)
+                      .arg(featureAt(zone, 3), -10)
+                      .arg(featureAt(zone, 4), -10);
+    }
+    m_zoneCapabilitySummaryLogged = true;
+    QLOG() << LOGSEPARATOR;
+}
+
+void ZoneDiscovery::logZoneCapabilitySummaryWhenComplete()
+{
+    if (zoneCapabilitySummaryAvailable())
+        logZoneCapabilitySummary();
 }
 
 }

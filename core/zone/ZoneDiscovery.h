@@ -110,12 +110,18 @@ signals:
     // become invalid mid-session.
     void aboutToResetZones();
     // Fired once per ZoneDiscovery lifetime, right as the ZoneGroupTopology
-    // SUBSCRIBE is issued (not once it completes). Household uses this as
-    // the trigger for its one-time music-service catalog/icon/serial
-    // fetches -- those have nothing to do with discovery itself, they just
-    // need *a* reachable zone to run against, and this is the first point
-    // one is known good.
-    void topologyZonePicked(ZonePlayer *zone);
+    // SUBSCRIBE is issued (not once it completes). This zone is only the
+    // event-subscription endpoint; it is not yet proof that a visible group
+    // coordinator is ready for browse/catalog calls.
+    void topologySubscriptionZonePicked(ZonePlayer *zone);
+    // Fired when discovery has a visible, ready group coordinator that is
+    // suitable for household-level SOAP calls such as ContentDirectory and
+    // MusicServices. This deliberately comes later than
+    // topologySubscriptionZonePicked: that signal means "we have a zone to
+    // subscribe through";
+    // readyCoordinator means "topology/device_description/HHID have all
+    // landed and user-facing browse/catalog work may proceed".
+    void readyCoordinator(ZonePlayer *zone);
     // Raw <ThirdPartyMediaServersX> GENA payload -- arrives on the same
     // ZoneGroupTopology subscription's NOTIFY channel as topology changes
     // (Sonos multiplexes both properties onto one subscription), but
@@ -147,7 +153,9 @@ private:
     ZonePlayer *allocateZone(const QString &deviceIp, const QString &udn);
     void fetchDeviceDescription(ZonePlayer *zone);
     void fetchHouseholdId(ZonePlayer *zone);
-    void maybePickTopologyZone();
+    ZonePlayer *findTopologySubscriptionCandidate() const;
+    void selectTopologySubscriptionZone(ZonePlayer *zone);
+    void updateTopologySubscriptionSelection();
     void subscribeTopology();
     void subscribeZoneEvents(ZonePlayer *zone);
     void subscribeZoneEvent(ZonePlayer *zone, UpnpService &service, ZoneEventService serviceType);
@@ -155,6 +163,12 @@ private:
     void routeZoneEvent(const ZoneEventSubscription &subscription, const QByteArray &body);
     void parseZoneGroupState(const QByteArray &xml);
     void checkZoneReady(ZonePlayer *zone);
+    ZonePlayer *findReadyCoordinator() const;
+    void publishReadyCoordinator(ZonePlayer *zone);
+    void updateReadyCoordinatorSelection();
+    bool zoneCapabilitySummaryAvailable() const;
+    void logZoneCapabilitySummary();
+    void logZoneCapabilitySummaryWhenComplete();
 
 private:
     QNetworkAccessManager *m_netMgr;
@@ -165,7 +179,10 @@ private:
 
     QString m_householdId;
     QMap<QString, ZonePlayer *> m_zones; // keyed by UDN
+    QMap<QString, qint64> m_lastSsdpResponseLogTimeMs; // wall-clock msecs since epoch, keyed by UDN
+    bool m_zoneCapabilitySummaryLogged = false;
     QString m_topologyZoneUdn;
+    QString m_readyCoordinatorUdn;
     QString m_topologySubscriptionSid;
     QMap<QString, ZoneEventSubscription> m_zoneEventSubscriptions;
     QTimer m_topologyRenewTimer;
