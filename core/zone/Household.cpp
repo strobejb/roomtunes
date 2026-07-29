@@ -29,6 +29,7 @@ namespace {
 // used to be) is the difference between "Spotify etc. never show up for
 // the rest of the session" and "shows up a few seconds late".
 constexpr int kServiceFetchRetrySeconds = 5;
+constexpr int kServiceIconFetchRetrySeconds = 60;
 
 QString redactedFormattedXml(QString xml)
 {
@@ -411,9 +412,10 @@ void Household::fetchServiceIcons()
         reply->deleteLater();
 
         if (reply->error() != QNetworkReply::NoError) {
-            QWARN() << "mslogo.xml fetch failed:" << reply->errorString() << "-- retrying in" << kServiceFetchRetrySeconds
-                    << "s";
-            QTimer::singleShot(kServiceFetchRetrySeconds * 1000, this, &Household::fetchServiceIcons);
+            QWARN() << "mslogo.xml fetch failed:" << reply->errorString() << "-- retrying in background in"
+                    << kServiceIconFetchRetrySeconds << "s";
+            m_serviceIconsReady = true;
+            QTimer::singleShot(kServiceIconFetchRetrySeconds * 1000, this, &Household::fetchServiceIcons);
             return;
         }
 

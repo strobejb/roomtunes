@@ -311,6 +311,7 @@ void ZoneDiscovery::restart()
     m_zoneEventSubscriptions.clear();
     m_lastSsdpResponseLogTimeMs.clear();
     m_zoneCapabilitySummaryLogged = false;
+    m_parsingZoneGroupState = false;
 
     emit zoneListChanged();
 
@@ -504,13 +505,18 @@ void ZoneDiscovery::checkZoneReady(ZonePlayer *zone)
         zone->setReady(true);
         emit zoneReady(zone);
         subscribeZoneEvents(zone);
-        if (isUsableReadyCoordinator(zone))
+        if (!m_parsingZoneGroupState && isUsableReadyCoordinator(zone))
             publishReadyCoordinator(zone);
     }
 }
 
 ZonePlayer *ZoneDiscovery::findReadyCoordinator() const
 {
+    if (ZonePlayer *current = m_zones.value(m_readyCoordinatorUdn)) {
+        if (isUsableReadyCoordinator(current))
+            return current;
+    }
+
     for (ZonePlayer *zone : std::as_const(m_zones)) {
         if (!isUsableReadyCoordinator(zone))
             continue;
@@ -581,6 +587,7 @@ void ZoneDiscovery::selectTopologySubscriptionZone(ZonePlayer *zone)
     m_topologyZoneUdn = zone->udn();
     QLOG() << "picked topology zone" << m_topologyZoneUdn;
     subscribeTopology();
+    refreshTopology();
 }
 
 void ZoneDiscovery::updateTopologySubscriptionSelection()
@@ -623,9 +630,8 @@ void ZoneDiscovery::subscribeTopology()
         const ScopedLogEndpoint logEndpoint(topologyZoneIp, LogDirection::Outbound);
 
         if (reply->error() != QNetworkReply::NoError) {
-            QWARN() << "ZoneGroupTopology subscribe failed:"
-                    << reply->errorString() << "-- falling back to a one-shot GetZoneGroupState";
-            refreshTopology();
+            QWARN() << "ZoneGroupTopology subscribe failed:" << reply->errorString()
+                    << "-- continuing with one-shot GetZoneGroupState refreshes";
             return;
         }
 
@@ -642,10 +648,10 @@ void ZoneDiscovery::subscribeTopology()
         m_topologyRenewTimer.start();
 
         // UPnP eventing requires the publisher to send an initial NOTIFY
-        // with the current state right after a successful SUBSCRIBE, so no
-        // separate poll is needed here -- but if that initial NOTIFY is
-        // ever missed, refreshTopology() remains available as a manual /
-        // fallback re-poll.
+        // with the current state right after a successful SUBSCRIBE, but
+        // startup has already issued GetZoneGroupState directly. The
+        // NOTIFY remains the live update channel; readiness is not blocked
+        // on callback delivery timing.
     });
 }
 
@@ -859,6 +865,8 @@ void ZoneDiscovery::refreshTopology()
 
 void ZoneDiscovery::parseZoneGroupState(const QByteArray &xmlBody)
 {
+    m_parsingZoneGroupState = true;
+
     if (verboseLoggingEnabled()) {
         QLOG() << "ZoneGroupState XML:";
         QLOG() << prettyPrintXml(xmlBody);
@@ -954,6 +962,8 @@ void ZoneDiscovery::parseZoneGroupState(const QByteArray &xmlBody)
             }
         }
     }
+
+    m_parsingZoneGroupState = false;
 
     // Matches roomtunes-bb10's "processZone:" summary table -- one line
     // per known zone reflecting exactly what this parse just set. A zone

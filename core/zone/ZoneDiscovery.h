@@ -92,9 +92,10 @@ public:
     // (any zone would do; this one's already known-reachable).
     ZonePlayer *topologyZone() const { return m_zones.value(m_topologyZoneUdn); }
 
-    // One-shot GetZoneGroupState poll of the topology zone. Used as a
-    // fallback if the GENA subscription fails, and available for a manual
-    // "refresh" gesture; normal updates arrive via NOTIFY once subscribed.
+    // One-shot GetZoneGroupState poll of the topology zone. Startup uses
+    // this immediately after choosing a topology zone so readiness is not
+    // gated on the first GENA NOTIFY; later NOTIFYs still carry the same
+    // ZoneGroupState shape and flow through the same parser.
     void refreshTopology();
 
 signals:
@@ -181,6 +182,7 @@ private:
     QMap<QString, ZonePlayer *> m_zones; // keyed by UDN
     QMap<QString, qint64> m_lastSsdpResponseLogTimeMs; // wall-clock msecs since epoch, keyed by UDN
     bool m_zoneCapabilitySummaryLogged = false;
+    bool m_parsingZoneGroupState = false;
     QString m_topologyZoneUdn;
     QString m_readyCoordinatorUdn;
     QString m_topologySubscriptionSid;
