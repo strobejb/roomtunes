@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Room Tunes
+GenericName=Sonos Controller
+Comment=Desktop controller for Sonos rooms and music services
+Exec=roomtunes
+Icon=roomtunes
+StartupWMClass=roomtunes
+Categories=AudioVideo;Audio;Player;
+Terminal=false

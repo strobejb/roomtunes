@@ -171,4 +171,13 @@ set_target_properties(RoomTunes PROPERTIES
 
 if(UNIX AND NOT APPLE)
     set_target_properties(RoomTunes PROPERTIES OUTPUT_NAME roomtunes)
+
+    include(GNUInstallDirs)
+    install(FILES resources/roomtunes.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+    )
+    install(FILES resources/icons/app.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps
+        RENAME roomtunes.png
+    )
 endif()

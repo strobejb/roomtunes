@@ -1,4 +1,5 @@
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -25,6 +26,9 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     app.setApplicationDisplayName(QStringLiteral("Room Tunes"));
     app.setApplicationVersion(QStringLiteral(PRODUCT_VERSION_STRING));
+#ifndef Q_OS_WIN
+    app.setWindowIcon(QIcon(QStringLiteral(":/qt/qml/RoomTunes/resources/icons/app.png")));
+#endif
     logStartupBanner(QStringLiteral("RoomTunes"));
     configureApplicationSettings();
 
