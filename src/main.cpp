@@ -20,9 +20,9 @@ using namespace RoomTunes;
 int main(int argc, char *argv[])
 {
     installLogMessagePattern();
-    logStartupBanner(QStringLiteral("RoomTunes"));
 
     QGuiApplication app(argc, argv);
+    logStartupBanner(QStringLiteral("RoomTunes"));
     configureApplicationSettings();
 
     // Without an explicit style, Qt Quick Controls auto-selects a native

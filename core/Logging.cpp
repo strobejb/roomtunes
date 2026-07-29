@@ -3,11 +3,16 @@
 #include <cstdio>
 
 #include <QDateTime>
+#include <QFile>
+#include <QHash>
 #include <QLocale>
 #include <QNetworkAddressEntry>
 #include <QNetworkInterface>
 #include <QNetworkRequest>
+#include <QProcess>
 #include <QRegularExpression>
+#include <QStandardPaths>
+#include <QStringList>
 #include <QSysInfo>
 #include <QtGlobal>
 
@@ -32,6 +37,54 @@ QString directedEndpoint(const QString &address, LogDirection direction)
         return {};
     const QChar marker = direction == LogDirection::Outbound ? QLatin1Char('>') : QLatin1Char('<');
     return QString(marker) + address;
+}
+
+QHash<QString, QStringList> defaultGatewaysByInterface()
+{
+    QHash<QString, QStringList> gateways;
+
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+    // Qt exposes interface addresses but not the default route/gateway.
+    // Keep this as best-effort startup diagnostics only: unsupported
+    // platforms simply omit gwN lines rather than affecting discovery.
+    QString ipTool = QStandardPaths::findExecutable(QStringLiteral("ip"));
+    if (ipTool.isEmpty()) {
+        const QStringList candidates = {
+            QStringLiteral("/usr/sbin/ip"),
+            QStringLiteral("/sbin/ip"),
+            QStringLiteral("/usr/bin/ip"),
+            QStringLiteral("/bin/ip"),
+        };
+        for (const QString &candidate : candidates) {
+            if (QFile::exists(candidate)) {
+                ipTool = candidate;
+                break;
+            }
+        }
+    }
+
+    if (ipTool.isEmpty())
+        return gateways;
+
+    QProcess process;
+    process.start(ipTool, { QStringLiteral("-o"), QStringLiteral("-4"), QStringLiteral("route"),
+                            QStringLiteral("show"), QStringLiteral("default") });
+    if (!process.waitForFinished(1000) || process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0)
+        return gateways;
+
+    const QString output = QString::fromUtf8(process.readAllStandardOutput());
+    for (const QString &line : output.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+        const QStringList fields = line.simplified().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+        const qsizetype devIndex = fields.indexOf(QStringLiteral("dev"));
+        const qsizetype viaIndex = fields.indexOf(QStringLiteral("via"));
+        if (devIndex < 0 || devIndex + 1 >= fields.size() || viaIndex < 0 || viaIndex + 1 >= fields.size())
+            continue;
+
+        gateways[fields.at(devIndex + 1)].append(fields.at(viaIndex + 1));
+    }
+#endif
+
+    return gateways;
 }
 
 LogVerbosity verbosityFromEnvironment()
@@ -241,6 +294,8 @@ void logStartupBanner(const QString &appName)
     qCDebug(logDiscovery) << "  locale:" << QLocale::system().name();
     qCDebug(logDiscovery) << "--------------------------------------------------------------------------------";
 
+    const QHash<QString, QStringList> gateways = defaultGatewaysByInterface();
+
     // Every interface Windows offers to bind against, not just the one
     // NetworkWatcher/Ssdp end up picking -- this exact dump would have
     // made the SSDP-bind-port saga earlier in this app's development
@@ -251,10 +306,19 @@ void logStartupBanner(const QString &appName)
                                                 .arg(iface.humanReadableName(), -20)
                                                 .arg(running ? QStringLiteral("connected") : QStringLiteral("down"));
 
+        int ipIndex = 0;
         for (const QNetworkAddressEntry &entry : iface.addressEntries()) {
-            qCDebug(logDiscovery).noquote() << QStringLiteral("  >> %1 / %2")
+            qCDebug(logDiscovery).noquote() << QStringLiteral("  ip%1: %2 / %3")
+                                                    .arg(ipIndex++)
                                                     .arg(entry.ip().toString(), -28)
                                                     .arg(entry.netmask().toString());
+        }
+
+        int gatewayIndex = 0;
+        for (const QString &gateway : gateways.value(iface.name())) {
+            qCDebug(logDiscovery).noquote() << QStringLiteral("  gw%1: %2")
+                                                    .arg(gatewayIndex++)
+                                                    .arg(gateway);
         }
     }
 
