@@ -7,7 +7,7 @@
 #include "Logging.h"
 #include "Settings.h"
 #include "chrome/PlatformChrome.h"
-#include "zone/BrowseRecencyStore.h"
+#include "zone/BrowseHistoryStore.h"
 #include "chrome/WindowsChrome.h"
 #include "zone/GroupedZoneModel.h"
 #include "zone/Household.h"
@@ -39,9 +39,9 @@ int main(int argc, char *argv[])
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
     Household household;
-    BrowseRecencyStore browseRecency;
+    BrowseHistoryStore browseHistory;
     GroupedZoneModel groupsModel(&household);
-    MusicServiceListModel musicServiceModel(&household, &browseRecency);
+    MusicServiceListModel musicServiceModel(&household, &browseHistory);
     RecentlyPlayedModel recentlyPlayedModel(&household);
     household.startDiscovery();
 
@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("household"), &household);
-    engine.rootContext()->setContextProperty(QStringLiteral("browseRecency"), &browseRecency);
+    engine.rootContext()->setContextProperty(QStringLiteral("browseHistory"), &browseHistory);
     engine.rootContext()->setContextProperty(QStringLiteral("groupsModel"), &groupsModel);
     engine.rootContext()->setContextProperty(QStringLiteral("musicServiceModel"), &musicServiceModel);
     engine.rootContext()->setContextProperty(QStringLiteral("recentlyPlayedModel"), &recentlyPlayedModel);

@@ -5,6 +5,8 @@
 namespace RoomTunes {
 
 void configureApplicationSettings();
+QString configDirectoryPath();
+QString applicationSettingsFilePath();
 QString smapiSettingsFilePath();
 
 }

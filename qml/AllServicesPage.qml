@@ -80,7 +80,7 @@ Item {
 
                 onClicked: {
                     const item = model.item
-                    browseRecency.recordUse(item.serviceKey)
+                    browseHistory.recordUse(item.serviceKey)
                     root.stack.pushFolder(root.pageComponent, {
                         title: item.title,
                         service: item.serviceObject,

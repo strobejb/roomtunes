@@ -15,7 +15,7 @@ class MediaItem;
 // RecentlyPlayedUpdateID (a real GENA LastChange variable, so Sonos does
 // track *something* internally) doesn't correspond to any browsable id.
 // This is RoomTunes' own client-side substitute instead: watches every
-// known zone's currentTrackChanged and keeps a persisted (QSettings),
+// known zone's currentTrackChanged and keeps a persisted JSON,
 // most-recent-first, deduplicated-by-uri history across the whole
 // household (not scoped to one room -- matches how a shared household
 // history reads in practice). A play event is recorded once per actual

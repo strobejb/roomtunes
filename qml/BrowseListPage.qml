@@ -119,7 +119,7 @@ Item {
         const itemId = String(item.id || "")
         const parentId = String(item.parentId || "")
         if (root.objectId === "FV:2" || parentId === "FV:2" || itemId.indexOf("FV:2/") === 0)
-            browseRecency.recordUse("browse:favourite:" + itemId)
+            browseHistory.recordUse("browse:favourite:" + itemId)
     }
 
     // Re-runs the same search under a different category -- e.g. the user

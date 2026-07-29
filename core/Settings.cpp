@@ -9,7 +9,23 @@ namespace RoomTunes {
 namespace {
 
 constexpr auto kOrganizationName = "catch22";
-constexpr auto kApplicationName = "q22";
+constexpr auto kApplicationName = "roomtunes";
+
+QString appConfigDirPath()
+{
+    const QString configRoot = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    QDir dir(configRoot);
+    const QString appConfigDir = QString::fromLatin1(kOrganizationName) + QLatin1Char('/')
+        + QString::fromLatin1(kApplicationName);
+    dir.mkpath(appConfigDir);
+    return dir.filePath(appConfigDir);
+}
+
+QString settingsFilePath(const QString &fileName)
+{
+    QDir dir(appConfigDirPath());
+    return dir.filePath(fileName);
+}
 
 }
 
@@ -19,12 +35,19 @@ void configureApplicationSettings()
     QCoreApplication::setApplicationName(QString::fromLatin1(kApplicationName));
 }
 
+QString configDirectoryPath()
+{
+    return appConfigDirPath();
+}
+
+QString applicationSettingsFilePath()
+{
+    return settingsFilePath(QStringLiteral("roomtunes.conf"));
+}
+
 QString smapiSettingsFilePath()
 {
-    const QString configRoot = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
-    QDir dir(configRoot);
-    dir.mkpath(QString::fromLatin1(kOrganizationName));
-    return dir.filePath(QString::fromLatin1(kOrganizationName) + QStringLiteral("/smapi.conf"));
+    return settingsFilePath(QStringLiteral("smapi.conf"));
 }
 
 }

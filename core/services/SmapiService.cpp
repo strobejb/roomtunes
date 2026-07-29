@@ -250,7 +250,7 @@ QString sonosControllerId()
     // Manifest browse endpoints expect a controller identity which remains
     // stable across requests. It identifies this RoomTunes installation,
     // not a Sonos account, so generate and persist our own UUID.
-    QSettings settings;
+    QSettings settings(applicationSettingsFilePath(), QSettings::IniFormat);
     constexpr auto key = "network/sonosControllerId";
     QString id = settings.value(QLatin1String(key)).toString();
     if (id.isEmpty()) {

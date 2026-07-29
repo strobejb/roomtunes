@@ -1,8 +1,13 @@
 #include "RecentlyPlayedModel.h"
 
-#include <QSettings>
+#include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #include "../Logging.h"
+#include "../Settings.h"
 #include "../media/MediaItem.h"
 #include "Household.h"
 #include "ZonePlayer.h"
@@ -13,6 +18,27 @@ namespace RoomTunes {
 
 namespace {
 constexpr int kMaxEntries = 30;
+
+QString recentlyPlayedFilePath()
+{
+    return QDir(configDirectoryPath()).filePath(QStringLiteral("recently-played.json"));
+}
+
+QJsonObject variantMapToJsonObject(const QVariantMap &map)
+{
+    QJsonObject object;
+    for (auto it = map.constBegin(); it != map.constEnd(); ++it)
+        object.insert(it.key(), QJsonValue::fromVariant(it.value()));
+    return object;
+}
+
+QVariantMap jsonObjectToVariantMap(const QJsonObject &object)
+{
+    QVariantMap map;
+    for (auto it = object.constBegin(); it != object.constEnd(); ++it)
+        map.insert(it.key(), it.value().toVariant());
+    return map;
+}
 }
 
 RecentlyPlayedModel::RecentlyPlayedModel(Household *household, QObject *parent)
@@ -132,18 +158,28 @@ void RecentlyPlayedModel::recordPlay(MediaItem *track)
 
 void RecentlyPlayedModel::load()
 {
-    QSettings settings;
-    settings.beginGroup(QStringLiteral("RecentlyPlayed"));
-    m_entries = settings.value(QStringLiteral("entries")).toList();
-    settings.endGroup();
+    QFile file(recentlyPlayedFilePath());
+    if (!file.open(QIODevice::ReadOnly))
+        return;
+
+    const QJsonArray entries = QJsonDocument::fromJson(file.readAll()).array();
+    for (const QJsonValue &entry : entries) {
+        if (entry.isObject())
+            m_entries.append(jsonObjectToVariantMap(entry.toObject()));
+    }
 }
 
 void RecentlyPlayedModel::save()
 {
-    QSettings settings;
-    settings.beginGroup(QStringLiteral("RecentlyPlayed"));
-    settings.setValue(QStringLiteral("entries"), m_entries);
-    settings.endGroup();
+    QJsonArray entries;
+    for (const QVariant &entry : std::as_const(m_entries))
+        entries.append(variantMapToJsonObject(entry.toMap()));
+
+    QFile file(recentlyPlayedFilePath());
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return;
+
+    file.write(QJsonDocument(entries).toJson(QJsonDocument::Indented));
 }
 
 }

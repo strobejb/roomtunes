@@ -90,18 +90,18 @@ Item {
         return source.kind !== "tv" || root.selectedZoneSupportsTvSource
     })
 
-    function recencyKey(section, id) {
+    function browseHistoryKey(section, id) {
         return "browse:" + section + ":" + id
     }
 
-    function sortedByRecency(items, section, idFunction) {
-        var revision = browseRecency.revision
+    function sortedByBrowseHistory(items, section, idFunction) {
+        var revision = browseHistory.revision
         var copy = items.slice(0)
         copy.sort(function(a, b) {
-            var aKey = root.recencyKey(section, idFunction(a))
-            var bKey = root.recencyKey(section, idFunction(b))
-            var aScore = browseRecency.score(aKey)
-            var bScore = browseRecency.score(bKey)
+            var aKey = root.browseHistoryKey(section, idFunction(a))
+            var bKey = root.browseHistoryKey(section, idFunction(b))
+            var aScore = browseHistory.score(aKey)
+            var bScore = browseHistory.score(bKey)
             if (aScore !== bScore)
                 return bScore - aScore
             return String(a.title).localeCompare(String(b.title))
@@ -109,9 +109,9 @@ Item {
         return copy
     }
 
-    readonly property var orderedSonosSources: sortedByRecency(
+    readonly property var orderedSonosSources: sortedByBrowseHistory(
         availableSonosSources, "source", function(source) { return source.kind })
-    readonly property var orderedFavourites: sortedByRecency(
+    readonly property var orderedFavourites: sortedByBrowseHistory(
         favouriteItems, "favourite", function(item) { return item.id })
 
     Connections {
@@ -190,7 +190,7 @@ Item {
     // item back to C++ and let the service decide whether the item should
     // browse through ContentDirectory or a SMAPI service.
     function openFavourite(item) {
-        browseRecency.recordUse(root.recencyKey("favourite", item.id))
+        browseHistory.recordUse(root.browseHistoryKey("favourite", item.id))
         root.browseStack.pushFolder(root.pageComponent, {
             title: item.title,
             service: root.libraryService,
@@ -203,7 +203,7 @@ Item {
     }
 
     function openSonosSource(source) {
-        browseRecency.recordUse(root.recencyKey("source", source.kind))
+        browseHistory.recordUse(root.browseHistoryKey("source", source.kind))
         if (source.kind !== "library" || !root.libraryService)
             return
 
@@ -217,7 +217,7 @@ Item {
     }
 
     function openServiceItem(item) {
-        browseRecency.recordUse(item.serviceKey)
+        browseHistory.recordUse(item.serviceKey)
         root.browseStack.pushFolder(root.pageComponent, {
             title: item.title,
             service: item.serviceObject,
@@ -355,7 +355,7 @@ Item {
                                 // keep enough to replay an item, not to
                                 // browse from it).
                                 onClicked: {
-                                    browseRecency.recordUse(root.recencyKey("recent", model.item.uri || model.item.id))
+                                    browseHistory.recordUse(root.browseHistoryKey("recent", model.item.uri || model.item.id))
                                     if (root.browseStack.zone)
                                         root.browseStack.zone.playItem(model.item)
                                 }

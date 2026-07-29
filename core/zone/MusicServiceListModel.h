@@ -6,7 +6,7 @@
 namespace RoomTunes {
 
 class Household;
-class BrowseRecencyStore;
+class BrowseHistoryStore;
 class MusicService;
 
 // One row per browsable music service on this household -- the Sonos
@@ -29,7 +29,7 @@ public:
         ItemRole,
     };
 
-    explicit MusicServiceListModel(Household *household, BrowseRecencyStore *recencyStore, QObject *parent = nullptr);
+    explicit MusicServiceListModel(Household *household, BrowseHistoryStore *browseHistoryStore, QObject *parent = nullptr);
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
@@ -43,7 +43,7 @@ private:
     QList<MusicService *> orderedServices() const;
 
     Household *m_household;
-    BrowseRecencyStore *m_recencyStore;
+    BrowseHistoryStore *m_browseHistoryStore;
     QList<MusicService *> m_services;
 };
 

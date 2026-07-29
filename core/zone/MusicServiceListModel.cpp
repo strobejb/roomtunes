@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "BrowseRecencyStore.h"
+#include "BrowseHistoryStore.h"
 #include "../services/MusicService.h"
 #include "Household.h"
 
@@ -28,10 +28,10 @@ QVariantMap serviceItem(MusicService *service)
 
 }
 
-MusicServiceListModel::MusicServiceListModel(Household *household, BrowseRecencyStore *recencyStore, QObject *parent)
+MusicServiceListModel::MusicServiceListModel(Household *household, BrowseHistoryStore *browseHistoryStore, QObject *parent)
     : QAbstractListModel(parent)
     , m_household(household)
-    , m_recencyStore(recencyStore)
+    , m_browseHistoryStore(browseHistoryStore)
 {
     m_services = orderedServices();
     connect(household, &Household::musicServicesChanged, this, &MusicServiceListModel::rebuild);
@@ -113,8 +113,8 @@ QList<MusicService *> MusicServiceListModel::orderedServices() const
     }
 
     std::sort(ordered.begin(), ordered.end(), [this](MusicService *a, MusicService *b) {
-        const qint64 aScore = m_recencyStore->score(a->serviceKey());
-        const qint64 bScore = m_recencyStore->score(b->serviceKey());
+        const qint64 aScore = m_browseHistoryStore->score(a->serviceKey());
+        const qint64 bScore = m_browseHistoryStore->score(b->serviceKey());
         if (aScore != bScore)
             return aScore > bScore;
         return a->title().localeAwareCompare(b->title()) < 0;
