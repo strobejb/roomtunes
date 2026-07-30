@@ -196,6 +196,7 @@ public:
     Q_INVOKABLE void refreshVolume();
     void refreshMute();
     Q_INVOKABLE void refreshTransportState();
+    Q_INVOKABLE void advancePositionTick();
     void handleRenderingControlEvent(const QByteArray &body);
     void handleAVTransportEvent(const QByteArray &body);
     void handleContentDirectoryEvent(const QByteArray &body);
@@ -224,6 +225,7 @@ private:
     void setPlayState(PlayState state);
     void setCurrentTrack(MediaItem *track);
     void refreshAccentColor(const QString &imageUrl);
+    void refreshPositionInfo();
     void setPosition(int positionSeconds, int durationSeconds);
     void playQueueTrackInternal(int trackNumber, const QVariantMap &selectedItem = {});
 

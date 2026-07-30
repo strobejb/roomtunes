@@ -425,230 +425,6 @@ Item {
             }
         }
 
-        // Folder/album art header -- square art, title/artist underneath
-        // (same text treatment as NowPlayingPanel.qml's track title/artist),
-        // then a Play pill that plays this whole folder (its own uri is a
-        // container URI the zone expands into multiple queue entries --
-        // the exact mechanism BrowseListPage's "Play Now" row action
-        // already uses for a folder row, just applied to the folder this
-        // whole page IS rather than a row inside it).
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 10
-            // Extra room between the Play pill row and whatever comes next
-            // (filter pills or the results list) -- separate from the 10px
-            // spacing between this block's own children above.
-            Layout.bottomMargin: 16
-            visible: root.hasFolderArt
-
-            Item {
-                // 66% of the panel width rather than filling it, centered --
-                // Layout.preferredHeight matches Layout.preferredWidth so it
-                // stays square at any panel width.
-                Layout.preferredWidth: parent.width * 0.66
-                Layout.preferredHeight: Layout.preferredWidth
-                Layout.alignment: Qt.AlignHCenter
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 8
-                    color: "#BDBDBD"
-                    visible: folderArtImage.status !== Image.Ready
-                }
-
-                // Never shown directly -- MultiEffect below reads its pixels
-                // through `source:` and applies the mask. clip:true on a
-                // plain Rectangle only clips to its bounding box, not its
-                // own radius (same reasoning as MusicServiceRow.qml's icon
-                // masking, reused verbatim here), so a masked Image is the
-                // only way to actually get rounded corners on the art.
-                Image {
-                    id: folderArtImage
-                    anchors.fill: parent
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    source: root.folderItem.imageUrl ? root.folderItem.imageUrl : ""
-                    smooth: true
-                    mipmap: true
-                    visible: false
-                }
-
-                Item {
-                    id: folderArtMask
-                    anchors.fill: parent
-                    layer.enabled: true
-                    visible: false
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: 8
-                        color: "black"
-                    }
-                }
-
-                MultiEffect {
-                    anchors.fill: parent
-                    visible: folderArtImage.status === Image.Ready
-                    source: folderArtImage
-                    maskEnabled: true
-                    maskSource: folderArtMask
-                }
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: root.title
-                font.pixelSize: Math.round(20 * UiScale.factor)
-                font.weight: Typography.emphasisWeight
-                color: "#212121"
-                elide: Text.ElideRight
-                horizontalAlignment: Text.AlignHCenter
-            }
-
-            Label {
-                Layout.fillWidth: true
-                visible: text.length > 0
-                text: root.folderItem.artist ? root.folderItem.artist : ""
-                font.pixelSize: 14
-                color: "#212121"
-                opacity: 0.65
-                elide: Text.ElideRight
-                horizontalAlignment: Text.AlignHCenter
-            }
-
-            // Play pill (shrinks to fit the room name, but capped at the
-            // width it used to always be -- full row minus the two circular
-            // buttons -- so it can only get smaller, never push them out)
-            // plus shuffle/menu actions alongside it.
-            RowLayout {
-                id: playPillRow
-                Layout.fillWidth: true
-                Layout.topMargin: 4
-                spacing: 8
-
-                Rectangle {
-                    id: playPill
-                    // root.width (not playPillRow.width) -- reading a
-                    // RowLayout's own resolved width back out from within
-                    // one of its children's Layout.preferredWidth binding
-                    // isn't reliable (Qt Quick Layouts resolves a
-                    // fillWidth row's width and its children's preferred
-                    // sizes in passes that don't guarantee this settles),
-                    // and it showed: the pill collapsed to a sliver. Page
-                    // width is stable and known well before layout, so
-                    // derive the cap from that instead.
-                    readonly property int maxWidth: root.width - shuffleButton.implicitWidth
-                                                     - folderMenuButton.implicitWidth - playPillRow.spacing * 2
-                    // +4 slack beyond the exact fixed-chrome + text-width
-                    // sum -- an exact fit measured out to fractional pixels
-                    // (confirmed via a debug overlay: e.g. a 136.34375px
-                    // pill for text needing exactly 82.34375px) still
-                    // elided one notch early, since layout rounds to whole
-                    // device pixels and can round the assigned width down
-                    // a hair below the text's own implicitWidth.
-                    Layout.preferredWidth: Math.min(24 + 10 + 4 + 16 + 4 + roomNameMeasure.implicitWidth, maxWidth)
-                    // Same height as the two circular buttons beside it.
-                    Layout.preferredHeight: 32
-                    radius: height / 2
-                    color: playPillMouseArea.containsMouse ? "#E8E8E8" : "#F0F0F0"
-
-                    // Not part of the RowLayout below (and never shown) --
-                    // exists purely so its own implicitWidth reflects the
-                    // room name's natural unclipped text width. Reading
-                    // roomNameLabel.implicitWidth directly wouldn't work:
-                    // that Label's width is itself constrained by this
-                    // pill's own width (Layout.fillWidth within it), which
-                    // would make the pill's width depend on a value that in
-                    // turn depends on the pill's width -- a feedback loop
-                    // that collapses to a tiny/broken size instead of
-                    // resolving, rather than the plain "how wide would this
-                    // text like to be" figure actually needed here. A Label
-                    // (not a plain Text) specifically -- Label's own control
-                    // padding makes its implicitWidth a bit wider than a
-                    // same-font Text's, and undershooting truncated the pill
-                    // one notch early ("Living Ro…" instead of "Living Room").
-                    Label {
-                        id: roomNameMeasure
-                        visible: false
-                        text: roomNameLabel.text
-                        font: roomNameLabel.font
-                    }
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 4
-                        anchors.rightMargin: 16
-                        spacing: 10
-
-                        Item {
-                            Layout.preferredWidth: 24
-                            Layout.preferredHeight: 24
-
-                            Image {
-                                anchors.centerIn: parent
-                                source: "../resources/icons/play.svg"
-                                sourceSize.width: 16
-                                sourceSize.height: 16
-                            }
-                        }
-
-                        Label {
-                            id: roomNameLabel
-                            Layout.fillWidth: true
-                            text: root.zone ? root.zone.roomName : qsTr("No zone selected")
-                            font.pixelSize: 14
-                            font.weight: Typography.emphasisWeight
-                            color: "#212121"
-                            elide: Text.ElideRight
-                        }
-                    }
-
-                    MouseArea {
-                        id: playPillMouseArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        enabled: !!root.zone && !!root.folderItem.uri
-                        onClicked: root.zone.playItem(root.folderItem)
-                    }
-                }
-
-                // Not wired to anything yet -- there's no shuffle-mode
-                // control on ZonePlayer to call into (AVTransport's
-                // SetPlayMode is wrapped but nothing above it decides/tracks
-                // a shuffle state), same "visual affordance only" situation
-                // as QueuePanel's Favourite entry.
-                IconButton {
-                    id: shuffleButton
-                    iconSource: "../resources/icons/shuffle.svg"
-                    iconSize: 18
-                    idleColor: "#F0F0F0"
-                    hoverColor: "#E4E4E4"
-                    pressedColor: "#D0D0D0"
-                }
-
-                // Opens the same context menu a row's own dots button does
-                // (Play Now/Play Next/Add to End of Queue/Replace Queue),
-                // targeting this whole folder instead of one row inside it.
-                IconButton {
-                    id: folderMenuButton
-                    visible: !!root.folderItem.uri
-                    iconSource: "../resources/icons/three_dots_vertical.svg"
-                    iconSize: 16
-                    idleColor: "#F0F0F0"
-                    hoverColor: "#E4E4E4"
-                    pressedColor: "#D0D0D0"
-                    onClicked: {
-                        rowMenu.currentItem = root.folderItem
-                        rowMenu.parent = folderMenuButton
-                        rowMenu.x = folderMenuButton.width - rowMenu.width
-                        rowMenu.y = folderMenuButton.height + 4
-                        rowMenu.open()
-                    }
-                }
-            }
-        }
-
         // Filter pills for a search-results page -- which categories a
         // service offers (Spotify: Tracks/Albums/Artists/Playlists, its
         // own ids/titles, not something this app invents) only becomes
@@ -811,79 +587,275 @@ Item {
                 model: root.items
 
                 header: Item {
+                    id: listHeaderContainer
                     width: listView.width
-                    height: root.isSmapiServiceRootPage ? 104 : 0
+                    readonly property int folderArtSize: Math.round(Math.max(96, Math.min(listView.width * 0.66,
+                                                                                           resultsArea.height * 0.42)))
+                    readonly property int serviceRootHeight: root.isSmapiServiceRootPage ? 104 : 0
+                    readonly property int folderHeaderHeight: root.hasFolderArt
+                                                              ? folderArtSize + 10 + 26 + 10 + 18 + 14 + 32 + 16
+                                                              : 0
+                    property bool repinToBeginningAfterResize: false
+                    height: serviceRootHeight + folderHeaderHeight
                     visible: height > 0
 
-                    RowLayout {
+                    onFolderArtSizeChanged: {
+                        repinToBeginningAfterResize = root.hasFolderArt && listView.atYBeginning
+                    }
+
+                    onHeightChanged: {
+                        if (repinToBeginningAfterResize) {
+                            repinToBeginningAfterResize = false
+                            listView.positionViewAtBeginning()
+                        }
+                    }
+
+                    ColumnLayout {
+                        id: listHeader
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
-                        anchors.topMargin: 10
-                        anchors.bottomMargin: 18
-                        spacing: 16
+                        visible: root.isSmapiServiceRootPage || root.hasFolderArt
+                        spacing: 10
 
-                        Item {
-                            Layout.preferredWidth: 72
-                            Layout.preferredHeight: 72
-                            Layout.alignment: Qt.AlignVCenter
-
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 14
-                                color: "#BDBDBD"
-                                visible: serviceRootIconImage.status !== Image.Ready
-                            }
-
-                            Image {
-                                id: serviceRootIconImage
-                                anchors.fill: parent
-                                source: root.service ? root.service.iconSource : ""
-                                sourceSize.width: width
-                                sourceSize.height: height
-                                smooth: true
-                                mipmap: true
-                                visible: false
-                            }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: listHeaderContainer.serviceRootHeight > 0 ? 86 : 0
+                            visible: root.isSmapiServiceRootPage
+                            spacing: 16
 
                             Item {
-                                id: serviceRootIconMask
-                                anchors.fill: parent
-                                layer.enabled: true
-                                visible: false
+                                Layout.preferredWidth: 72
+                                Layout.preferredHeight: 72
+                                Layout.alignment: Qt.AlignVCenter
 
                                 Rectangle {
                                     anchors.fill: parent
                                     radius: 14
-                                    color: "black"
+                                    color: "#BDBDBD"
+                                    visible: serviceRootIconImage.status !== Image.Ready
+                                }
+
+                                Image {
+                                    id: serviceRootIconImage
+                                    anchors.fill: parent
+                                    source: root.service ? root.service.iconSource : ""
+                                    sourceSize.width: width
+                                    sourceSize.height: height
+                                    smooth: true
+                                    mipmap: true
+                                    visible: false
+                                }
+
+                                Item {
+                                    id: serviceRootIconMask
+                                    anchors.fill: parent
+                                    layer.enabled: true
+                                    visible: false
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 14
+                                        color: "black"
+                                    }
+                                }
+
+                                MultiEffect {
+                                    anchors.fill: parent
+                                    visible: serviceRootIconImage.status === Image.Ready
+                                    source: serviceRootIconImage
+                                    maskEnabled: true
+                                    maskSource: serviceRootIconMask
+                                }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: serviceRootIconImage.status !== Image.Ready
+                                    text: "♪"
+                                    font.pixelSize: 28
+                                    color: "#7A7A7A"
                                 }
                             }
 
-                            MultiEffect {
-                                anchors.fill: parent
-                                visible: serviceRootIconImage.status === Image.Ready
-                                source: serviceRootIconImage
-                                maskEnabled: true
-                                maskSource: serviceRootIconMask
-                            }
-
-                            Text {
-                                anchors.centerIn: parent
-                                visible: serviceRootIconImage.status !== Image.Ready
-                                text: "♪"
-                                font.pixelSize: 28
-                                color: "#7A7A7A"
+                            Label {
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
+                                text: root.service ? root.service.title : root.title
+                                font.pixelSize: Math.round(23 * UiScale.factor)
+                                font.weight: Typography.emphasisWeight
+                                color: "#212121"
+                                elide: Text.ElideRight
                             }
                         }
 
-                        Label {
+                        // Folder/album art header. This is a ListView
+                        // header rather than a sibling above the ListView
+                        // so the art, title, actions, and tracks all scroll
+                        // as one page.
+                        ColumnLayout {
                             Layout.fillWidth: true
-                            Layout.alignment: Qt.AlignVCenter
-                            text: root.service ? root.service.title : root.title
-                            font.pixelSize: Math.round(23 * UiScale.factor)
-                            font.weight: Typography.emphasisWeight
-                            color: "#212121"
-                            elide: Text.ElideRight
+                            Layout.bottomMargin: 16
+                            spacing: 10
+                            visible: root.hasFolderArt
+
+                            Item {
+                                Layout.preferredWidth: listHeaderContainer.folderArtSize
+                                Layout.preferredHeight: listHeaderContainer.folderArtSize
+                                Layout.alignment: Qt.AlignHCenter
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 8
+                                    color: "#BDBDBD"
+                                    visible: folderArtImage.status !== Image.Ready
+                                }
+
+                                Image {
+                                    id: folderArtImage
+                                    anchors.fill: parent
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                    source: root.folderItem.imageUrl ? root.folderItem.imageUrl : ""
+                                    smooth: true
+                                    mipmap: true
+                                    visible: false
+                                }
+
+                                Item {
+                                    id: folderArtMask
+                                    anchors.fill: parent
+                                    layer.enabled: true
+                                    visible: false
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 8
+                                        color: "black"
+                                    }
+                                }
+
+                                MultiEffect {
+                                    anchors.fill: parent
+                                    visible: folderArtImage.status === Image.Ready
+                                    source: folderArtImage
+                                    maskEnabled: true
+                                    maskSource: folderArtMask
+                                }
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: root.title
+                                font.pixelSize: Math.round(20 * UiScale.factor)
+                                font.weight: Typography.emphasisWeight
+                                color: "#212121"
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                visible: text.length > 0
+                                text: root.folderItem.artist ? root.folderItem.artist : ""
+                                font.pixelSize: 14
+                                color: "#212121"
+                                opacity: 0.65
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+
+                            RowLayout {
+                                id: playPillRow
+                                Layout.fillWidth: true
+                                Layout.topMargin: 4
+                                spacing: 8
+
+                                Rectangle {
+                                    id: playPill
+                                    readonly property int maxWidth: root.width - shuffleButton.implicitWidth
+                                                                     - folderMenuButton.implicitWidth - playPillRow.spacing * 2
+                                    Layout.preferredWidth: Math.min(24 + 10 + 4 + 16 + 4 + roomNameMeasure.implicitWidth,
+                                                                    maxWidth)
+                                    Layout.preferredHeight: 32
+                                    radius: height / 2
+                                    color: playPillMouseArea.containsMouse ? "#E8E8E8" : "#F0F0F0"
+
+                                    Label {
+                                        id: roomNameMeasure
+                                        visible: false
+                                        text: roomNameLabel.text
+                                        font: roomNameLabel.font
+                                    }
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 4
+                                        anchors.rightMargin: 16
+                                        spacing: 10
+
+                                        Item {
+                                            Layout.preferredWidth: 24
+                                            Layout.preferredHeight: 24
+
+                                            Image {
+                                                anchors.centerIn: parent
+                                                source: "../resources/icons/play.svg"
+                                                sourceSize.width: 16
+                                                sourceSize.height: 16
+                                            }
+                                        }
+
+                                        Label {
+                                            id: roomNameLabel
+                                            Layout.fillWidth: true
+                                            text: root.zone ? root.zone.roomName : qsTr("No zone selected")
+                                            font.pixelSize: 14
+                                            font.weight: Typography.emphasisWeight
+                                            color: "#212121"
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: playPillMouseArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        enabled: !!root.zone && !!root.folderItem.uri
+                                        onClicked: root.zone.playItem(root.folderItem)
+                                    }
+                                }
+
+                                Item {
+                                    Layout.fillWidth: true
+                                }
+
+                                IconButton {
+                                    id: shuffleButton
+                                    iconSource: "../resources/icons/shuffle.svg"
+                                    iconSize: 18
+                                    idleColor: "#F0F0F0"
+                                    hoverColor: "#E4E4E4"
+                                    pressedColor: "#D0D0D0"
+                                }
+
+                                IconButton {
+                                    id: folderMenuButton
+                                    visible: !!root.folderItem.uri
+                                    iconSource: "../resources/icons/three_dots_vertical.svg"
+                                    iconSize: 16
+                                    idleColor: "#F0F0F0"
+                                    hoverColor: "#E4E4E4"
+                                    pressedColor: "#D0D0D0"
+                                    onClicked: {
+                                        rowMenu.currentItem = root.folderItem
+                                        rowMenu.parent = folderMenuButton
+                                        rowMenu.x = folderMenuButton.width - rowMenu.width
+                                        rowMenu.y = folderMenuButton.height + 4
+                                        rowMenu.open()
+                                    }
+                                }
+                            }
                         }
                     }
                 }

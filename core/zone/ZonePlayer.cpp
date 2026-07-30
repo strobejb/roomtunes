@@ -137,6 +137,7 @@ QString tvAudioInfoFromMetadata(const QString &trackMetaData, const QString &tra
 
 struct AvTransportTrackSnapshot
 {
+    QString transportState;
     QString uri;
     QString metadata;
 };
@@ -153,7 +154,9 @@ AvTransportTrackSnapshot avTransportTrackSnapshot(const QByteArray &body)
         if (!xml.readNextStartElement())
             continue;
 
-        if (xml.name() == QLatin1String("CurrentTrackURI"))
+        if (xml.name() == QLatin1String("TransportState"))
+            snapshot.transportState = xml.attributes().value(QStringLiteral("val")).toString();
+        else if (xml.name() == QLatin1String("CurrentTrackURI"))
             snapshot.uri = xml.attributes().value(QStringLiteral("val")).toString();
         else if (xml.name() == QLatin1String("CurrentTrackMetaData"))
             snapshot.metadata = xml.attributes().value(QStringLiteral("val")).toString();
@@ -774,6 +777,15 @@ void ZonePlayer::handleRenderingControlEvent(const QByteArray &body)
 void ZonePlayer::handleAVTransportEvent(const QByteArray &body)
 {
     const AvTransportTrackSnapshot snapshot = avTransportTrackSnapshot(body);
+    if (snapshot.transportState == QStringLiteral("PLAYING"))
+        setPlayState(PlayState::Playing);
+    else if (snapshot.transportState == QStringLiteral("PAUSED_PLAYBACK"))
+        setPlayState(PlayState::Paused);
+    else if (snapshot.transportState == QStringLiteral("TRANSITIONING"))
+        setPlayState(PlayState::Transitioning);
+    else if (!snapshot.transportState.isEmpty())
+        setPlayState(PlayState::Stopped);
+
     if (isTvStreamUri(snapshot.uri)) {
         const QString audioInfo = tvAudioInfoFromMetadata(snapshot.metadata, snapshot.uri);
         if (!audioInfo.isEmpty() && m_tvAudioInfo != audioInfo)
@@ -782,7 +794,7 @@ void ZonePlayer::handleAVTransportEvent(const QByteArray &body)
         m_tvAudioInfo.clear();
     }
 
-    refreshTransportState();
+    refreshPositionInfo();
 }
 
 void ZonePlayer::handleContentDirectoryEvent(const QByteArray &)
@@ -817,6 +829,11 @@ void ZonePlayer::refreshTransportState()
             setPlayState(PlayState::Stopped);
     });
 
+    refreshPositionInfo();
+}
+
+void ZonePlayer::refreshPositionInfo()
+{
     QNetworkReply *positionReply = m_avTransport.GetPositionInfo(0);
     connect(positionReply, &QNetworkReply::finished, this, [this, positionReply]() {
         SoapResponse response(positionReply);
@@ -884,6 +901,14 @@ void ZonePlayer::refreshTransportState()
         setPosition(parseUpnpTime(response.value(QStringLiteral("RelTime"))),
                     parseUpnpTime(response.value(QStringLiteral("TrackDuration"))));
     });
+}
+
+void ZonePlayer::advancePositionTick()
+{
+    if (m_playState != PlayState::Playing || m_durationSeconds <= 0)
+        return;
+
+    setPosition(std::min(m_positionSeconds + 1, m_durationSeconds), m_durationSeconds);
 }
 
 void ZonePlayer::setPosition(int positionSeconds, int durationSeconds)

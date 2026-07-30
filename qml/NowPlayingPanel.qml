@@ -120,16 +120,15 @@ Item {
         visible: false
     }
 
-    // GetPositionInfo isn't event-driven (no AVTransport GENA subscription
-    // exists in this app), so polling once a second while actually playing
-    // is what keeps the scrub bar moving -- ZonePlayer itself skips
-    // rebuilding currentTrack when a poll's track hasn't changed, so this
-    // doesn't cause the churn it otherwise would.
+    // Match the old BB10 app's shape: AVTransport events and occasional
+    // explicit refreshes sync the real transport/track/position state,
+    // while this one-second UI tick just advances the displayed elapsed
+    // time locally. No SOAP request is issued from this timer.
     Timer {
         interval: 1000
         repeat: true
         running: root.zone !== null && root.isPlaying
-        onTriggered: root.zone.refreshTransportState()
+        onTriggered: root.zone.advancePositionTick()
     }
 
     NowPlayingWide {
