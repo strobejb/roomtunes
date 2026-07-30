@@ -9,6 +9,7 @@
 #include <QNetworkRequest>
 #include <QRegularExpression>
 #include <QSettings>
+#include <QStringList>
 #include <QSysInfo>
 #include <QUrl>
 #include <QTimer>
@@ -17,6 +18,7 @@
 
 #include <cstdlib>
 #include <initializer_list>
+#include <memory>
 #include <utility>
 
 #include "../Logging.h"
@@ -33,6 +35,10 @@ namespace RoomTunes {
 namespace {
 
 constexpr quint32 kContextCapability = 1u << 16;
+// SMAPI Service/@Capabilities bit 0 advertises provider-side search support.
+// Services without it can still browse, but getMetadata("search") normally
+// faults or returns no categories, so exclude them from search UI upfront.
+constexpr quint32 kSearchCapability = 1u << 0;
 constexpr int kDeviceAuthTokenPollIntervalMs = 3000;
 constexpr int kDeviceAuthTokenPollTimeoutMs = 7 * 60 * 1000;
 
@@ -197,6 +203,15 @@ bool looksLikeAuthExpiredError(const QString &errorMessage)
                 || lower.contains(QStringLiteral("account"))
                 || lower.contains(QStringLiteral("access"))))
         || (lower.contains(QStringLiteral("auth")) && lower.contains(QStringLiteral("expired")));
+}
+
+bool looksLikeSearchUnsupportedProbeResult(const QString &errorMessage)
+{
+    const QString lower = errorMessage.toLower();
+    return lower.contains(QStringLiteral("no browse data"))
+        || lower.contains(QStringLiteral("not found"))
+        || lower.contains(QStringLiteral("unsupported"))
+        || lower.contains(QStringLiteral("not supported"));
 }
 
 bool isRetryableDeviceAuthTokenError(const SoapResponse &response)
@@ -592,6 +607,7 @@ void SmapiService::updateResolved(int smapiId, const QString &serviceUri, const 
                                    const QString &manifestUri)
 {
     const bool wasNeedsSignIn = needsSignIn();
+    const bool wasSearchCapable = canSearch();
 
     m_smapiId = smapiId;
     if (m_serviceUri != serviceUri) {
@@ -630,6 +646,13 @@ void SmapiService::updateResolved(int smapiId, const QString &serviceUri, const 
 
     if (wasNeedsSignIn != needsSignIn())
         emit needsSignInChanged();
+    if (wasSearchCapable != canSearch())
+        emit canSearchChanged();
+}
+
+bool SmapiService::canSearch() const
+{
+    return (m_capabilities & kSearchCapability) && !m_searchUnsupported;
 }
 
 void SmapiService::doBrowse(const QString &objectId, ResultCallback callback)
@@ -656,6 +679,11 @@ void SmapiService::browseViaSoap(const QString &objectId, const QString &request
 
 void SmapiService::doSearch(const QString &category, const QString &term, ResultCallback callback)
 {
+    if (!canSearch()) {
+        callback(false, tr("This service doesn't support search."), {});
+        return;
+    }
+
     const QString description = QStringLiteral("search category=%1 term=%2").arg(category, term);
     QLOG() << title() << description;
 
@@ -670,8 +698,15 @@ void SmapiService::doSearch(const QString &category, const QString &term, Result
 void SmapiService::resolveSearchCategory(const QString &hint, ResultCallback callback,
                                           std::function<void(const QString &)> onResolved)
 {
-    if (!m_searchCategories.isEmpty()) {
+    ensureSearchCategories(callback, [this, hint, onResolved]() {
         applyResolvedSearchCategory(pickSearchCategoryId(hint), onResolved);
+    });
+}
+
+void SmapiService::ensureSearchCategories(ResultCallback callback, std::function<void()> onReady)
+{
+    if (!m_searchCategories.isEmpty()) {
+        onReady();
         return;
     }
 
@@ -685,9 +720,13 @@ void SmapiService::resolveSearchCategory(const QString &hint, ResultCallback cal
     auto reissue = [this]() { return m_smapi.getMetadata(QStringLiteral("search"), 0, 10); };
     runMetadataRequest(
         reissue(), description,
-        [this, hint, callback, onResolved](bool ok, const QString &error, const QVariantList &items) {
+        [this, callback, onReady](bool ok, const QString &error, const QVariantList &items) {
             if (!ok) {
                 QWARN() << title() << "fetching search categories failed:" << error;
+                if (looksLikeSearchUnsupportedProbeResult(error) && !m_searchUnsupported) {
+                    m_searchUnsupported = true;
+                    emit canSearchChanged();
+                }
                 callback(false, tr("This service doesn't support search."), {});
                 return;
             }
@@ -695,15 +734,68 @@ void SmapiService::resolveSearchCategory(const QString &hint, ResultCallback cal
             m_searchCategories = items;
             if (m_searchCategories.isEmpty()) {
                 QWARN() << title() << "fetching search categories returned none";
+                if (!m_searchUnsupported) {
+                    m_searchUnsupported = true;
+                    emit canSearchChanged();
+                }
                 callback(false, tr("This service doesn't support search."), {});
                 return;
             }
 
             QLOG() << title() << "search categories:" << m_searchCategories.size();
             emit searchCategoriesChanged();
-            applyResolvedSearchCategory(pickSearchCategoryId(hint), onResolved);
+            onReady();
         },
         reissue);
+}
+
+void SmapiService::doSearchPreview(const QString &term, int limit, ResultCallback callback)
+{
+    if (!canSearch()) {
+        callback(true, QString(), {});
+        return;
+    }
+
+    const QString description = QStringLiteral("search preview term=%1").arg(term);
+    QLOG() << title() << description;
+
+    withCredentials(description, callback, [this, term, limit, callback, description]() {
+        ensureSearchCategories(callback, [this, term, limit, callback, description]() {
+            auto categories = std::make_shared<QStringList>();
+            for (const QVariant &v : m_searchCategories) {
+                const QString categoryId = v.toMap().value(QStringLiteral("id")).toString();
+                if (!categoryId.isEmpty())
+                    categories->append(categoryId);
+            }
+
+            auto merged = std::make_shared<QVariantList>();
+            auto index = std::make_shared<int>(0);
+            auto runNext = std::make_shared<std::function<void()>>();
+            *runNext = [this, term, limit, callback, description, categories, merged, index, runNext]() {
+                if ((limit > 0 && merged->size() >= limit) || *index >= categories->size()) {
+                    callback(true, QString(), limit > 0 ? merged->mid(0, limit) : *merged);
+                    return;
+                }
+
+                const QString categoryId = categories->at((*index)++);
+                auto reissue = [this, categoryId, term]() { return m_smapi.search(categoryId, term, 0, 100); };
+                runMetadataRequest(
+                    reissue(), QStringLiteral("%1 category=%2").arg(description, categoryId),
+                    [limit, callback, merged, runNext](bool ok, const QString &, const QVariantList &items) {
+                        if (ok) {
+                            for (const QVariant &item : items) {
+                                merged->append(item);
+                                if (limit > 0 && merged->size() >= limit)
+                                    break;
+                            }
+                        }
+                        (*runNext)();
+                    },
+                    reissue);
+            };
+            (*runNext)();
+        });
+    });
 }
 
 void SmapiService::applyResolvedSearchCategory(const QString &categoryId, std::function<void(const QString &)> onResolved)

@@ -45,6 +45,10 @@ StackView {
         push(component, properties)
     }
 
+    function pushHomeSearchResults(properties) {
+        pushSearchResults(homeSearchPageComponent, properties)
+    }
+
     function goBack() {
         if (!canGoBack)
             return
@@ -132,6 +136,16 @@ StackView {
         AllServicesPage {
             stack: stack
             pageComponent: browsePageComponent
+        }
+    }
+
+    Component {
+        id: homeSearchPageComponent
+
+        BrowseHomeSearchPage {
+            stack: stack
+            pageComponent: browsePageComponent
+            zone: stack.zone
         }
     }
 

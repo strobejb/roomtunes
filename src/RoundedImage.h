@@ -1,9 +1,12 @@
 #pragma once
 
+#include <memory>
+
 #include <QImage>
 #include <QNetworkAccessManager>
 #include <QPointer>
 #include <QQuickPaintedItem>
+#include <QSvgRenderer>
 #include <QUrl>
 
 class QNetworkReply;
@@ -45,6 +48,8 @@ signals:
 
 private:
     void load();
+    bool loadSvg(const QByteArray &data);
+    bool loadSvgFile(const QString &path);
     void setStatus(Status status);
     void finishLoad(const QByteArray &data);
 
@@ -53,6 +58,7 @@ private:
     qreal m_radius = 0;
     Status m_status = Null;
     QImage m_image;
+    std::unique_ptr<QSvgRenderer> m_svg;
     QNetworkAccessManager m_network;
     QPointer<QNetworkReply> m_reply;
 };

@@ -41,9 +41,24 @@ void MusicService::search(const QString &requestToken, const QString &category, 
     });
 }
 
+void MusicService::searchPreview(const QString &requestToken, const QString &term, int limit)
+{
+    doSearchPreview(term, limit, [this, requestToken](bool ok, const QString &errorMessage, const QVariantList &items) {
+        emit browseFinished(requestToken, ok, errorMessage, items);
+    });
+}
+
 void MusicService::doSearch(const QString &, const QString &, ResultCallback callback)
 {
     callback(false, tr("Search isn't supported for this service."), {});
+}
+
+void MusicService::doSearchPreview(const QString &term, int limit, ResultCallback callback)
+{
+    doSearch(QStringLiteral("tracks"), term, [limit, callback = std::move(callback)](bool ok, const QString &errorMessage,
+                                                                                     const QVariantList &items) {
+        callback(ok, errorMessage, limit > 0 ? items.mid(0, limit) : items);
+    });
 }
 
 void MusicService::doBrowseItem(const QVariantMap &item, ResultCallback callback)

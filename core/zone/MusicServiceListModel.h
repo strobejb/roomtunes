@@ -2,6 +2,7 @@
 
 #include <QAbstractListModel>
 #include <QList>
+#include <QVariantList>
 
 namespace RoomTunes {
 
@@ -35,12 +36,15 @@ public:
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
+    Q_INVOKABLE QVariantList searchServiceItems() const;
+
 private slots:
     void rebuild();
 
 private:
     MusicService *serviceAt(int row) const;
     QList<MusicService *> orderedServices() const;
+    qint64 browseHistoryScore(MusicService *service) const;
 
     Household *m_household;
     BrowseHistoryStore *m_browseHistoryStore;

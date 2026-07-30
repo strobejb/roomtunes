@@ -39,7 +39,7 @@ class MusicService : public QObject
     Q_PROPERTY(QString title READ title NOTIFY titleChanged)
     Q_PROPERTY(QString iconSource READ iconSource NOTIFY iconSourceChanged)
     Q_PROPERTY(int serviceId READ serviceId CONSTANT)
-    Q_PROPERTY(bool canSearch READ canSearch CONSTANT)
+    Q_PROPERTY(bool canSearch READ canSearch NOTIFY canSearchChanged)
     Q_PROPERTY(bool needsSignIn READ needsSignIn NOTIFY needsSignInChanged)
     // {id, title} pairs a search-capable service offers to filter by (e.g.
     // Spotify's own "Tracks"/"Albums"/"Artists"/"Playlists" categories) --
@@ -88,6 +88,7 @@ public:
     Q_INVOKABLE void browse(const QString &requestToken, const QString &objectId);
     Q_INVOKABLE void browseItem(const QString &requestToken, const QVariantMap &item);
     Q_INVOKABLE void search(const QString &requestToken, const QString &category, const QString &term);
+    Q_INVOKABLE void searchPreview(const QString &requestToken, const QString &term, int limit);
 
     // Internal C++ browse entry point for service-to-service redirects.
     // Sonos Favourites are the current use: they are discovered via the
@@ -101,6 +102,7 @@ signals:
     void needsSignInChanged();
     void searchCategoriesChanged();
     void activeSearchCategoryChanged();
+    void canSearchChanged();
     void titleChanged();
     void iconSourceChanged();
 
@@ -110,6 +112,7 @@ protected:
     // Base default: reports "not supported". A subclass only overrides
     // this if it can actually search (see canSearch()).
     virtual void doSearch(const QString &category, const QString &term, ResultCallback callback);
+    virtual void doSearchPreview(const QString &term, int limit, ResultCallback callback);
 
 protected:
     void setTitle(const QString &title);

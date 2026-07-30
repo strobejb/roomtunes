@@ -227,6 +227,31 @@ Item {
         })
     }
 
+    function startHomeSearch(term) {
+        const trimmed = term.trim()
+        if (trimmed.length === 0 || !root.browseStack)
+            return
+
+        root.browseStack.pushHomeSearchResults({
+            term: trimmed,
+            searchServices: musicServiceModel.searchServiceItems(),
+            stack: root.browseStack,
+            pageComponent: root.pageComponent,
+            zone: root.browseStack.zone
+        })
+    }
+
+    function clearSearchPill() {
+        homeSearchInput.text = ""
+        homeSearchControl.expanded = false
+        homeSearchInput.focus = false
+    }
+
+    StackView.onStatusChanged: {
+        if (StackView.status !== StackView.Active)
+            clearSearchPill()
+    }
+
     // Below this, three sections each wrapping their up-to-5 items into
     // 2 rows would need more vertical room than a short window actually
     // has, forcing the Flickable below into constant scrolling just to
@@ -241,19 +266,103 @@ Item {
         anchors.fill: parent
         spacing: 20
 
-        RowLayout {
+        Item {
             Layout.fillWidth: true
-            spacing: 8
+            implicitHeight: 32
 
             Label {
-                Layout.fillWidth: true
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.rightMargin: homeSearchControl.reserveWidth
+                anchors.verticalCenter: parent.verticalCenter
                 text: qsTr("Browse")
                 font.pixelSize: Math.round(18 * UiScale.factor)
                 font.weight: Typography.emphasisWeight
                 color: "#212121"
+                elide: Text.ElideRight
             }
 
-            SearchIconButton {
+            Item {
+                id: homeSearchControl
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+
+                property bool expanded: false
+                readonly property int collapsedWidth: 32
+                readonly property int reserveWidth: collapsedWidth + 8
+
+                width: expanded ? parent.width : collapsedWidth
+                height: 32
+
+                Behavior on width {
+                    NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: height / 2
+                    antialiasing: true
+                    color: homeSearchControl.expanded ? "#F0F0F0"
+                                                       : (homeSearchMouseArea.containsMouse ? "#F0F0F0" : "transparent")
+                }
+
+                TextField {
+                    id: homeSearchInput
+                    anchors.left: parent.left
+                    anchors.leftMargin: 14
+                    anchors.right: homeSearchIconArea.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: homeSearchControl.expanded
+                    opacity: homeSearchControl.expanded ? 1 : 0
+                    background: Item {}
+                    font.pixelSize: 13
+                    placeholderText: qsTr("Search")
+
+                    onAccepted: root.startHomeSearch(text)
+
+                    Keys.onEscapePressed: (event) => {
+                        root.clearSearchPill()
+                        event.accepted = true
+                    }
+
+                    onActiveFocusChanged: {
+                        if (!activeFocus && text.length === 0)
+                            homeSearchControl.expanded = false
+                    }
+                }
+
+                Item {
+                    id: homeSearchIconArea
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 32
+                    height: 32
+
+                    Image {
+                        anchors.centerIn: parent
+                        source: "../resources/icons/search.svg"
+                        sourceSize.width: 18
+                        sourceSize.height: 18
+                        smooth: true
+                    }
+
+                    MouseArea {
+                        id: homeSearchMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (!homeSearchControl.expanded) {
+                                homeSearchControl.expanded = true
+                                homeSearchInput.forceActiveFocus()
+                            } else if (homeSearchInput.text.trim().length > 0) {
+                                homeSearchInput.accepted()
+                            } else {
+                                homeSearchControl.expanded = false
+                            }
+                        }
+                    }
+                }
             }
         }
 

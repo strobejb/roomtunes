@@ -96,6 +96,14 @@ void SonosLibraryService::doSearch(const QString &category, const QString &term,
     doBrowse(category + QStringLiteral(":") + term, callback);
 }
 
+void SonosLibraryService::doSearchPreview(const QString &term, int limit, ResultCallback callback)
+{
+    doSearch(QStringLiteral("A:TRACKS"), term, [limit, callback = std::move(callback)](bool ok, const QString &errorMessage,
+                                                                                       const QVariantList &items) {
+        callback(ok, errorMessage, limit > 0 ? items.mid(0, limit) : items);
+    });
+}
+
 void SonosLibraryService::doBrowseItem(const QVariantMap &item, ResultCallback callback)
 {
     // This is the BB10-style browse choke point. QML passes the clicked item

@@ -138,6 +138,17 @@ Item {
         searchInput.forceActiveFocus()
     }
 
+    function clearSearchPill() {
+        searchInput.text = ""
+        searchControl.expanded = false
+        searchInput.focus = false
+    }
+
+    StackView.onStatusChanged: {
+        if (StackView.status !== StackView.Active)
+            clearSearchPill()
+    }
+
     Connections {
         target: root.service
 
@@ -333,13 +344,6 @@ Item {
                         if (term.length === 0)
                             return
 
-                        // Deliberately left expanded (with this term still
-                        // showing) rather than collapsed/cleared -- the
-                        // pushed results page opens with its own box
-                        // already expanded and focused (see below), so
-                        // there's no longer any need to reset this one, and
-                        // leaving it means it reads the same way if the
-                        // user backs out to it later.
                         root.stack.pushSearchResults(root.pageComponent, {
                             title: term,
                             service: root.service,
@@ -347,6 +351,11 @@ Item {
                             stack: root.stack,
                             pageComponent: root.pageComponent
                         })
+                    }
+
+                    Keys.onEscapePressed: (event) => {
+                        root.clearSearchPill()
+                        event.accepted = true
                     }
 
                     onActiveFocusChanged: {

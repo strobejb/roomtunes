@@ -1,8 +1,8 @@
 import QtQuick
 
-// Search icon button for the Browse panel header. Not wired to any search
-// functionality yet -- a visual affordance only, same as the title bar's
-// menu button and each service row's chevron.
+// Small reusable search glyph button. BrowseHome/BrowseListPage wrap their
+// own expanding search pills around the same visual language when they need a
+// full text field.
 Item {
     id: button
 

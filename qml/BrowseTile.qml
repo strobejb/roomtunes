@@ -20,7 +20,7 @@ Item {
     signal clicked()
 
     implicitWidth: 76
-    implicitHeight: 104
+    implicitHeight: 112
 
     MouseArea {
         id: mouseArea
@@ -47,8 +47,8 @@ Item {
         id: iconArea
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
-        width: 48
-        height: 48
+        width: 56
+        height: 56
 
         Rectangle {
             anchors.fill: parent
@@ -63,7 +63,7 @@ Item {
         RoundedImage {
             id: iconImage
             anchors.fill: parent
-            source: root.imageUrl
+            source: root.imageUrl ? Qt.resolvedUrl(root.imageUrl) : ""
             radius: root.circularIcon ? width / 2 : 8
             visible: status === RoundedImage.Ready
         }

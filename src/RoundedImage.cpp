@@ -7,6 +7,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QQmlFile>
+#include <QSvgRenderer>
 
 namespace RoomTunes {
 
@@ -41,7 +42,7 @@ void RoundedImage::setRadius(qreal radius)
 
 void RoundedImage::paint(QPainter *painter)
 {
-    if (m_status != Ready || m_image.isNull() || width() <= 0 || height() <= 0)
+    if (m_status != Ready || width() <= 0 || height() <= 0)
         return;
 
     painter->setRenderHint(QPainter::Antialiasing, true);
@@ -51,6 +52,14 @@ void RoundedImage::paint(QPainter *painter)
     QPainterPath clipPath;
     clipPath.addRoundedRect(target, m_radius, m_radius);
     painter->setClipPath(clipPath);
+
+    if (m_svg) {
+        m_svg->render(painter, target);
+        return;
+    }
+
+    if (m_image.isNull())
+        return;
 
     const QSize imageSize = m_image.size();
     const qreal imageRatio = qreal(imageSize.width()) / qreal(imageSize.height());
@@ -77,6 +86,7 @@ void RoundedImage::load()
     }
 
     m_image = {};
+    m_svg.reset();
     update();
 
     if (m_source.isEmpty()) {
@@ -86,6 +96,16 @@ void RoundedImage::load()
 
     if (m_source.isLocalFile() || m_source.scheme() == QLatin1String("qrc")) {
         const QString path = QQmlFile::urlToLocalFileOrQrc(m_source);
+        if (path.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive)) {
+            if (loadSvgFile(path)) {
+                setStatus(Ready);
+                update();
+            } else {
+                setStatus(Error);
+            }
+            return;
+        }
+
         QImage image(path);
         if (image.isNull()) {
             setStatus(Error);
@@ -119,6 +139,28 @@ void RoundedImage::load()
     });
 }
 
+bool RoundedImage::loadSvg(const QByteArray &data)
+{
+    auto renderer = std::make_unique<QSvgRenderer>(data);
+    if (!renderer->isValid())
+        return false;
+
+    m_svg = std::move(renderer);
+    m_image = {};
+    return true;
+}
+
+bool RoundedImage::loadSvgFile(const QString &path)
+{
+    auto renderer = std::make_unique<QSvgRenderer>(path);
+    if (!renderer->isValid())
+        return false;
+
+    m_svg = std::move(renderer);
+    m_image = {};
+    return true;
+}
+
 void RoundedImage::setStatus(Status status)
 {
     if (m_status == status)
@@ -130,6 +172,12 @@ void RoundedImage::setStatus(Status status)
 
 void RoundedImage::finishLoad(const QByteArray &data)
 {
+    if (loadSvg(data)) {
+        setStatus(Ready);
+        update();
+        return;
+    }
+
     QImage image;
     if (!image.loadFromData(data)) {
         setStatus(Error);

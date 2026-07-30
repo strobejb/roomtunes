@@ -26,7 +26,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Network)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Network Svg)
 
 qt_standard_project_setup()
 
@@ -96,6 +96,7 @@ qt_add_qml_module(RoomTunes
         qml/AllServicesPage.qml
         qml/BrowseStack.qml
         qml/BrowseListPage.qml
+        qml/BrowseHomeSearchPage.qml
         qml/SignInDialog.qml
         qml/SearchIconButton.qml
         qml/IconButton.qml
@@ -155,7 +156,7 @@ qt_add_qml_module(RoomTunes
         resources/icons/window_restore_symbolic.svg
 )
 
-target_link_libraries(RoomTunes PRIVATE Qt6::Quick Qt6::QuickControls2 roomtunes_core)
+target_link_libraries(RoomTunes PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Svg roomtunes_core)
 
 if(WIN32)
     target_link_libraries(RoomTunes PRIVATE dwmapi)

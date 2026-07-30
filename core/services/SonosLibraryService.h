@@ -41,6 +41,7 @@ protected:
     void doBrowse(const QString &objectId, ResultCallback callback) override;
     void doBrowseItem(const QVariantMap &item, ResultCallback callback) override;
     void doSearch(const QString &category, const QString &term, ResultCallback callback) override;
+    void doSearchPreview(const QString &term, int limit, ResultCallback callback) override;
 
 private:
     Household *m_household;
