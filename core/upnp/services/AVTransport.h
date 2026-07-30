@@ -134,6 +134,17 @@ public:
         return request.send(m_soapUrl);
     }
 
+    QNetworkReply *GetTransportSettings(int instanceId)
+    {
+        SoapRequest request(m_netMgr, m_action, QStringLiteral("GetTransportSettings"));
+        request.openEnvelope();
+        request.openCommand(QStringLiteral("u"));
+        request.writeIntParameter(QStringLiteral("InstanceID"), instanceId);
+        request.closeCommand();
+        request.closeEnvelope();
+        return request.send(m_soapUrl);
+    }
+
     QNetworkReply *GetPositionInfo(int instanceId)
     {
         SoapRequest request(m_netMgr, m_action, QStringLiteral("GetPositionInfo"));

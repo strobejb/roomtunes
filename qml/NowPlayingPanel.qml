@@ -8,8 +8,8 @@ import QtQuick
 // for its transport controls row to fit without clipping, otherwise
 // NowPlayingCompact.qml (art centered on top, controls pinned to the
 // bottom) -- see useCompactLayout below for exactly how that's decided.
-// Shuffle/repeat are visually present but not wired to a backend call yet
-// -- ZonePlayer has no play-mode (SetPlayMode) support.
+// Repeat is visually present but not wired to a backend call yet. Shuffle is
+// backed by AVTransport SetPlayMode/CurrentPlayMode on ZonePlayer.
 Item {
     id: root
 

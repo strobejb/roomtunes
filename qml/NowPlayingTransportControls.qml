@@ -53,13 +53,19 @@ RowLayout {
 
     TransportIconButton {
         buttonSize: root.buttonSize
-        iconSource: root.backgroundIsLight
-            ? "../resources/icons/shuffle.svg"
-            : "../resources/icons/shuffle_light.svg"
+        iconSource: {
+            const active = root.zone && root.zone.shuffleEnabled
+            if (active)
+                return root.backgroundIsLight ? "../resources/icons/shuffle_light.svg" : "../resources/icons/shuffle.svg"
+            return root.backgroundIsLight ? "../resources/icons/shuffle.svg" : "../resources/icons/shuffle_light.svg"
+        }
         iconSize: Math.round(22 * root.sizeScale)
         enabled: root.zone !== null
         hoverColor: root.controlHoverColor
         pressedColor: root.controlPressedColor
+        checked: root.zone && root.zone.shuffleEnabled
+        checkedColor: root.buttonFillColor
+        onClicked: root.zone.setShuffleEnabled(!root.zone.shuffleEnabled)
     }
 
     TransportIconButton {
@@ -132,12 +138,18 @@ RowLayout {
 
     TransportIconButton {
         buttonSize: root.buttonSize
-        iconSource: root.backgroundIsLight
-            ? "../resources/icons/repeat.svg"
-            : "../resources/icons/repeat_light.svg"
+        iconSource: {
+            const active = root.zone && root.zone.repeatMode > 0
+            if (active)
+                return root.backgroundIsLight ? "../resources/icons/repeat_light.svg" : "../resources/icons/repeat.svg"
+            return root.backgroundIsLight ? "../resources/icons/repeat.svg" : "../resources/icons/repeat_light.svg"
+        }
         iconSize: Math.round(24 * root.sizeScale)
         enabled: root.zone !== null
         hoverColor: root.controlHoverColor
         pressedColor: root.controlPressedColor
+        checked: root.zone && root.zone.repeatMode > 0
+        checkedColor: root.buttonFillColor
+        onClicked: root.zone.cycleRepeatMode()
     }
 }

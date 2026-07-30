@@ -138,6 +138,7 @@ QString tvAudioInfoFromMetadata(const QString &trackMetaData, const QString &tra
 struct AvTransportTrackSnapshot
 {
     QString transportState;
+    QString playMode;
     QString uri;
     QString metadata;
 };
@@ -156,6 +157,8 @@ AvTransportTrackSnapshot avTransportTrackSnapshot(const QByteArray &body)
 
         if (xml.name() == QLatin1String("TransportState"))
             snapshot.transportState = xml.attributes().value(QStringLiteral("val")).toString();
+        else if (xml.name() == QLatin1String("CurrentPlayMode"))
+            snapshot.playMode = xml.attributes().value(QStringLiteral("val")).toString();
         else if (xml.name() == QLatin1String("CurrentTrackURI"))
             snapshot.uri = xml.attributes().value(QStringLiteral("val")).toString();
         else if (xml.name() == QLatin1String("CurrentTrackMetaData"))
@@ -203,6 +206,23 @@ QString genaProperty(const QByteArray &body, const QString &propertyName)
     }
 
     return {};
+}
+
+QString playModeFor(bool shuffleEnabled, int repeatMode)
+{
+    if (shuffleEnabled) {
+        if (repeatMode == 2)
+            return QStringLiteral("SHUFFLE_REPEAT_ONE");
+        if (repeatMode == 1)
+            return QStringLiteral("SHUFFLE");
+        return QStringLiteral("SHUFFLE_NOREPEAT");
+    }
+
+    if (repeatMode == 2)
+        return QStringLiteral("REPEAT_ONE");
+    if (repeatMode == 1)
+        return QStringLiteral("REPEAT_ALL");
+    return QStringLiteral("NORMAL");
 }
 
 }
@@ -341,6 +361,34 @@ QString ZonePlayer::playStateText() const
     }
 }
 
+bool ZonePlayer::shuffleEnabled() const
+{
+    return m_playMode.startsWith(QStringLiteral("SHUFFLE"));
+}
+
+int ZonePlayer::repeatMode() const
+{
+    if (m_playMode.endsWith(QStringLiteral("REPEAT_ONE")))
+        return 2;
+    if (m_playMode == QStringLiteral("REPEAT_ALL") || m_playMode == QStringLiteral("SHUFFLE"))
+        return 1;
+    return 0;
+}
+
+void ZonePlayer::setPlayMode(const QString &playMode)
+{
+    if (playMode.isEmpty() || m_playMode == playMode)
+        return;
+
+    const bool wasShuffleEnabled = shuffleEnabled();
+    const int oldRepeatMode = repeatMode();
+    m_playMode = playMode;
+    if (wasShuffleEnabled != shuffleEnabled() || oldRepeatMode != repeatMode()) {
+        QLOG() << m_roomName << "play mode:" << m_playMode;
+        emit playModeChanged();
+    }
+}
+
 void ZonePlayer::setCurrentTrack(MediaItem *track)
 {
     const bool oldSupportsTvSource = supportsTvSource();
@@ -443,6 +491,49 @@ void ZonePlayer::previous()
             refreshTransportState();
         else
             QWARN() << m_roomName << "Previous failed:" << response.faultString();
+    });
+}
+
+void ZonePlayer::setShuffleEnabled(bool enabled)
+{
+    const QString requestedPlayMode = playModeFor(enabled, repeatMode());
+    const QString previousPlayMode = m_playMode;
+    setPlayMode(requestedPlayMode);
+
+    QNetworkReply *reply = m_avTransport.SetPlayMode(0, requestedPlayMode);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, previousPlayMode]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
+
+        if (response.error()) {
+            QWARN() << m_roomName << "SetPlayMode failed:" << soapErrorDetail(response);
+            setPlayMode(previousPlayMode);
+            return;
+        }
+
+        refreshTransportState();
+    });
+}
+
+void ZonePlayer::cycleRepeatMode()
+{
+    const int requestedRepeatMode = (repeatMode() + 1) % 3;
+    const QString requestedPlayMode = playModeFor(shuffleEnabled(), requestedRepeatMode);
+    const QString previousPlayMode = m_playMode;
+    setPlayMode(requestedPlayMode);
+
+    QNetworkReply *reply = m_avTransport.SetPlayMode(0, requestedPlayMode);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, previousPlayMode]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
+
+        if (response.error()) {
+            QWARN() << m_roomName << "SetPlayMode failed:" << soapErrorDetail(response);
+            setPlayMode(previousPlayMode);
+            return;
+        }
+
+        refreshTransportState();
     });
 }
 
@@ -809,6 +900,8 @@ void ZonePlayer::handleAVTransportEvent(const QByteArray &body)
     else if (!snapshot.transportState.isEmpty())
         setPlayState(PlayState::Stopped);
 
+    setPlayMode(snapshot.playMode);
+
     if (isTvStreamUri(snapshot.uri)) {
         const QString audioInfo = tvAudioInfoFromMetadata(snapshot.metadata, snapshot.uri);
         if (!audioInfo.isEmpty() && m_tvAudioInfo != audioInfo)
@@ -850,6 +943,19 @@ void ZonePlayer::refreshTransportState()
             setPlayState(PlayState::Transitioning);
         else
             setPlayState(PlayState::Stopped);
+    });
+
+    QNetworkReply *settingsReply = m_avTransport.GetTransportSettings(0);
+    connect(settingsReply, &QNetworkReply::finished, this, [this, settingsReply]() {
+        SoapResponse response(settingsReply);
+        settingsReply->deleteLater();
+
+        if (response.error()) {
+            QWARN() << m_roomName << "GetTransportSettings failed:" << response.faultString();
+            return;
+        }
+
+        setPlayMode(response.value(QStringLiteral("CurrentPlayMode")));
     });
 
     refreshPositionInfo();

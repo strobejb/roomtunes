@@ -46,6 +46,8 @@ class ZonePlayer : public QObject
     Q_PROPERTY(bool muted READ muted NOTIFY mutedChanged)
     Q_PROPERTY(bool muteKnown READ muteKnown NOTIFY mutedChanged)
     Q_PROPERTY(QString playStateText READ playStateText NOTIFY playStateChanged)
+    Q_PROPERTY(bool shuffleEnabled READ shuffleEnabled NOTIFY playModeChanged)
+    Q_PROPERTY(int repeatMode READ repeatMode NOTIFY playModeChanged)
     Q_PROPERTY(MediaItem *currentTrack READ currentTrack NOTIFY currentTrackChanged)
     Q_PROPERTY(QColor accentColor READ accentColor NOTIFY accentColorChanged)
     Q_PROPERTY(int positionSeconds READ positionSeconds NOTIFY positionChanged)
@@ -108,6 +110,8 @@ public:
 
     PlayState playState() const { return m_playState; }
     QString playStateText() const;
+    bool shuffleEnabled() const;
+    int repeatMode() const;
     int volume() const { return m_volume; }
     bool volumeKnown() const { return m_volumeKnown; }
     bool muted() const { return m_muted; }
@@ -137,6 +141,8 @@ public:
     Q_INVOKABLE void pause();
     Q_INVOKABLE void next();
     Q_INVOKABLE void previous();
+    Q_INVOKABLE void setShuffleEnabled(bool enabled);
+    Q_INVOKABLE void cycleRepeatMode();
     // fraction is 0..1 -- the scrub bar naturally deals in ratios of its
     // own width, so it converts to/from durationSeconds here rather than
     // making QML do that arithmetic.
@@ -214,6 +220,7 @@ signals:
     void supportsTvSourceChanged();
     void supportsLineInSourceChanged();
     void playStateChanged();
+    void playModeChanged();
     void volumeChanged();
     void mutedChanged();
     void currentTrackChanged();
@@ -227,6 +234,7 @@ signals:
 
 private:
     void setPlayState(PlayState state);
+    void setPlayMode(const QString &playMode);
     void setCurrentTrack(MediaItem *track);
     void refreshAccentColor(const QString &imageUrl);
     void refreshPositionInfo();
@@ -254,6 +262,7 @@ private:
     bool m_ready = false;
 
     PlayState m_playState = PlayState::Stopped;
+    QString m_playMode = QStringLiteral("NORMAL");
     int m_volume = 0;
     bool m_volumeKnown = false;
     bool m_muted = false;

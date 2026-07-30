@@ -26,6 +26,10 @@ Item {
     // an already-blended opaque color here instead.
     property color hoverColor: Qt.rgba(contrastColor.r, contrastColor.g, contrastColor.b, 0.10)
     property color pressedColor: Qt.rgba(contrastColor.r, contrastColor.g, contrastColor.b, 0.22)
+    property bool checked: false
+    property color checkedColor: contrastColor
+    property color checkedHoverColor: checkedColor
+    property color checkedPressedColor: checkedColor
 
     signal clicked()
 
@@ -50,7 +54,14 @@ Item {
         radius: width / 2
         antialiasing: true
         color: {
-            if (!mouseArea.containsMouse || !button.enabled)
+            if (!button.enabled)
+                return "transparent"
+            if (button.checked) {
+                if (mouseArea.pressed)
+                    return button.checkedPressedColor
+                return mouseArea.containsMouse ? button.checkedHoverColor : button.checkedColor
+            }
+            if (!mouseArea.containsMouse)
                 return "transparent"
             return mouseArea.pressed ? button.pressedColor : button.hoverColor
         }
