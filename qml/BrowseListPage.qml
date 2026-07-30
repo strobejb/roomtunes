@@ -285,15 +285,12 @@ Item {
                 Rectangle {
                     anchors.fill: parent
                     radius: height / 2
+                    antialiasing: true
                     color: searchControl.expanded ? "#F0F0F0" : (iconMouseArea.containsMouse ? "#F0F0F0" : "transparent")
                 }
 
                 // Small static icon of the service being searched, sitting
-                // left of the typed text -- same circular-mask rendering
-                // MusicServiceRow.qml uses for every other service icon in
-                // this app (a plain unclipped Image reads noticeably softer
-                // here; see that file's own comment for why MultiEffect's
-                // maskSource is used instead of a Canvas clip).
+                // left of the typed text.
                 Item {
                     id: serviceIcon
                     anchors.left: parent.left
@@ -303,36 +300,12 @@ Item {
                     height: 20
                     visible: searchControl.expanded
 
-                    Image {
+                    RoundedImage {
                         id: serviceIconImage
                         anchors.fill: parent
                         source: root.service ? root.service.iconSource : ""
-                        sourceSize.width: width
-                        sourceSize.height: height
-                        smooth: true
-                        mipmap: true
-                        visible: false
-                    }
-
-                    Item {
-                        id: serviceIconMask
-                        anchors.fill: parent
-                        layer.enabled: true
-                        visible: false
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: width / 2
-                            color: "black"
-                        }
-                    }
-
-                    MultiEffect {
-                        anchors.fill: parent
-                        visible: serviceIconImage.status === Image.Ready
-                        source: serviceIconImage
-                        maskEnabled: true
-                        maskSource: serviceIconMask
+                        radius: width / 2
+                        visible: status === RoundedImage.Ready
                     }
                 }
 
@@ -632,45 +605,24 @@ Item {
                                 Rectangle {
                                     anchors.fill: parent
                                     radius: 14
+                                    antialiasing: true
+                                    layer.enabled: true
+                                    layer.samples: 4
                                     color: "#BDBDBD"
-                                    visible: serviceRootIconImage.status !== Image.Ready
+                                    visible: serviceRootIconImage.status !== RoundedImage.Ready
                                 }
 
-                                Image {
+                                RoundedImage {
                                     id: serviceRootIconImage
                                     anchors.fill: parent
                                     source: root.service ? root.service.iconSource : ""
-                                    sourceSize.width: width
-                                    sourceSize.height: height
-                                    smooth: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                Item {
-                                    id: serviceRootIconMask
-                                    anchors.fill: parent
-                                    layer.enabled: true
-                                    visible: false
-
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: 14
-                                        color: "black"
-                                    }
-                                }
-
-                                MultiEffect {
-                                    anchors.fill: parent
-                                    visible: serviceRootIconImage.status === Image.Ready
-                                    source: serviceRootIconImage
-                                    maskEnabled: true
-                                    maskSource: serviceRootIconMask
+                                    radius: 14
+                                    visible: status === RoundedImage.Ready
                                 }
 
                                 Text {
                                     anchors.centerIn: parent
-                                    visible: serviceRootIconImage.status !== Image.Ready
+                                    visible: serviceRootIconImage.status !== RoundedImage.Ready
                                     text: "♪"
                                     font.pixelSize: 28
                                     color: "#7A7A7A"
@@ -706,40 +658,19 @@ Item {
                                 Rectangle {
                                     anchors.fill: parent
                                     radius: 8
+                                    antialiasing: true
+                                    layer.enabled: true
+                                    layer.samples: 4
                                     color: "#BDBDBD"
-                                    visible: folderArtImage.status !== Image.Ready
+                                    visible: folderArtImage.status !== RoundedImage.Ready
                                 }
 
-                                Image {
+                                RoundedImage {
                                     id: folderArtImage
                                     anchors.fill: parent
-                                    fillMode: Image.PreserveAspectCrop
-                                    asynchronous: true
                                     source: root.folderItem.imageUrl ? root.folderItem.imageUrl : ""
-                                    smooth: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                Item {
-                                    id: folderArtMask
-                                    anchors.fill: parent
-                                    layer.enabled: true
-                                    visible: false
-
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: 8
-                                        color: "black"
-                                    }
-                                }
-
-                                MultiEffect {
-                                    anchors.fill: parent
-                                    visible: folderArtImage.status === Image.Ready
-                                    source: folderArtImage
-                                    maskEnabled: true
-                                    maskSource: folderArtMask
+                                    radius: 8
+                                    visible: status === RoundedImage.Ready
                                 }
                             }
 

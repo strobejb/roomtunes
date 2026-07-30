@@ -45,6 +45,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: button.linuxHeaderBar ? width / 2 : 0
+        antialiasing: button.linuxHeaderBar
         color: {
             if (!mouseArea.containsMouse)
                 return "transparent"
@@ -61,6 +62,7 @@ Item {
         source: button.symbolicIconSource
         sourceSize.width: 16
         sourceSize.height: 16
+        smooth: true
     }
 
     Text {

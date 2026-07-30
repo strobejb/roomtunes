@@ -82,6 +82,7 @@ RowLayout {
         Layout.preferredWidth: root.playButtonSize
         Layout.preferredHeight: root.playButtonSize
         radius: width / 2
+        antialiasing: true
         color: {
             if (!playMouseArea.containsMouse)
                 return root.buttonFillColor
@@ -104,6 +105,7 @@ RowLayout {
             }
             sourceSize.width: Math.round(26 * root.sizeScale)
             sourceSize.height: Math.round(26 * root.sizeScale)
+            smooth: true
         }
 
         MouseArea {

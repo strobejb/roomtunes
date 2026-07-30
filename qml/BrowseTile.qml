@@ -1,12 +1,11 @@
 import QtQuick
-import QtQuick.Effects
 
 // One icon+label tile in BrowseHome.qml's "Recently Played"/"Favourites"/
 // "Your Services" sections -- a compact icon-on-top, label-below shape
 // (unlike MusicServiceRow.qml's full-width icon+name+chevron row), laid
 // out 4-per-row in a wrapping GridLayout by the caller. Same
-// Image+mask+MultiEffect icon-masking pattern as MusicServiceRow.qml, just
-// square-tile-shaped rather than row-shaped.
+// RoundedImage handles clipping natively; Qt Quick's shader masks were too
+// brittle for these small service/track icons.
 Item {
     id: root
 
@@ -39,6 +38,7 @@ Item {
         height: Math.min(parent.height - anchors.topMargin, iconArea.height + titleLabel.anchors.topMargin
                          + Math.ceil(titleLabel.font.pixelSize * 1.25) * 2 + 16)
         radius: 12
+        antialiasing: true
         color: "#E8E8E8"
         visible: mouseArea.containsMouse
     }
@@ -53,49 +53,24 @@ Item {
         Rectangle {
             anchors.fill: parent
             radius: root.circularIcon ? width / 2 : 8
+            antialiasing: true
+            layer.enabled: true
+            layer.samples: 4
             color: "#BDBDBD"
-            visible: iconImage.status !== Image.Ready
+            visible: iconImage.status !== RoundedImage.Ready
         }
 
-        // Never shown directly -- MultiEffect below reads its pixels
-        // through `source:` and applies the mask (see MusicServiceRow.qml's
-        // identical pattern).
-        Image {
+        RoundedImage {
             id: iconImage
             anchors.fill: parent
             source: root.imageUrl
-            sourceSize.width: width
-            sourceSize.height: height
-            asynchronous: true
-            smooth: true
-            mipmap: true
-            visible: false
-        }
-
-        Item {
-            id: maskShape
-            anchors.fill: parent
-            layer.enabled: true
-            visible: false
-
-            Rectangle {
-                anchors.fill: parent
-                radius: root.circularIcon ? width / 2 : 8
-                color: "black"
-            }
-        }
-
-        MultiEffect {
-            anchors.fill: parent
-            visible: iconImage.status === Image.Ready
-            source: iconImage
-            maskEnabled: true
-            maskSource: maskShape
+            radius: root.circularIcon ? width / 2 : 8
+            visible: status === RoundedImage.Ready
         }
 
         Text {
             anchors.centerIn: parent
-            visible: iconImage.status !== Image.Ready
+            visible: iconImage.status !== RoundedImage.Ready
             text: "♪"
             font.pixelSize: 18
             color: "#7A7A7A"

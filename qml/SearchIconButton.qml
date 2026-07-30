@@ -14,6 +14,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: width / 2
+        antialiasing: true
         color: mouseArea.containsMouse ? "#F0F0F0" : "transparent"
     }
 
@@ -22,6 +23,7 @@ Item {
         source: "../resources/icons/search.svg"
         sourceSize.width: 18
         sourceSize.height: 18
+        smooth: true
     }
 
     MouseArea {

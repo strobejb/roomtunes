@@ -69,6 +69,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: height / 2
+        antialiasing: true
         color: root.expanded ? root.pillColor : "transparent"
         opacity: root.expandedOpacity
 
@@ -80,6 +81,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: height / 2
+        antialiasing: true
         color: root.expanded
             ? (slider.dragging ? root.pressedOverlayColor : root.hoverColor)
             : (mouseArea.iconHovered ? root.hoverColor : "transparent")
@@ -103,6 +105,7 @@ Item {
                 : "../resources/icons/" + root.volumeIconName + "_light.svg"
             sourceSize.width: 18
             sourceSize.height: 18
+            smooth: true
             opacity: root.stateKnown ? 1.0 : 0.45
         }
     }
@@ -139,6 +142,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             height: 3
             radius: 1.5
+            antialiasing: true
             color: root.contrastColor
             opacity: 0.3
         }
@@ -152,6 +156,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             height: 3
             radius: 1.5
+            antialiasing: true
             width: volumeTrack.width * slider.displayRatio
             color: root.contrastColor
         }
@@ -160,6 +165,7 @@ Item {
             width: 10
             height: 10
             radius: 5
+            antialiasing: true
             color: root.contrastColor
             anchors.verticalCenter: parent.verticalCenter
             x: volumeTrack.width * slider.displayRatio - width / 2

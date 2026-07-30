@@ -128,6 +128,7 @@ Item {
                     x: 0
                     width: parent.width + 16
                     radius: 10
+                    antialiasing: true
                     color: rowItem.rowHoverActive
                            ? "#F5F5F5"
                            : (rowItem.isCurrentQueueTrack && !rowMenuButton.hovered ? "#E0E0E0" : "transparent")
@@ -167,52 +168,29 @@ Item {
                         Rectangle {
                             anchors.fill: parent
                             radius: 6
+                            antialiasing: true
+                            layer.enabled: true
+                            layer.samples: 4
                             color: "#BDBDBD"
-                            visible: artImage.status !== Image.Ready
+                            visible: artImage.status !== RoundedImage.Ready
                         }
 
-                        Image {
+                        RoundedImage {
                             id: artImage
                             anchors.fill: parent
-                            fillMode: Image.PreserveAspectCrop
-                            asynchronous: true
                             readonly property string requestedUrl: model.imageUrl ? String(model.imageUrl) : ""
                             source: root.imageUrlAvailable(requestedUrl) ? requestedUrl : ""
-                            sourceSize.width: width
-                            sourceSize.height: height
-                            smooth: true
-                            mipmap: true
-                            visible: false
+                            radius: 6
+                            visible: status === RoundedImage.Ready
                             onStatusChanged: {
-                                if (status === Image.Error)
+                                if (status === RoundedImage.Error)
                                     root.markImageUrlFailed(requestedUrl)
                             }
                         }
 
-                        Item {
-                            id: artMask
-                            anchors.fill: parent
-                            layer.enabled: true
-                            visible: false
-
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 6
-                                color: "black"
-                            }
-                        }
-
-                        MultiEffect {
-                            anchors.fill: parent
-                            visible: artImage.status === Image.Ready
-                            source: artImage
-                            maskEnabled: true
-                            maskSource: artMask
-                        }
-
                         Text {
                             anchors.centerIn: parent
-                            visible: artImage.status !== Image.Ready
+                            visible: artImage.status !== RoundedImage.Ready
                             text: "♪"
                             font.pixelSize: 16
                             color: "#7A7A7A"

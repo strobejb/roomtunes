@@ -198,7 +198,7 @@ public:
 
     // pull current volume/mute/transport/track state from the zone
     Q_INVOKABLE void refreshVolume();
-    void refreshMute();
+    Q_INVOKABLE void refreshMute();
     Q_INVOKABLE void refreshTransportState();
     Q_INVOKABLE void advancePositionTick();
     void handleRenderingControlEvent(const QByteArray &body);

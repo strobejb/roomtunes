@@ -42,6 +42,8 @@ add_subdirectory(tools/core-cli)
 
 qt_add_executable(RoomTunes
     src/main.cpp
+    src/RoundedImage.h
+    src/RoundedImage.cpp
     src/version.h
     src/chrome/PlatformChrome.h
     src/chrome/PlatformChrome.cpp

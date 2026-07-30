@@ -66,6 +66,7 @@ Item {
         width: 44
         height: root.iconHeight
         radius: width / 2
+        antialiasing: true
         color: volumeMouseArea.iconHovered && !root.expanded
             ? root.controlHoverColor
             : "transparent"
@@ -78,6 +79,7 @@ Item {
         width: 44
         height: 44 + root.sliderLength
         radius: width / 2
+        antialiasing: true
         color: volumeSlider.dragging ? root.volumePressedColor : root.controlHoverColor
         opacity: root.expandedOpacity
 
@@ -99,6 +101,7 @@ Item {
             : "../resources/icons/" + root.volumeIconName + "_light.svg"
         sourceSize.width: 26
         sourceSize.height: 26
+        smooth: true
         opacity: root.stateKnown ? 1.0 : 0.45
     }
 
@@ -133,6 +136,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: 3
             radius: 1.5
+            antialiasing: true
             color: root.contrastColor
             opacity: 0.3
         }
@@ -144,6 +148,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: 3
             radius: 1.5
+            antialiasing: true
             height: volumeTrack.height * volumeSlider.displayRatio
             color: root.contrastColor
         }
@@ -152,6 +157,7 @@ Item {
             width: 10
             height: 10
             radius: 5
+            antialiasing: true
             color: root.contrastColor
             anchors.horizontalCenter: parent.horizontalCenter
             y: volumeTrack.height * (1 - volumeSlider.displayRatio) - height / 2

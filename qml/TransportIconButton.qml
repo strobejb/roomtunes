@@ -48,6 +48,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: width / 2
+        antialiasing: true
         color: {
             if (!mouseArea.containsMouse || !button.enabled)
                 return "transparent"
@@ -69,6 +70,7 @@ Item {
         source: button.iconSource
         sourceSize.width: button.iconSize
         sourceSize.height: button.iconSize
+        smooth: true
         // The SVG's own fill is baked in (caller picks the light/dark
         // asset variant); dim it for disabled via opacity instead of
         // recoloring, since that doesn't need any shader/mask effect to

@@ -28,6 +28,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: width / 2
+        antialiasing: true
         color: mouseArea.pressed
             ? button.pressedColor
             : (mouseArea.containsMouse ? button.hoverColor : button.idleColor)
@@ -38,6 +39,7 @@ Item {
         source: button.iconSource
         sourceSize.width: button.iconSize
         sourceSize.height: button.iconSize
+        smooth: true
     }
 
     MouseArea {

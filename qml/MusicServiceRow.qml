@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Effects
 
 // One row in the Browse panel's navigation stack (BrowseStack.qml/
 // BrowseListPage.qml): icon + name + a chevron affordance for rows that
@@ -92,76 +91,36 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 radius: root.circularIcon ? width / 2 : 6
+                antialiasing: true
+                layer.enabled: true
+                layer.samples: 4
                 color: "#BDBDBD"
-                visible: iconImage.status !== Image.Ready
+                visible: iconImage.status !== RoundedImage.Ready
             }
 
-            // The actual icon, never shown directly -- MultiEffect below
-            // reads its pixels through `source:` and applies the mask, so
-            // this can stay full-quality (sourceSize/smooth/mipmap) without
-            // needing to be clipped itself.
-            Image {
+            RoundedImage {
                 id: iconImage
                 anchors.fill: parent
                 source: root.imageUrl
-                sourceSize.width: width
-                sourceSize.height: height
-                smooth: true
-                mipmap: true
-                visible: false
-            }
-
-            // Circle/rounded-rect shape used purely as a mask -- its own
-            // fill color is irrelevant, MultiEffect reads its alpha.
-            Item {
-                id: maskShape
-                anchors.fill: parent
-                layer.enabled: true
-                visible: false
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: root.circularIcon ? width / 2 : 6
-                    color: "black"
-                }
-            }
-
-            // Replaced an earlier Canvas 2D (ctx.drawImage + ctx.clip)
-            // approach -- confirmed via an isolated test (qml.exe, a real
-            // Sonos icon URL, side-by-side against a plain unclipped Image)
-            // that Canvas's own drawImage() renders visibly softer than a
-            // plain Image at the exact same source/size regardless of
-            // sourceSize/smooth/mipmap/imageSmoothingQuality settings --
-            // the degradation was in Canvas's rendering itself, not the
-            // decode. MultiEffect's maskSource does work correctly in this
-            // Qt build (retested directly); an earlier comment here
-            // claiming it rendered nothing was either a stale finding or
-            // testing a different failure mode -- worth knowing if masking
-            // ever seems broken again elsewhere in this app.
-            MultiEffect {
-                anchors.fill: parent
-                visible: iconImage.status === Image.Ready
-                source: iconImage
-                maskEnabled: true
-                maskSource: maskShape
+                radius: root.circularIcon ? width / 2 : 6
+                visible: status === RoundedImage.Ready
             }
 
             Text {
                 anchors.centerIn: parent
-                visible: iconImage.status !== Image.Ready
+                visible: iconImage.status !== RoundedImage.Ready
                 text: "♪"
                 font.pixelSize: 18
                 color: "#7A7A7A"
             }
 
-            // Hover-to-play cue -- a plain darkening rect (not a mask) plus
-            // a plain white play.svg centered on top; nothing here needs
-            // clipping to the art's own shape beyond matching its corner
-            // radius, so there's no need for the MultiEffect masking
-            // approach above.
+            // Hover-to-play cue -- a plain darkening rect plus a plain
+            // white play.svg centered on top; it matches RoundedImage's
+            // own corner radius.
             Rectangle {
                 anchors.fill: parent
                 radius: root.circularIcon ? width / 2 : 6
+                antialiasing: true
                 color: "#000000"
                 opacity: root.showPlayOverlay && mouseArea.containsMouse ? 0.45 : 0
                 visible: opacity > 0

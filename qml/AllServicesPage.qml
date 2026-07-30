@@ -32,6 +32,7 @@ Item {
                 Rectangle {
                     anchors.fill: parent
                     radius: width / 2
+                    antialiasing: true
                     color: backMouseArea.containsMouse ? "#F0F0F0" : "transparent"
                 }
 
@@ -40,6 +41,7 @@ Item {
                     source: "../resources/icons/chevron_left.svg"
                     sourceSize.width: 26
                     sourceSize.height: 26
+                    smooth: true
                 }
 
                 MouseArea {

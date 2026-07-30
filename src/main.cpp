@@ -2,10 +2,12 @@
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <qqml.h>
 #include <QQuickStyle>
 #include <QQuickWindow>
 
 #include "Logging.h"
+#include "RoundedImage.h"
 #include "Settings.h"
 #include "version.h"
 #include "chrome/PlatformChrome.h"
@@ -44,6 +46,7 @@ int main(int argc, char *argv[])
     // Popup wherever they're used directly rather than via one of this
     // app's own hand-built components).
     QQuickStyle::setStyle(QStringLiteral("Basic"));
+    qmlRegisterType<RoundedImage>("RoomTunes", 1, 0, "RoundedImage");
 
     Household household;
     BrowseHistoryStore browseHistory;
