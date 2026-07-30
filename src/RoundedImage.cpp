@@ -19,6 +19,11 @@ RoundedImage::RoundedImage(QQuickItem *parent)
     setOpaquePainting(false);
 }
 
+RoundedImage::~RoundedImage()
+{
+    cancelPendingReply();
+}
+
 void RoundedImage::setSource(const QUrl &source)
 {
     if (m_source == source)
@@ -79,11 +84,7 @@ void RoundedImage::paint(QPainter *painter)
 
 void RoundedImage::load()
 {
-    if (m_reply) {
-        m_reply->abort();
-        m_reply->deleteLater();
-        m_reply.clear();
-    }
+    cancelPendingReply();
 
     m_image = {};
     m_svg.reset();
@@ -120,6 +121,10 @@ void RoundedImage::load()
     setStatus(Loading);
     QNetworkReply *reply = m_network.get(QNetworkRequest(m_source));
     m_reply = reply;
+    connect(reply, &QObject::destroyed, this, [this, reply]() {
+        if (m_reply == reply)
+            m_reply.clear();
+    });
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         if (m_reply != reply) {
             reply->deleteLater();
@@ -137,6 +142,20 @@ void RoundedImage::load()
         }
         finishLoad(data);
     });
+}
+
+void RoundedImage::cancelPendingReply()
+{
+    QNetworkReply *reply = m_reply.data();
+    if (!reply)
+        return;
+
+    // abort() may emit finished() synchronously. Detach first so the finished
+    // handler cannot race this cancellation path and touch the same reply twice.
+    m_reply.clear();
+    QObject::disconnect(reply, nullptr, this, nullptr);
+    reply->abort();
+    reply->deleteLater();
 }
 
 bool RoundedImage::loadSvg(const QByteArray &data)

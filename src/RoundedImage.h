@@ -30,6 +30,7 @@ public:
     Q_ENUM(Status)
 
     explicit RoundedImage(QQuickItem *parent = nullptr);
+    ~RoundedImage() override;
 
     QUrl source() const { return m_source; }
     void setSource(const QUrl &source);
@@ -48,6 +49,7 @@ signals:
 
 private:
     void load();
+    void cancelPendingReply();
     bool loadSvg(const QByteArray &data);
     bool loadSvgFile(const QString &path);
     void setStatus(Status status);
