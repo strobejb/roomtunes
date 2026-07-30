@@ -3,6 +3,7 @@
 #include <QMap>
 #include <QNetworkAccessManager>
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QTimer>
 
@@ -164,6 +165,7 @@ private:
     void routeZoneEvent(const ZoneEventSubscription &subscription, const QByteArray &body);
     void parseZoneGroupState(const QByteArray &xml);
     void checkZoneReady(ZonePlayer *zone);
+    void ensureVisibleZoneEventsAndRenderingState();
     ZonePlayer *findReadyCoordinator() const;
     void publishReadyCoordinator(ZonePlayer *zone);
     void updateReadyCoordinatorSelection();
@@ -187,6 +189,7 @@ private:
     QString m_readyCoordinatorUdn;
     QString m_topologySubscriptionSid;
     QMap<QString, ZoneEventSubscription> m_zoneEventSubscriptions;
+    QSet<QString> m_pendingZoneEventSubscriptions;
     QTimer m_topologyRenewTimer;
     QTimer m_zoneEventRenewTimer;
 };

@@ -31,12 +31,13 @@ Item {
 
     readonly property int displayVolume: volumeSlider.dragging
         ? Math.round(volumeSlider.dragRatio * 100)
-        : (zone ? zone.volume : 20)
+        : ((zone && zone.volumeKnown) ? zone.volume : 20)
     readonly property bool displayMuted: volumeSlider.dragging
         ? displayVolume <= 0
-        : !!zone && zone.muted
+        : !!zone && zone.muteKnown && zone.muted
     readonly property string volumeIconName: VolumeIcon.nameFor(
         displayVolume, displayMuted)
+    readonly property bool stateKnown: !!zone && zone.volumeKnown && zone.muteKnown
 
     width: 44
     // Fixed at the full max footprint always -- not animated. See
@@ -98,6 +99,7 @@ Item {
             : "../resources/icons/" + root.volumeIconName + "_light.svg"
         sourceSize.width: 26
         sourceSize.height: 26
+        opacity: root.stateKnown ? 1.0 : 0.45
     }
 
     Item {
@@ -117,7 +119,9 @@ Item {
         // Reads as 0 while muted rather than the real (unchanged) device
         // volume -- see the class comment above.
         readonly property real liveRatio:
-            (root.zone && !root.zone.muted) ? Math.max(0, Math.min(1, root.zone.volume / 100)) : 0
+            !root.zone ? 0
+                : (root.zone.muteKnown && root.zone.muted) ? 0
+                : Math.max(0, Math.min(1, root.displayVolume / 100))
         property bool dragging: false
         property real dragRatio: 0
         readonly property real displayRatio: dragging ? dragRatio : liveRatio

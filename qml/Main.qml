@@ -117,6 +117,7 @@ ApplicationWindow {
         if (selectedZone) {
             selectedZone.refreshTransportState()
             selectedZone.refreshVolume()
+            selectedZone.refreshMute()
         }
         queueModel.zone = selectedZone
     }

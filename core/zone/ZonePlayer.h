@@ -42,7 +42,9 @@ class ZonePlayer : public QObject
     Q_PROPERTY(bool supportsTvSource READ supportsTvSource NOTIFY supportsTvSourceChanged)
     Q_PROPERTY(bool supportsLineInSource READ supportsLineInSource NOTIFY supportsLineInSourceChanged)
     Q_PROPERTY(int volume READ volume NOTIFY volumeChanged)
+    Q_PROPERTY(bool volumeKnown READ volumeKnown NOTIFY volumeChanged)
     Q_PROPERTY(bool muted READ muted NOTIFY mutedChanged)
+    Q_PROPERTY(bool muteKnown READ muteKnown NOTIFY mutedChanged)
     Q_PROPERTY(QString playStateText READ playStateText NOTIFY playStateChanged)
     Q_PROPERTY(MediaItem *currentTrack READ currentTrack NOTIFY currentTrackChanged)
     Q_PROPERTY(QColor accentColor READ accentColor NOTIFY accentColorChanged)
@@ -107,7 +109,9 @@ public:
     PlayState playState() const { return m_playState; }
     QString playStateText() const;
     int volume() const { return m_volume; }
+    bool volumeKnown() const { return m_volumeKnown; }
     bool muted() const { return m_muted; }
+    bool muteKnown() const { return m_muteKnown; }
     MediaItem *currentTrack() const { return m_currentTrack; }
     // A prominent color picked from the current track's album art, for the
     // Now Playing panel's "color" render mode (see AlbumColorAnalyzer).
@@ -251,7 +255,9 @@ private:
 
     PlayState m_playState = PlayState::Stopped;
     int m_volume = 0;
+    bool m_volumeKnown = false;
     bool m_muted = false;
+    bool m_muteKnown = false;
     MediaItem *m_currentTrack = nullptr;
     QColor m_accentColor;
     QString m_accentColorRequestUrl; // guards against a stale reply landing after currentTrack changed again

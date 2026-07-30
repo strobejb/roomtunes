@@ -106,6 +106,11 @@ QString serviceNameFromType(const QString &serviceType)
     return serviceType.mid(nameStart, nameEnd - nameStart);
 }
 
+QString zoneEventSubscriptionKey(const QString &udn, const char *serviceName)
+{
+    return udn + QLatin1Char('|') + QLatin1String(serviceName);
+}
+
 QSet<QString> parseServiceList(QXmlStreamReader &xml)
 {
     QSet<QString> services;
@@ -130,6 +135,40 @@ QSet<QString> parseServiceList(QXmlStreamReader &xml)
     return services;
 }
 
+void parseDeviceElement(QXmlStreamReader &xml, DeviceDescription &description, bool rootDevice)
+{
+    while (xml.readNextStartElement()) {
+        if (rootDevice && xml.name() == QLatin1String("roomName"))
+            description.roomName = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (rootDevice && xml.name() == QLatin1String("displayName"))
+            description.displayName = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (rootDevice && xml.name() == QLatin1String("modelName"))
+            description.modelName = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (rootDevice && xml.name() == QLatin1String("serialNum"))
+            description.serialNumber = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (rootDevice && xml.name() == QLatin1String("displayVersion"))
+            description.displayVersion = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (rootDevice && xml.name() == QLatin1String("softwareVersion"))
+            description.softwareVersion = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (rootDevice && xml.name() == QLatin1String("zoneType"))
+            description.zoneType = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        else if (rootDevice && xml.name().startsWith(QLatin1String("feature")))
+            description.features.append(xml.readElementText(QXmlStreamReader::SkipChildElements));
+        else if (xml.name() == QLatin1String("serviceList"))
+            description.services.unite(parseServiceList(xml));
+        else if (xml.name() == QLatin1String("deviceList")) {
+            while (xml.readNextStartElement()) {
+                if (xml.name() == QLatin1String("device"))
+                    parseDeviceElement(xml, description, false);
+                else
+                    xml.skipCurrentElement();
+            }
+        } else {
+            xml.skipCurrentElement();
+        }
+    }
+}
+
 DeviceDescription parseDeviceDescription(const QByteArray &body)
 {
     DeviceDescription description;
@@ -141,28 +180,11 @@ DeviceDescription parseDeviceDescription(const QByteArray &body)
         if (xml.name() != QLatin1String("device"))
             continue;
 
-        while (xml.readNextStartElement()) {
-            if (xml.name() == QLatin1String("roomName"))
-                description.roomName = xml.readElementText(QXmlStreamReader::SkipChildElements);
-            else if (xml.name() == QLatin1String("displayName"))
-                description.displayName = xml.readElementText(QXmlStreamReader::SkipChildElements);
-            else if (xml.name() == QLatin1String("modelName"))
-                description.modelName = xml.readElementText(QXmlStreamReader::SkipChildElements);
-            else if (xml.name() == QLatin1String("serialNum"))
-                description.serialNumber = xml.readElementText(QXmlStreamReader::SkipChildElements);
-            else if (xml.name() == QLatin1String("displayVersion"))
-                description.displayVersion = xml.readElementText(QXmlStreamReader::SkipChildElements);
-            else if (xml.name() == QLatin1String("softwareVersion"))
-                description.softwareVersion = xml.readElementText(QXmlStreamReader::SkipChildElements);
-            else if (xml.name() == QLatin1String("zoneType"))
-                description.zoneType = xml.readElementText(QXmlStreamReader::SkipChildElements);
-            else if (xml.name().startsWith(QLatin1String("feature")))
-                description.features.append(xml.readElementText(QXmlStreamReader::SkipChildElements));
-            else if (xml.name() == QLatin1String("serviceList"))
-                description.services = parseServiceList(xml);
-            else
-                xml.skipCurrentElement();
-        }
+        // Sonos device_description.xml has useful services both on the root
+        // ZonePlayer device and on nested MediaRenderer/MediaServer devices.
+        // RenderingControl and AVTransport live in those nested devices, so
+        // skipping deviceList makes startup mute/volume polling impossible.
+        parseDeviceElement(xml, description, true);
         break;
     }
 
@@ -505,8 +527,37 @@ void ZoneDiscovery::checkZoneReady(ZonePlayer *zone)
         zone->setReady(true);
         emit zoneReady(zone);
         subscribeZoneEvents(zone);
+        if (!zone->invisible() && zone->hasDeviceService(QStringLiteral("RenderingControl"))) {
+            zone->refreshVolume();
+            zone->refreshMute();
+        }
         if (!m_parsingZoneGroupState && isUsableReadyCoordinator(zone))
             publishReadyCoordinator(zone);
+    }
+}
+
+void ZoneDiscovery::ensureVisibleZoneEventsAndRenderingState()
+{
+    for (ZonePlayer *zone : std::as_const(m_zones)) {
+        if (!zone || !zone->ready() || zone->invisible())
+            continue;
+
+        const bool needsEventSubscription =
+            (zone->hasDeviceService(QStringLiteral("AVTransport")) && !zone->avTransport().subscribed())
+            || (zone->hasDeviceService(QStringLiteral("RenderingControl")) && !zone->renderingControl().subscribed())
+            || (zone->hasDeviceService(QStringLiteral("ContentDirectory")) && !zone->contentDirectory().subscribed())
+            || (zone->hasDeviceService(QStringLiteral("AudioIn")) && !zone->audioIn().subscribed());
+        if (needsEventSubscription) {
+            QLOG() << "visible ready zone needs event subscription:" << zone->roomName();
+            subscribeZoneEvents(zone);
+        }
+
+        if (zone->hasDeviceService(QStringLiteral("RenderingControl"))
+            && (!zone->volumeKnown() || !zone->muteKnown())) {
+            QLOG() << "visible ready zone needs RenderingControl state:" << zone->roomName();
+            zone->refreshVolume();
+            zone->refreshMute();
+        }
     }
 }
 
@@ -702,13 +753,20 @@ void ZoneDiscovery::subscribeZoneEvents(ZonePlayer *zone)
 
 void ZoneDiscovery::subscribeZoneEvent(ZonePlayer *zone, UpnpService &service, ZoneEventService serviceType)
 {
-    const QString localAddress = localAddressForPeer(zone->deviceIp());
     const QString udn = zone->udn();
+    const QString pendingKey = zoneEventSubscriptionKey(udn, service.serviceName());
+    if (m_pendingZoneEventSubscriptions.contains(pendingKey))
+        return;
+
+    const QString localAddress = localAddressForPeer(zone->deviceIp());
     const QString oldSid = service.sid();
+    m_pendingZoneEventSubscriptions.insert(pendingKey);
     QNetworkReply *reply = service.subscribe(localAddress, m_notifyServer.port(), kTopologySubscriptionTimeoutSeconds);
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply, udn, oldSid, serviceType, serviceName = service.serviceName()]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, udn, oldSid, serviceType,
+                                                    serviceName = service.serviceName(), pendingKey]() {
         reply->deleteLater();
+        m_pendingZoneEventSubscriptions.remove(pendingKey);
 
         ZonePlayer *zone = m_zones.value(udn);
         if (!zone)
@@ -778,6 +836,7 @@ void ZoneDiscovery::unsubscribeZoneEvents()
     }
 
     m_zoneEventSubscriptions.clear();
+    m_pendingZoneEventSubscriptions.clear();
 }
 
 void ZoneDiscovery::routeZoneEvent(const ZoneEventSubscription &subscription, const QByteArray &body)
@@ -986,6 +1045,7 @@ void ZoneDiscovery::parseZoneGroupState(const QByteArray &xmlBody)
     }
     logZoneCapabilitySummaryWhenComplete();
     updateReadyCoordinatorSelection();
+    ensureVisibleZoneEventsAndRenderingState();
 }
 
 bool ZoneDiscovery::zoneCapabilitySummaryAvailable() const

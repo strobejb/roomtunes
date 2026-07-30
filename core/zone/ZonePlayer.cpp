@@ -649,8 +649,9 @@ void ZonePlayer::setVolume(int level)
         SoapResponse response(reply);
         reply->deleteLater();
 
-        if (!response.error() && level != m_volume) {
+        if (!response.error() && (level != m_volume || !m_volumeKnown)) {
             m_volume = level;
+            m_volumeKnown = true;
             emit volumeChanged();
         }
     });
@@ -664,8 +665,9 @@ void ZonePlayer::setMuted(bool muted)
     // the failure path below still logs (and leaves the optimistic state in
     // place rather than snapping back, which would be a worse experience
     // for the common case to guard against a rare one).
-    if (m_muted != muted) {
+    if (m_muted != muted || !m_muteKnown) {
         m_muted = muted;
+        m_muteKnown = true;
         emit mutedChanged();
     }
 
@@ -714,15 +716,24 @@ void ZonePlayer::refreshVolume()
         SoapResponse response(reply);
         reply->deleteLater();
 
-        if (response.error())
+        if (response.error()) {
+            QWARN() << m_roomName << "GetVolume failed:" << response.faultString();
             return;
+        }
 
         bool ok = false;
         const int level = response.value(QStringLiteral("CurrentVolume")).toInt(&ok);
-        if (ok && level != m_volume) {
+        if (!ok) {
+            QWARN() << m_roomName << "GetVolume returned invalid CurrentVolume:"
+                    << response.value(QStringLiteral("CurrentVolume"));
+            return;
+        }
+        if (ok && (level != m_volume || !m_volumeKnown)) {
             m_volume = level;
+            m_volumeKnown = true;
             emit volumeChanged();
         }
+        QLOG() << m_roomName << "GetVolume OK:" << level;
     });
 }
 
@@ -733,14 +744,24 @@ void ZonePlayer::refreshMute()
         SoapResponse response(reply);
         reply->deleteLater();
 
-        if (response.error())
+        if (response.error()) {
+            QWARN() << m_roomName << "GetMute failed:" << response.faultString();
             return;
+        }
 
-        const bool muted = response.value(QStringLiteral("CurrentMute")) == QStringLiteral("1");
-        if (muted != m_muted) {
+        const QString currentMute = response.value(QStringLiteral("CurrentMute"));
+        if (currentMute != QStringLiteral("0") && currentMute != QStringLiteral("1")) {
+            QWARN() << m_roomName << "GetMute returned invalid CurrentMute:" << currentMute;
+            return;
+        }
+
+        const bool muted = currentMute == QStringLiteral("1");
+        if (muted != m_muted || !m_muteKnown) {
             m_muted = muted;
+            m_muteKnown = true;
             emit mutedChanged();
         }
+        QLOG() << m_roomName << "GetMute OK:" << muted;
     });
 }
 
@@ -759,15 +780,17 @@ void ZonePlayer::handleRenderingControlEvent(const QByteArray &body)
             && xml.attributes().value(QStringLiteral("channel")) == QLatin1String("Master")) {
             bool ok = false;
             const int level = xml.attributes().value(QStringLiteral("val")).toInt(&ok);
-            if (ok && level != m_volume) {
+            if (ok && (level != m_volume || !m_volumeKnown)) {
                 m_volume = level;
+                m_volumeKnown = true;
                 emit volumeChanged();
             }
         } else if (xml.name() == QLatin1String("Mute")
                    && xml.attributes().value(QStringLiteral("channel")) == QLatin1String("Master")) {
             const bool muted = xml.attributes().value(QStringLiteral("val")) == QLatin1String("1");
-            if (muted != m_muted) {
+            if (muted != m_muted || !m_muteKnown) {
                 m_muted = muted;
+                m_muteKnown = true;
                 emit mutedChanged();
             }
         }
