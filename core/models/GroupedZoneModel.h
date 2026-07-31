@@ -29,6 +29,8 @@ public:
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
     Q_INVOKABLE RoomTunes::ZonePlayer *firstCoordinator() const;
+    Q_INVOKABLE RoomTunes::ZonePlayer *coordinatorByUdn(const QString &udn) const;
+    Q_INVOKABLE int coordinatorIndex(const QString &udn) const;
     Q_INVOKABLE RoomTunes::ZonePlayer *canonicalCoordinator(RoomTunes::ZonePlayer *zone) const;
 
 private slots:

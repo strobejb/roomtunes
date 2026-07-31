@@ -68,6 +68,51 @@ ApplicationWindow {
 
     property var selectedZone: null
     property bool compactZonesExpanded: false
+    property bool userSelectedZone: false
+
+    function setSelectedZone(zone, persist) {
+        const coordinator = groupsModel.canonicalCoordinator(zone)
+        window.selectedZone = coordinator
+        if (persist && coordinator)
+            appSettings.lastSelectedZoneUdn = coordinator.udn
+    }
+
+    function restoreSelectedZone() {
+        if (window.userSelectedZone)
+            return
+
+        const lastUdn = appSettings.lastSelectedZoneUdn
+        if (lastUdn.length > 0
+                && (!window.selectedZone || window.selectedZone.udn !== lastUdn)) {
+            const restored = groupsModel.coordinatorByUdn(lastUdn)
+            if (restored) {
+                window.setSelectedZone(restored, false)
+                return
+            }
+        }
+
+        if (!window.selectedZone)
+            window.setSelectedZone(groupsModel.firstCoordinator(), false)
+    }
+
+    function reconcileSelectedZone() {
+        if (!window.selectedZone) {
+            window.restoreSelectedZone()
+            return
+        }
+
+        const coordinator = groupsModel.canonicalCoordinator(window.selectedZone)
+        if (coordinator !== window.selectedZone)
+            window.setSelectedZone(coordinator, false)
+
+        if (!window.userSelectedZone)
+            window.restoreSelectedZone()
+    }
+
+    function chooseZone(zone) {
+        window.userSelectedZone = true
+        window.setSelectedZone(zone, true)
+    }
 
     // Drives UiScale.factor (Zones column width + headline text) and
     // BrowseGrid.factor (Browse column width + tile grid column count)
@@ -104,8 +149,18 @@ ApplicationWindow {
         target: household
         function onAboutToResetZones() {
             window.selectedZone = null
+            window.userSelectedZone = false
         }
     }
+
+    Connections {
+        target: groupsModel
+        function onModelReset() {
+            window.reconcileSelectedZone()
+        }
+    }
+
+    Component.onCompleted: restoreSelectedZone()
 
     // Drives the window-wide dim behind an open ActionMenu (see
     // overlayDim below) -- true for as long as either settings menu is
@@ -226,7 +281,7 @@ ApplicationWindow {
                             anchors.fill: parent
                             dragGhost: sharedDragGhost
                             selectedZone: window.selectedZone
-                            onZoneSelected: (zone) => window.selectedZone = zone
+                            onZoneSelected: (zone) => window.chooseZone(zone)
                         }
                     }
 
@@ -295,7 +350,7 @@ ApplicationWindow {
                                 dragGhost: sharedDragGhost
                                 selectedZone: window.selectedZone
                                 onZoneSelected: (zone) => {
-                                    window.selectedZone = zone
+                                    window.chooseZone(zone)
                                     window.compactZonesExpanded = false
                                 }
                                 onExpandRequested: window.compactZonesExpanded = !window.compactZonesExpanded

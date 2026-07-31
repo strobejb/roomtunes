@@ -121,6 +121,33 @@ ZonePlayer *GroupedZoneModel::firstCoordinator() const
     return m_groups.isEmpty() ? nullptr : m_groups.constFirst().coordinator;
 }
 
+ZonePlayer *GroupedZoneModel::coordinatorByUdn(const QString &udn) const
+{
+    if (udn.isEmpty())
+        return nullptr;
+
+    for (const Group &group : m_groups) {
+        if (group.coordinator && group.coordinator->udn() == udn)
+            return group.coordinator;
+    }
+
+    return nullptr;
+}
+
+int GroupedZoneModel::coordinatorIndex(const QString &udn) const
+{
+    if (udn.isEmpty())
+        return -1;
+
+    for (int i = 0; i < m_groups.size(); ++i) {
+        ZonePlayer *coordinator = m_groups.at(i).coordinator;
+        if (coordinator && coordinator->udn() == udn)
+            return i;
+    }
+
+    return -1;
+}
+
 ZonePlayer *GroupedZoneModel::canonicalCoordinator(ZonePlayer *zone) const
 {
     if (!zone)

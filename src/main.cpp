@@ -8,6 +8,7 @@
 
 #include "Logging.h"
 #include "RoundedImage.h"
+#include "settings/AppSettings.h"
 #include "settings/Settings.h"
 #include "version.h"
 #include "chrome/PlatformChrome.h"
@@ -49,6 +50,7 @@ int main(int argc, char *argv[])
     qmlRegisterType<RoundedImage>("RoomTunes", 1, 0, "RoundedImage");
 
     Household household;
+    AppSettings appSettings;
     BrowseHistoryStore browseHistory;
     GroupedZoneModel groupsModel(&household);
     MusicServiceListModel musicServiceModel(&household, &browseHistory);
@@ -59,6 +61,7 @@ int main(int argc, char *argv[])
     QueueModel queueModel;
 
     QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("appSettings"), &appSettings);
     engine.rootContext()->setContextProperty(QStringLiteral("household"), &household);
     engine.rootContext()->setContextProperty(QStringLiteral("browseHistory"), &browseHistory);
     engine.rootContext()->setContextProperty(QStringLiteral("groupsModel"), &groupsModel);

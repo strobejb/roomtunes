@@ -5,6 +5,8 @@ qt_add_library(roomtunes_core STATIC
     Logging.cpp
     settings/Settings.h
     settings/Settings.cpp
+    settings/AppSettings.h
+    settings/AppSettings.cpp
     settings/BrowseHistoryStore.h
     settings/BrowseHistoryStore.cpp
 

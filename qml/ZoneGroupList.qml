@@ -18,11 +18,7 @@ Item {
     property var selectedZone: null
     signal zoneSelected(var zone)
 
-    function normalizeSelection() {
-        const coordinator = groupsModel.canonicalCoordinator(root.selectedZone)
-        if (coordinator !== root.selectedZone)
-            root.zoneSelected(coordinator)
-    }
+    onSelectedZoneChanged: zoneListView.revealSelectedZone()
 
     ListView {
         id: zoneListView
@@ -30,6 +26,10 @@ Item {
         clip: true
         spacing: 10
         model: groupsModel
+        onVisibleChanged: {
+            if (visible)
+                revealSelectedZone()
+        }
         // Faded and fully inert while processing -- enabled: false (not
         // just the opacity) is what actually matters here: it's what
         // stops hover states and clicks from reaching the cards
@@ -82,7 +82,6 @@ Item {
                     zone.leaveGroup()
                 }
             }
-            Component.onCompleted: root.normalizeSelection()
         }
 
         Label {
@@ -204,6 +203,19 @@ Item {
             zoneListView.applyHighlight(null)
         }
 
+        function revealSelectedZone() {
+            if (!root.selectedZone)
+                return
+
+            const index = groupsModel.coordinatorIndex(root.selectedZone.udn)
+            if (index < 0)
+                return
+
+            Qt.callLater(function() {
+                zoneListView.positionViewAtIndex(index, ListView.Center)
+            })
+        }
+
         // True from the moment a group/unlink action is requested until
         // the *next* topology rebuild lands (see the Connections below)
         // -- covers the real gap between "we asked Sonos to regroup" and
@@ -226,7 +238,7 @@ Item {
             target: groupsModel
             function onModelReset() {
                 zoneListView.processing = false
-                root.normalizeSelection()
+                zoneListView.revealSelectedZone()
             }
         }
     }
