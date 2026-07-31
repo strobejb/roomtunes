@@ -3,8 +3,10 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Network)
 qt_add_library(roomtunes_core STATIC
     Logging.h
     Logging.cpp
-    Settings.h
-    Settings.cpp
+    settings/Settings.h
+    settings/Settings.cpp
+    settings/BrowseHistoryStore.h
+    settings/BrowseHistoryStore.cpp
 
     xml/XmlUtils.h
 
@@ -36,24 +38,23 @@ qt_add_library(roomtunes_core STATIC
     media/AlbumColorAnalyzer.h
     media/AlbumColorAnalyzer.cpp
 
+    models/GroupedZoneModel.h
+    models/GroupedZoneModel.cpp
+    models/QueueModel.h
+    models/QueueModel.cpp
+    models/MusicServiceListModel.h
+    models/MusicServiceListModel.cpp
+    models/RecentlyPlayedModel.h
+    models/RecentlyPlayedModel.cpp
+
     zone/ZonePlayer.h
     zone/ZonePlayer.cpp
-    zone/BrowseHistoryStore.h
-    zone/BrowseHistoryStore.cpp
     zone/ZoneDiscovery.h
     zone/ZoneDiscovery.cpp
     zone/NetworkWatcher.h
     zone/NetworkWatcher.cpp
     zone/Household.h
     zone/Household.cpp
-    zone/GroupedZoneModel.h
-    zone/GroupedZoneModel.cpp
-    zone/QueueModel.h
-    zone/QueueModel.cpp
-    zone/MusicServiceListModel.h
-    zone/MusicServiceListModel.cpp
-    zone/RecentlyPlayedModel.h
-    zone/RecentlyPlayedModel.cpp
 
     services/MusicService.h
     services/MusicService.cpp

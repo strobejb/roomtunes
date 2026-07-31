@@ -4,7 +4,7 @@
 #include <QList>
 #include <QMetaObject>
 
-#include "ZonePlayer.h"
+#include "../zone/ZonePlayer.h"
 
 namespace RoomTunes {
 

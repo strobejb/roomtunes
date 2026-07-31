@@ -7,10 +7,10 @@
 #include <QJsonObject>
 
 #include "../Logging.h"
-#include "../Settings.h"
 #include "../media/MediaItem.h"
-#include "Household.h"
-#include "ZonePlayer.h"
+#include "../settings/Settings.h"
+#include "../zone/Household.h"
+#include "../zone/ZonePlayer.h"
 
 #define QLOG_CATEGORY logZone
 

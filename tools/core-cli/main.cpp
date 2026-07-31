@@ -10,7 +10,7 @@
 #include <QNetworkAccessManager>
 
 #include "Logging.h"
-#include "Settings.h"
+#include "settings/Settings.h"
 #include "services/MusicService.h"
 #include "services/SmapiService.h"
 #include "services/SpotifyServiceConfig.h"

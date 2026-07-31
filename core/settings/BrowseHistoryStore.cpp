@@ -5,7 +5,7 @@
 #include <QJsonObject>
 #include <QDir>
 
-#include "../Settings.h"
+#include "Settings.h"
 
 namespace RoomTunes {
 

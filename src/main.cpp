@@ -8,16 +8,16 @@
 
 #include "Logging.h"
 #include "RoundedImage.h"
-#include "Settings.h"
+#include "settings/Settings.h"
 #include "version.h"
 #include "chrome/PlatformChrome.h"
-#include "zone/BrowseHistoryStore.h"
 #include "chrome/WindowsChrome.h"
-#include "zone/GroupedZoneModel.h"
+#include "models/GroupedZoneModel.h"
+#include "models/MusicServiceListModel.h"
+#include "models/QueueModel.h"
+#include "models/RecentlyPlayedModel.h"
+#include "settings/BrowseHistoryStore.h"
 #include "zone/Household.h"
-#include "zone/MusicServiceListModel.h"
-#include "zone/QueueModel.h"
-#include "zone/RecentlyPlayedModel.h"
 
 using namespace RoomTunes;
 

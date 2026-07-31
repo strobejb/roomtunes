@@ -4,8 +4,8 @@
 
 #include <QTimer>
 
-#include "Household.h"
-#include "ZonePlayer.h"
+#include "../zone/Household.h"
+#include "../zone/ZonePlayer.h"
 
 namespace RoomTunes {
 

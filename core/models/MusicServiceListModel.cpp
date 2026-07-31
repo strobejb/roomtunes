@@ -2,9 +2,9 @@
 
 #include <algorithm>
 
-#include "BrowseHistoryStore.h"
 #include "../services/MusicService.h"
-#include "Household.h"
+#include "../settings/BrowseHistoryStore.h"
+#include "../zone/Household.h"
 
 namespace RoomTunes {
 

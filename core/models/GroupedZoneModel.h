@@ -3,7 +3,7 @@
 #include <QAbstractListModel>
 #include <QSet>
 
-#include "ZonePlayer.h"
+#include "../zone/ZonePlayer.h"
 
 namespace RoomTunes {
 
