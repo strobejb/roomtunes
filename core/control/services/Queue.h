@@ -31,6 +31,19 @@ public:
         request.closeEnvelope();
         return request.send(m_soapUrl);
     }
+
+    QNetworkReply *SaveAsSonosPlaylist(int queueId, const QString &title, const QString &objectId)
+    {
+        SoapRequest request(m_netMgr, m_action, QStringLiteral("SaveAsSonosPlaylist"));
+        request.openEnvelope();
+        request.openCommand(QStringLiteral("u"));
+        request.writeIntParameter(QStringLiteral("QueueID"), queueId);
+        request.writeStrParameter(QStringLiteral("Title"), title);
+        request.writeStrParameter(QStringLiteral("ObjectID"), objectId);
+        request.closeCommand();
+        request.closeEnvelope();
+        return request.send(m_soapUrl);
+    }
 };
 
 }

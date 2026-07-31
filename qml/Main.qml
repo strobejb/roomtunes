@@ -163,10 +163,10 @@ ApplicationWindow {
     Component.onCompleted: restoreSelectedZone()
 
     // Drives the window-wide dim behind an open ActionMenu (see
-    // overlayDim below) -- true for as long as either settings menu is
-    // visible, including during its own fade-out.
-    readonly property bool anyActionMenuOpen:
-        zonesPanel.settingsMenuOpen || zoneCompact.settingsMenuOpen || browseSettingsMenu.visible
+    // overlayDim below) -- ActionMenuState is incremented by every
+    // ActionMenu instance, so row menus and panel-header menus dim the
+    // window consistently without each caller wiring itself into Main.
+    readonly property bool anyActionMenuOpen: ActionMenuState.openCount > 0
 
     onSelectedZoneChanged: {
         if (selectedZone) {
@@ -464,25 +464,49 @@ ApplicationWindow {
             }
         }
 
-        // Window-wide dim behind an open ActionMenu -- ActionMenu itself
-        // suppresses its own default modal-dimming visual (Overlay.modal:
-        // Item {}) so this is the only dimming that actually renders,
-        // fading in/out in step with the menu's own opacity transition
-        // rather than snapping instantly the way QQC2's default modal
-        // overlay would. Popups always render into Qt Quick Controls'
-        // Overlay layer, which sits above ordinary Item content
-        // regardless of declaration order, so this doesn't need to be
-        // reordered relative to the menus themselves to stay underneath.
+        // Window-wide dim behind an open ActionMenu. ActionMenu suppresses
+        // QQC2's own modal overlay, so this is the only dimming that
+        // renders; the short delay keeps quick menu flicks from flashing
+        // the whole app.
         Rectangle {
             id: overlayDim
             anchors.fill: parent
-            color: "#59000000"
-            opacity: window.anyActionMenuOpen ? 1 : 0
-            visible: opacity > 0
+            color: "#40000000"
+            opacity: 0
+            visible: opacity > 0 || window.anyActionMenuOpen
 
-            Behavior on opacity {
-                NumberAnimation { duration: 180; easing.type: Easing.OutQuad }
-            }
+            state: window.anyActionMenuOpen ? "shown" : "hidden"
+            states: [
+                State {
+                    name: "shown"
+                    PropertyChanges {
+                        target: overlayDim
+                        opacity: 1
+                    }
+                },
+                State {
+                    name: "hidden"
+                    PropertyChanges {
+                        target: overlayDim
+                        opacity: 0
+                    }
+                }
+            ]
+            transitions: [
+                Transition {
+                    from: "hidden"
+                    to: "shown"
+                    SequentialAnimation {
+                        PauseAnimation { duration: 160 }
+                        NumberAnimation { property: "opacity"; duration: 460; easing.type: Easing.OutQuad }
+                    }
+                },
+                Transition {
+                    from: "shown"
+                    to: "hidden"
+                    NumberAnimation { property: "opacity"; duration: 320; easing.type: Easing.InOutQuad }
+                }
+            ]
         }
 
         ResizeBorder {

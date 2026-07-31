@@ -57,7 +57,8 @@ target_include_directories(RoomTunes PRIVATE src)
 # this, qt_add_qml_module registers it as an ordinary (non-singleton)
 # type, so a bare "UiScale.factor" reference silently resolves to
 # undefined instead of the shared instance.
-set_source_files_properties(qml/UiScale.qml qml/BrowseGrid.qml qml/Typography.qml qml/VolumeIcon.qml PROPERTIES
+set_source_files_properties(qml/UiScale.qml qml/BrowseGrid.qml qml/Typography.qml qml/VolumeIcon.qml
+    qml/ActionMenuState.qml PROPERTIES
     QT_QML_SINGLETON_TYPE TRUE
 )
 
@@ -70,6 +71,7 @@ qt_add_qml_module(RoomTunes
         qml/BrowseGrid.qml
         qml/Typography.qml
         qml/VolumeIcon.qml
+        qml/ActionMenuState.qml
         qml/Panel.qml
         qml/EqualizerIcon.qml
         qml/ScrollingText.qml
@@ -86,8 +88,11 @@ qt_add_qml_module(RoomTunes
         qml/NowPlayingScrubBar.qml
         qml/NowPlayingTransportControls.qml
         qml/NowPlayingVolumeControl.qml
+        qml/NowPlayingActionStrip.qml
+        qml/NowPlayingContextMenu.qml
         qml/ZoneVolumeControl.qml
         qml/QueuePanel.qml
+        qml/NewPlaylistDialog.qml
         qml/QueueCompact.qml
         qml/MusicServiceRow.qml
         qml/BrowseHome.qml
@@ -120,6 +125,8 @@ qt_add_qml_module(RoomTunes
         resources/icons/chevron_right.svg
         resources/icons/repeat.svg
         resources/icons/repeat_light.svg
+        resources/icons/heart.svg
+        resources/icons/heart_light.svg
         resources/icons/shuffle.svg
         resources/icons/shuffle_light.svg
         resources/icons/volume_0.svg
@@ -141,6 +148,7 @@ qt_add_qml_module(RoomTunes
         resources/icons/queue_play.svg
         resources/icons/drag_handle.svg
         resources/icons/three_dots.svg
+        resources/icons/three_dots_light.svg
         resources/icons/three_dots_vertical.svg
         resources/icons/library.svg
         resources/icons/line_in.svg

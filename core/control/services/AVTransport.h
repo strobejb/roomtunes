@@ -162,6 +162,17 @@ public:
         return request.send(m_soapUrl);
     }
 
+    QNetworkReply *GetCrossfadeMode(int instanceId)
+    {
+        SoapRequest request(m_netMgr, m_action, QStringLiteral("GetCrossfadeMode"));
+        request.openEnvelope();
+        request.openCommand(QStringLiteral("u"));
+        request.writeIntParameter(QStringLiteral("InstanceID"), instanceId);
+        request.closeCommand();
+        request.closeEnvelope();
+        return request.send(m_soapUrl);
+    }
+
     QNetworkReply *GetPositionInfo(int instanceId)
     {
         SoapRequest request(m_netMgr, m_action, QStringLiteral("GetPositionInfo"));
@@ -249,6 +260,18 @@ public:
         request.openCommand(QStringLiteral("u"));
         request.writeIntParameter(QStringLiteral("InstanceID"), instanceId);
         request.writeStrParameter(QStringLiteral("NewPlayMode"), newPlayMode);
+        request.closeCommand();
+        request.closeEnvelope();
+        return request.send(m_soapUrl);
+    }
+
+    QNetworkReply *SetCrossfadeMode(int instanceId, bool crossfadeMode)
+    {
+        SoapRequest request(m_netMgr, m_action, QStringLiteral("SetCrossfadeMode"));
+        request.openEnvelope();
+        request.openCommand(QStringLiteral("u"));
+        request.writeIntParameter(QStringLiteral("InstanceID"), instanceId);
+        request.writeStrParameter(QStringLiteral("CrossfadeMode"), crossfadeMode ? QStringLiteral("1") : QStringLiteral("0"));
         request.closeCommand();
         request.closeEnvelope();
         return request.send(m_soapUrl);

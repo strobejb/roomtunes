@@ -54,7 +54,8 @@ void applyResourceMetadata(DidlItem *item, const QString &resourceMetadata)
 }
 
 QByteArray Didl::buildItem(const QString &itemId, const QString &parentId, const QString &title,
-                            const QString &upnpClass, const QString &desc)
+                            const QString &upnpClass, const QString &desc,
+                            const QString &res, const QString &albumArtUri, const QString &protocolInfo)
 {
     QByteArray out;
     QXmlStreamWriter xml(&out);
@@ -72,6 +73,15 @@ QByteArray Didl::buildItem(const QString &itemId, const QString &parentId, const
 
     xml.writeTextElement(QLatin1String(kDidlNsDc), QStringLiteral("title"), title);
     xml.writeTextElement(QLatin1String(kDidlNsUpnp), QStringLiteral("class"), upnpClass);
+    if (!albumArtUri.isEmpty())
+        xml.writeTextElement(QLatin1String(kDidlNsUpnp), QStringLiteral("albumArtURI"), albumArtUri);
+    if (!res.isEmpty()) {
+        xml.writeStartElement(QStringLiteral("res"));
+        if (!protocolInfo.isEmpty())
+            xml.writeAttribute(QStringLiteral("protocolInfo"), protocolInfo);
+        xml.writeCharacters(res);
+        xml.writeEndElement(); // res
+    }
 
     xml.writeStartElement(QStringLiteral("desc"));
     xml.writeAttribute(QStringLiteral("id"), QStringLiteral("cdudn"));
@@ -79,6 +89,45 @@ QByteArray Didl::buildItem(const QString &itemId, const QString &parentId, const
     xml.writeCharacters(desc);
     xml.writeEndElement(); // desc
 
+    xml.writeEndElement(); // item
+    xml.writeEndElement(); // DIDL-Lite
+
+    return out;
+}
+
+QByteArray Didl::buildFavoriteItem(const DidlItem &item)
+{
+    const QByteArray innerItem = buildItem(item.didlId.isEmpty() ? item.id : item.didlId,
+                                          item.didlParentId.isEmpty() ? item.parentId : item.didlParentId,
+                                          item.title,
+                                          item.upnpClass,
+                                          item.desc.isEmpty() ? QStringLiteral("RINCON_AssociatedZPUDN") : item.desc,
+                                          item.res,
+                                          item.albumArtUri,
+                                          item.protocolInfo);
+
+    QByteArray out;
+    QXmlStreamWriter xml(&out);
+    xml.writeStartElement(QStringLiteral("DIDL-Lite"));
+    xml.writeDefaultNamespace(QLatin1String(kDidlNsDefault));
+    xml.writeNamespace(QLatin1String(kDidlNsDc), QStringLiteral("dc"));
+    xml.writeNamespace(QLatin1String(kDidlNsUpnp), QStringLiteral("upnp"));
+    xml.writeNamespace(QLatin1String(kDidlNsR), QStringLiteral("r"));
+
+    xml.writeStartElement(QStringLiteral("item"));
+    xml.writeTextElement(QLatin1String(kDidlNsDc), QStringLiteral("title"), item.title);
+    xml.writeTextElement(QLatin1String(kDidlNsR), QStringLiteral("type"), QStringLiteral("instantPlay"));
+    if (!item.albumArtUri.isEmpty())
+        xml.writeTextElement(QLatin1String(kDidlNsUpnp), QStringLiteral("albumArtURI"), item.albumArtUri);
+    if (!item.res.isEmpty()) {
+        xml.writeStartElement(QStringLiteral("res"));
+        if (!item.protocolInfo.isEmpty())
+            xml.writeAttribute(QStringLiteral("protocolInfo"), item.protocolInfo);
+        xml.writeCharacters(item.res);
+        xml.writeEndElement(); // res
+    }
+    xml.writeTextElement(QLatin1String(kDidlNsR), QStringLiteral("description"), item.title);
+    xml.writeTextElement(QLatin1String(kDidlNsR), QStringLiteral("resMD"), QString::fromUtf8(innerItem));
     xml.writeEndElement(); // item
     xml.writeEndElement(); // DIDL-Lite
 
@@ -132,8 +181,10 @@ DidlItem Didl::parseOneItem(QXmlStreamReader &xml, bool isContainer)
             item.streamInfo = xml.readElementText(QXmlStreamReader::SkipChildElements);
         else if (name == QStringLiteral("originalTrackNumber"))
             item.trackNumber = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("res"))
+        else if (name == QStringLiteral("res")) {
+            item.protocolInfo = xml.attributes().value(QStringLiteral("protocolInfo")).toString();
             item.res = xml.readElementText(QXmlStreamReader::SkipChildElements);
+        }
         else if (name == QStringLiteral("desc"))
             item.desc = xml.readElementText(QXmlStreamReader::SkipChildElements);
         else if (name == QStringLiteral("resMD"))

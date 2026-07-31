@@ -17,13 +17,30 @@ Popup {
     id: menu
 
     property var items: []
+    property bool countedOpen: false
 
     signal itemClicked(string text)
+
+    function updateOpenCount() {
+        if (visible && !countedOpen) {
+            ActionMenuState.openCount += 1
+            countedOpen = true
+        } else if (!visible && countedOpen) {
+            ActionMenuState.openCount = Math.max(0, ActionMenuState.openCount - 1)
+            countedOpen = false
+        }
+    }
 
     modal: true
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     padding: 6
+
+    onVisibleChanged: updateOpenCount()
+    Component.onDestruction: {
+        if (countedOpen)
+            ActionMenuState.openCount = Math.max(0, ActionMenuState.openCount - 1)
+    }
 
     // The window-wide dim (see Main.qml's own overlayDim Rectangle) is
     // hand-rolled and animated there instead of relying on this Popup's

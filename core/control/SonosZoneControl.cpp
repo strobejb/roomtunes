@@ -132,6 +132,21 @@ void SonosZoneControl::setPlayMode(QObject *context, const QString &playMode, st
     });
 }
 
+void SonosZoneControl::setCrossfadeEnabled(QObject *context, bool enabled, std::function<void(bool)> callback)
+{
+    QNetworkReply *reply = m_avTransport.SetCrossfadeMode(0, enabled);
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
+
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "SetCrossfadeMode failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
+}
+
 void SonosZoneControl::setAVTransportUri(QObject *context, const QString &uri, const QString &metaData,
                                          std::function<void(bool)> callback)
 {
@@ -179,6 +194,39 @@ void SonosZoneControl::removeAllTracksFromQueue(QObject *context, std::function<
         const bool ok = !response.error();
         if (!ok)
             QWARN() << roomName() << "RemoveAllTracksFromQueue failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
+}
+
+void SonosZoneControl::saveQueueAsSonosPlaylist(QObject *context, const QString &title, std::function<void(bool)> callback)
+{
+    // Empty ObjectID means "create a new Sonos playlist". Supplying an
+    // existing saved-queue object id would overwrite it, which this UI
+    // deliberately does not expose.
+    QNetworkReply *reply = m_queue.SaveAsSonosPlaylist(/*queueId=*/0, title, QString());
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
+
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "Queue.SaveAsSonosPlaylist failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
+}
+
+void SonosZoneControl::addToSonosFavourites(QObject *context, const DidlItem &item, std::function<void(bool)> callback)
+{
+    QNetworkReply *reply = m_contentDirectory.CreateObject(QStringLiteral("FV:2"), Didl::buildFavoriteItem(item));
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
+
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "CreateObject(FV:2) failed:" << soapErrorDetail(response);
         if (callback)
             callback(ok);
     });
@@ -390,6 +438,25 @@ void SonosZoneControl::getTransportSettings(QObject *context, std::function<void
 
         if (callback)
             callback(true, response.value(QStringLiteral("CurrentPlayMode")));
+    });
+}
+
+void SonosZoneControl::getCrossfadeMode(QObject *context, std::function<void(bool, bool)> callback)
+{
+    QNetworkReply *reply = m_avTransport.GetCrossfadeMode(0);
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
+
+        if (response.error()) {
+            QWARN() << roomName() << "GetCrossfadeMode failed:" << response.faultString();
+            if (callback)
+                callback(false, false);
+            return;
+        }
+
+        if (callback)
+            callback(true, response.value(QStringLiteral("CurrentCrossfadeMode")) == QStringLiteral("1"));
     });
 }
 

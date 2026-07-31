@@ -177,11 +177,24 @@ Item {
         anchors.right: parent.right
         anchors.topMargin: 16
         anchors.rightMargin: 16
+        z: 2
         zone: root.zone
         backgroundIsLight: root.backgroundIsLight
         contrastColor: root.contrastColor
         pillColor: root.panelBackgroundColor
         controlHoverColor: root.controlHoverColor
         controlPressedColor: root.controlPressedColor
+    }
+
+    NowPlayingActionStrip {
+        x: root.useCompactLayout ? 16 : volumeControl.x - width - 4
+        y: volumeControl.y
+        z: 1
+        zone: root.zone
+        track: root.track
+        backgroundIsLight: root.backgroundIsLight
+        controlHoverColor: root.controlHoverColor
+        controlPressedColor: root.controlPressedColor
+        volumeExpanded: volumeControl.expanded
     }
 }

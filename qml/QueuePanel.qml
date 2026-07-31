@@ -53,6 +53,31 @@ Item {
         }
     }
 
+    ActionMenu {
+        id: queueMenu
+        parent: queueMenuButton
+        x: queueMenuButton.width - width
+        y: queueMenuButton.height + 6
+        items: [qsTr("Save as Sonos Playlist"), qsTr("Clear Queue")]
+
+        onItemClicked: (text) => {
+            if (!root.queue || !root.queue.zone)
+                return
+            if (text === qsTr("Save as Sonos Playlist"))
+                newPlaylistDialog.openFresh()
+            else if (text === qsTr("Clear Queue"))
+                root.queue.zone.clearQueue()
+        }
+    }
+
+    NewPlaylistDialog {
+        id: newPlaylistDialog
+        onSaveRequested: (title) => {
+            if (root.queue && root.queue.zone)
+                root.queue.zone.saveQueueAsSonosPlaylist(title)
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 20
@@ -80,11 +105,13 @@ Item {
             }
 
             IconButton {
+                id: queueMenuButton
                 iconSource: "../resources/icons/three_dots.svg"
                 iconSize: 16
                 idleColor: "#E8E8E8"
                 hoverColor: "#D0D0D0"
                 pressedColor: "#B8B8B8"
+                onPressed: queueMenu.open()
             }
         }
 

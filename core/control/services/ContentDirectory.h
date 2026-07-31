@@ -34,6 +34,18 @@ public:
         request.closeEnvelope();
         return request.send(m_soapUrl);
     }
+
+    QNetworkReply *CreateObject(const QString &containerId, const QByteArray &elements)
+    {
+        SoapRequest request(m_netMgr, m_action, QStringLiteral("CreateObject"));
+        request.openEnvelope();
+        request.openCommand(QStringLiteral("u"));
+        request.writeStrParameter(QStringLiteral("ContainerID"), containerId);
+        request.writeStrParameter(QStringLiteral("Elements"), QString::fromUtf8(elements));
+        request.closeCommand();
+        request.closeEnvelope();
+        return request.send(m_soapUrl);
+    }
 };
 
 }

@@ -50,6 +50,7 @@ class ZonePlayer : public QObject
     Q_PROPERTY(QString playStateText READ playStateText NOTIFY playStateChanged)
     Q_PROPERTY(bool shuffleEnabled READ shuffleEnabled NOTIFY playModeChanged)
     Q_PROPERTY(int repeatMode READ repeatMode NOTIFY playModeChanged)
+    Q_PROPERTY(bool crossfadeEnabled READ crossfadeEnabled NOTIFY crossfadeChanged)
     Q_PROPERTY(MediaItem *currentTrack READ currentTrack NOTIFY currentTrackChanged)
     Q_PROPERTY(QColor accentColor READ accentColor NOTIFY accentColorChanged)
     Q_PROPERTY(int positionSeconds READ positionSeconds NOTIFY positionChanged)
@@ -114,6 +115,7 @@ public:
     QString playStateText() const;
     bool shuffleEnabled() const;
     int repeatMode() const;
+    bool crossfadeEnabled() const { return m_crossfadeEnabled; }
     int volume() const { return m_volume; }
     bool volumeKnown() const { return m_volumeKnown; }
     bool muted() const { return m_muted; }
@@ -146,6 +148,7 @@ public:
     Q_INVOKABLE void previous();
     Q_INVOKABLE void setShuffleEnabled(bool enabled);
     Q_INVOKABLE void cycleRepeatMode();
+    Q_INVOKABLE void setCrossfadeEnabled(bool enabled);
     // fraction is 0..1 -- the scrub bar naturally deals in ratios of its
     // own width, so it converts to/from durationSeconds here rather than
     // making QML do that arithmetic.
@@ -162,6 +165,9 @@ public:
     void addUriToQueue(const QString &uri, const QString &metaData, int desiredFirstTrackNumberEnqueued, bool enqueueAsNext,
                         std::function<void(bool ok, int firstTrackNumberEnqueued)> callback = {});
     void removeAllTracksFromQueue(std::function<void(bool)> callback = {});
+    Q_INVOKABLE void clearQueue();
+    Q_INVOKABLE void saveQueueAsSonosPlaylist(const QString &title);
+    Q_INVOKABLE void addCurrentTrackToSonosFavourites();
 
     // Plays a browse/search result item (a QVariantMap in the shape
     // MusicService subclasses produce -- id/title/uri/upnpClass/didlId/
@@ -228,6 +234,7 @@ signals:
     void supportsLineInSourceChanged();
     void playStateChanged();
     void playModeChanged();
+    void crossfadeChanged();
     void volumeChanged();
     void mutedChanged();
     void currentTrackChanged();
@@ -242,6 +249,7 @@ signals:
 private:
     void setPlayState(PlayState state);
     void setPlayMode(const QString &playMode);
+    void setCrossfadeState(bool enabled, bool known = true);
     void setCurrentTrack(MediaItem *track);
     void refreshAccentColor(const QString &imageUrl);
     void refreshPositionInfo();
@@ -270,6 +278,8 @@ private:
 
     PlayState m_playState = PlayState::Stopped;
     QString m_playMode = QStringLiteral("NORMAL");
+    bool m_crossfadeEnabled = false;
+    bool m_crossfadeKnown = false;
     int m_volume = 0;
     bool m_volumeKnown = false;
     bool m_muted = false;

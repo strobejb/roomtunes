@@ -47,10 +47,13 @@ public:
     void becomeCoordinatorOfStandaloneGroup(QObject *context, std::function<void(bool)> callback);
 
     void setPlayMode(QObject *context, const QString &playMode, std::function<void(bool)> callback);
+    void setCrossfadeEnabled(QObject *context, bool enabled, std::function<void(bool)> callback);
     void setAVTransportUri(QObject *context, const QString &uri, const QString &metaData, std::function<void(bool)> callback);
     void addUriToQueue(QObject *context, const QString &uri, const QString &metaData, int desiredFirstTrackNumberEnqueued,
                        bool enqueueAsNext, std::function<void(bool ok, int firstTrackNumberEnqueued)> callback);
     void removeAllTracksFromQueue(QObject *context, std::function<void(bool)> callback);
+    void saveQueueAsSonosPlaylist(QObject *context, const QString &title, std::function<void(bool)> callback);
+    void addToSonosFavourites(QObject *context, const DidlItem &item, std::function<void(bool)> callback);
     void removeTrackFromQueue(QObject *context, const QString &objectId, std::function<void(bool)> callback);
     void reorderTrackInQueue(QObject *context, int fromIndex, int toIndex, int updateId,
                              std::function<void(bool)> callback);
@@ -69,6 +72,7 @@ public:
                         int startingIndex, int requestedCount, const QString &browseFlag);
     void getTransportInfo(QObject *context, std::function<void(bool ok, const QString &state)> callback);
     void getTransportSettings(QObject *context, std::function<void(bool ok, const QString &playMode)> callback);
+    void getCrossfadeMode(QObject *context, std::function<void(bool ok, bool enabled)> callback);
     void getPositionInfo(QObject *context, std::function<void(bool ok, const PositionInfo &info)> callback);
 
 private:

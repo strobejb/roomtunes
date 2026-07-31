@@ -26,7 +26,9 @@ class MediaItem : public QObject
     Q_PROPERTY(QString album CONSTANT READ album)
     Q_PROPERTY(QString duration CONSTANT READ duration)
     Q_PROPERTY(QString uri CONSTANT READ uri)
+    Q_PROPERTY(QString protocolInfo CONSTANT READ protocolInfo)
     Q_PROPERTY(QString upnpClass CONSTANT READ upnpClass)
+    Q_PROPERTY(QString desc CONSTANT READ desc)
     Q_PROPERTY(QString imageUrl CONSTANT READ imageUrl)
     Q_PROPERTY(bool container CONSTANT READ isContainer)
     Q_PROPERTY(bool playable CONSTANT READ isPlayable)
@@ -38,6 +40,15 @@ public:
     MediaItem(const QString &id, const QString &parentId, const QString &title, const QString &artist,
               const QString &album, const QString &duration, const QString &uri, const QString &upnpClass,
               const QString &imageUrl, bool container, QObject *parent = nullptr)
+        : MediaItem(id, parentId, title, artist, album, duration, uri, QString(), upnpClass, QString(),
+                    imageUrl, container, parent)
+    {
+    }
+
+    MediaItem(const QString &id, const QString &parentId, const QString &title, const QString &artist,
+              const QString &album, const QString &duration, const QString &uri, const QString &protocolInfo,
+              const QString &upnpClass, const QString &desc, const QString &imageUrl, bool container,
+              QObject *parent = nullptr)
         : QObject(parent)
         , m_id(id)
         , m_parentId(parentId)
@@ -46,7 +57,9 @@ public:
         , m_album(album)
         , m_duration(duration)
         , m_uri(uri)
+        , m_protocolInfo(protocolInfo)
         , m_upnpClass(upnpClass)
+        , m_desc(desc)
         , m_imageUrl(imageUrl)
         , m_container(container)
     {
@@ -55,7 +68,8 @@ public:
     static MediaItem *fromDidl(const DidlItem &item, QObject *parent = nullptr)
     {
         return new MediaItem(item.id, item.parentId, item.title, item.artist, item.album, QString(),
-                              item.res, item.upnpClass, item.albumArtUri, item.container, parent);
+                              item.res, item.protocolInfo, item.upnpClass, item.desc, item.albumArtUri,
+                              item.container, parent);
     }
 
     QString id() const { return m_id; }
@@ -65,7 +79,9 @@ public:
     QString album() const { return m_album; }
     QString duration() const { return m_duration; }
     QString uri() const { return m_uri; }
+    QString protocolInfo() const { return m_protocolInfo; }
     QString upnpClass() const { return m_upnpClass; }
+    QString desc() const { return m_desc; }
     QString imageUrl() const { return m_imageUrl; }
     bool isContainer() const { return m_container; }
     bool isPlayable() const { return !m_container; }
@@ -80,7 +96,9 @@ public:
             { QStringLiteral("album"), m_album },
             { QStringLiteral("imageUrl"), m_imageUrl },
             { QStringLiteral("uri"), m_uri },
+            { QStringLiteral("protocolInfo"), m_protocolInfo },
             { QStringLiteral("upnpClass"), m_upnpClass },
+            { QStringLiteral("desc"), m_desc },
             { QStringLiteral("container"), m_container },
         };
     }
@@ -105,7 +123,9 @@ private:
     QString m_album;
     QString m_duration;
     QString m_uri;
+    QString m_protocolInfo;
     QString m_upnpClass;
+    QString m_desc;
     QString m_imageUrl;
     bool m_container = false;
     QString m_rating;

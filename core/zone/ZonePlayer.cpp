@@ -140,6 +140,7 @@ struct AvTransportTrackSnapshot
 {
     QString transportState;
     QString playMode;
+    QString crossfadeMode;
     QString uri;
     QString metadata;
 };
@@ -160,6 +161,8 @@ AvTransportTrackSnapshot avTransportTrackSnapshot(const QByteArray &body)
             snapshot.transportState = xml.attributes().value(QStringLiteral("val")).toString();
         else if (xml.name() == QLatin1String("CurrentPlayMode"))
             snapshot.playMode = xml.attributes().value(QStringLiteral("val")).toString();
+        else if (xml.name() == QLatin1String("CurrentCrossfadeMode"))
+            snapshot.crossfadeMode = xml.attributes().value(QStringLiteral("val")).toString();
         else if (xml.name() == QLatin1String("CurrentTrackURI"))
             snapshot.uri = xml.attributes().value(QStringLiteral("val")).toString();
         else if (xml.name() == QLatin1String("CurrentTrackMetaData"))
@@ -368,6 +371,17 @@ void ZonePlayer::setPlayMode(const QString &playMode)
     }
 }
 
+void ZonePlayer::setCrossfadeState(bool enabled, bool known)
+{
+    if (m_crossfadeEnabled == enabled && m_crossfadeKnown == known)
+        return;
+
+    m_crossfadeEnabled = enabled;
+    m_crossfadeKnown = known;
+    QLOG() << m_roomName << "crossfade:" << m_crossfadeEnabled;
+    emit crossfadeChanged();
+}
+
 void ZonePlayer::setCurrentTrack(MediaItem *track)
 {
     const bool oldSupportsTvSource = supportsTvSource();
@@ -475,6 +489,22 @@ void ZonePlayer::cycleRepeatMode()
     m_control.setPlayMode(this, requestedPlayMode, [this, previousPlayMode](bool ok) {
         if (!ok) {
             setPlayMode(previousPlayMode);
+            return;
+        }
+
+        refreshTransportState();
+    });
+}
+
+void ZonePlayer::setCrossfadeEnabled(bool enabled)
+{
+    const bool previousEnabled = m_crossfadeEnabled;
+    const bool previousKnown = m_crossfadeKnown;
+    setCrossfadeState(enabled);
+
+    m_control.setCrossfadeEnabled(this, enabled, [this, previousEnabled, previousKnown](bool ok) {
+        if (!ok) {
+            setCrossfadeState(previousEnabled, previousKnown);
             return;
         }
 
@@ -592,6 +622,45 @@ void ZonePlayer::replaceQueueWithItem(const QVariantMap &item)
         if (ok)
             playItem(item);
     });
+}
+
+void ZonePlayer::clearQueue()
+{
+    removeAllTracksFromQueue([this](bool ok) {
+        if (ok)
+            emit queueChanged();
+    });
+}
+
+void ZonePlayer::saveQueueAsSonosPlaylist(const QString &title)
+{
+    const QString trimmedTitle = title.trimmed();
+    if (trimmedTitle.isEmpty())
+        return;
+
+    m_control.saveQueueAsSonosPlaylist(this, trimmedTitle, [](bool) {});
+}
+
+void ZonePlayer::addCurrentTrackToSonosFavourites()
+{
+    if (!m_currentTrack || m_currentTrack->uri().isEmpty())
+        return;
+
+    DidlItem item;
+    item.id = m_currentTrack->id();
+    item.parentId = m_currentTrack->parentId();
+    item.didlId = item.id;
+    item.didlParentId = item.parentId;
+    item.title = m_currentTrack->title();
+    item.artist = m_currentTrack->artist();
+    item.album = m_currentTrack->album();
+    item.upnpClass = m_currentTrack->upnpClass();
+    item.res = m_currentTrack->uri();
+    item.protocolInfo = m_currentTrack->protocolInfo();
+    item.desc = m_currentTrack->desc();
+    item.albumArtUri = m_currentTrack->imageUrl();
+
+    m_control.addToSonosFavourites(this, item, [](bool) {});
 }
 
 void ZonePlayer::removeQueueTrack(const QString &objectId)
@@ -760,6 +829,8 @@ void ZonePlayer::handleAVTransportEvent(const QByteArray &body)
         setPlayState(PlayState::Stopped);
 
     setPlayMode(snapshot.playMode);
+    if (!snapshot.crossfadeMode.isEmpty())
+        setCrossfadeState(snapshot.crossfadeMode == QStringLiteral("1"));
 
     if (isTvStreamUri(snapshot.uri)) {
         const QString audioInfo = tvAudioInfoFromMetadata(snapshot.metadata, snapshot.uri);
@@ -802,6 +873,13 @@ void ZonePlayer::refreshTransportState()
             return;
 
         setPlayMode(playMode);
+    });
+
+    m_control.getCrossfadeMode(this, [this](bool ok, bool enabled) {
+        if (!ok)
+            return;
+
+        setCrossfadeState(enabled);
     });
 
     refreshPositionInfo();
