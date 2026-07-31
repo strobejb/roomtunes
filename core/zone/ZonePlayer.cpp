@@ -214,11 +214,12 @@ ZonePlayer::ZonePlayer(QNetworkAccessManager *netMgr, const QString &deviceIp, c
     , m_renderingControl(netMgr, deviceIp)
     , m_contentDirectory(netMgr, deviceIp)
     , m_audioIn(netMgr, deviceIp)
+    , m_queue(netMgr, deviceIp)
     , m_deviceProperties(netMgr, deviceIp)
     , m_zoneGroupTopology(netMgr, deviceIp)
     , m_musicServices(netMgr, deviceIp)
     , m_systemProperties(netMgr, deviceIp)
-    , m_control(m_avTransport, m_renderingControl, m_contentDirectory, [this]() { return m_roomName; })
+    , m_control(m_avTransport, m_renderingControl, m_contentDirectory, m_queue, [this]() { return m_roomName; })
 {
 }
 
@@ -601,6 +602,18 @@ void ZonePlayer::removeQueueTrack(const QString &objectId)
     });
 }
 
+void ZonePlayer::reorderQueueTrack(int fromIndex, int toIndex, int updateId)
+{
+    m_control.reorderTrackInQueue(this, fromIndex, toIndex, updateId, [this](bool ok) {
+        // The QML queue editor moves rows locally while dragging for
+        // immediate feedback. Refetch after the SOAP command completes so
+        // the model reconciles with the real Sonos queue on success or
+        // rolls back cleanly if the reorder failed.
+        Q_UNUSED(ok)
+        emit queueChanged();
+    });
+}
+
 void ZonePlayer::playQueueTrack(int trackNumber)
 {
     playQueueTrackInternal(trackNumber);
@@ -663,6 +676,15 @@ void ZonePlayer::browse(const QString &objectId, std::function<void(bool, const 
                          int startingIndex, int requestedCount, const QString &browseFlag)
 {
     m_control.browse(this, objectId, std::move(callback), startingIndex, requestedCount, browseFlag);
+}
+
+void ZonePlayer::browseQueue(std::function<void(bool, const QString &, const QList<DidlItem> &, int)> callback,
+                             int startingIndex, int requestedCount)
+{
+    m_control.browseDetailed(this, QStringLiteral("Q:0"), [callback](bool ok, const SonosZoneControl::BrowseResult &result) {
+        if (callback)
+            callback(ok, result.errorMessage, result.items, result.updateIdKnown ? result.updateId : 0);
+    }, startingIndex, requestedCount, QStringLiteral("BrowseDirectChildren"));
 }
 
 void ZonePlayer::refreshVolume()

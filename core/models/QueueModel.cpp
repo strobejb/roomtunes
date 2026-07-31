@@ -30,13 +30,14 @@ void QueueModel::refresh()
     beginResetModel();
     qDeleteAll(m_items);
     m_items.clear();
+    m_updateId = 0;
     endResetModel();
 
     if (!m_zone)
         return;
 
     ZonePlayer *zone = m_zone;
-    zone->browse(QStringLiteral("Q:0"), [this, zone](bool ok, const QString &, const QList<DidlItem> &items) {
+    zone->browseQueue([this, zone](bool ok, const QString &, const QList<DidlItem> &items, int updateId) {
         // The selected zone may have changed again while this request was
         // in flight -- a stale reply landing after that shouldn't clobber
         // the (already-requested-fresh) model for the new selection.
@@ -55,6 +56,7 @@ void QueueModel::refresh()
                 resolved.albumArtUri = zone->baseUrl().chopped(1) + resolved.albumArtUri;
             m_items.append(MediaItem::fromDidl(resolved, this));
         }
+        m_updateId = updateId;
         endResetModel();
     });
 }
@@ -103,6 +105,30 @@ QHash<int, QByteArray> QueueModel::roleNames() const
         { UriRole, "uri" },
         { ItemRole, "item" },
     };
+}
+
+void QueueModel::moveTrack(int fromIndex, int toIndex)
+{
+    if (fromIndex == toIndex)
+        return;
+    if (fromIndex < 0 || fromIndex >= m_items.size())
+        return;
+    if (toIndex < 0 || toIndex >= m_items.size())
+        return;
+
+    beginMoveRows(QModelIndex(), fromIndex, fromIndex, QModelIndex(), toIndex > fromIndex ? toIndex + 1 : toIndex);
+    m_items.move(fromIndex, toIndex);
+    endMoveRows();
+}
+
+void QueueModel::commitTrackMove(int fromIndex, int toIndex)
+{
+    if (!m_zone || fromIndex == toIndex)
+        return;
+    if (fromIndex < 0 || toIndex < 0)
+        return;
+
+    m_zone->reorderQueueTrack(fromIndex, toIndex, m_updateId);
 }
 
 }

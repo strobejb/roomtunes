@@ -139,6 +139,7 @@ qt_add_qml_module(RoomTunes
         resources/icons/settings.svg
         resources/icons/settings_light.svg
         resources/icons/queue_play.svg
+        resources/icons/drag_handle.svg
         resources/icons/three_dots.svg
         resources/icons/three_dots_vertical.svg
         resources/icons/library.svg

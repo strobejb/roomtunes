@@ -17,6 +17,7 @@
 #include "../control/services/ContentDirectory.h"
 #include "../control/services/DeviceProperties.h"
 #include "../control/services/MusicServices.h"
+#include "../control/services/Queue.h"
 #include "../control/services/RenderingControl.h"
 #include "../control/services/SystemProperties.h"
 #include "../control/services/ZoneGroupTopology.h"
@@ -132,6 +133,7 @@ public:
     RenderingControl &renderingControl() { return m_renderingControl; }
     ContentDirectory &contentDirectory() { return m_contentDirectory; }
     AudioIn &audioIn() { return m_audioIn; }
+    Queue &queue() { return m_queue; }
     DeviceProperties &deviceProperties() { return m_deviceProperties; }
     ZoneGroupTopology &zoneGroupTopology() { return m_zoneGroupTopology; }
     MusicServices &musicServices() { return m_musicServices; }
@@ -189,6 +191,7 @@ public:
     // roomtunes-bb10's remove_track(), which likewise always passes
     // UpdateID 0 (Sonos treats 0 as "don't care" for this action).
     Q_INVOKABLE void removeQueueTrack(const QString &objectId);
+    Q_INVOKABLE void reorderQueueTrack(int fromIndex, int toIndex, int updateId);
 
     // volume / mute
     Q_INVOKABLE void setVolume(int level);
@@ -202,6 +205,9 @@ public:
     void browse(const QString &objectId, std::function<void(bool ok, const QString &errorMessage, const QList<DidlItem> &items)> callback,
                 int startingIndex = 0, int requestedCount = 100,
                 const QString &browseFlag = QStringLiteral("BrowseDirectChildren"));
+    void browseQueue(std::function<void(bool ok, const QString &errorMessage, const QList<DidlItem> &items,
+                                        int updateId)> callback,
+                     int startingIndex = 0, int requestedCount = 100);
 
     // pull current volume/mute/transport/track state from the zone
     Q_INVOKABLE void refreshVolume();
@@ -280,6 +286,7 @@ private:
     RenderingControl m_renderingControl;
     ContentDirectory m_contentDirectory;
     AudioIn m_audioIn;
+    Queue m_queue;
     DeviceProperties m_deviceProperties;
     ZoneGroupTopology m_zoneGroupTopology;
     MusicServices m_musicServices;

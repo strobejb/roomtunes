@@ -110,6 +110,22 @@ Item {
             }
         }
 
+        Timer {
+            id: revealTimer
+            interval: 40
+            repeat: true
+            property int attempts: 0
+            property string selectedUdn: ""
+            onTriggered: {
+                if (zoneListView.revealSelectedZoneNow() || attempts >= 12) {
+                    stop()
+                    attempts = 0
+                } else {
+                    attempts += 1
+                }
+            }
+        }
+
         function autoScrollForDrag(globalPos) {
             // dragGhost.parent, not null/window space -- matches
             // ZoneGroupCard.qml's own dragPositionChanged, which reports
@@ -207,13 +223,26 @@ Item {
             if (!root.selectedZone)
                 return
 
-            const index = groupsModel.coordinatorIndex(root.selectedZone.udn)
-            if (index < 0)
-                return
+            const selectedUdn = root.selectedZone.udn
+            revealTimer.stop()
+            revealTimer.attempts = 0
+            revealTimer.selectedUdn = selectedUdn
+            revealTimer.start()
+        }
 
-            Qt.callLater(function() {
-                zoneListView.positionViewAtIndex(index, ListView.Center)
-            })
+        function revealSelectedZoneNow() {
+            if (!root.selectedZone || root.selectedZone.udn !== revealTimer.selectedUdn)
+                return true
+            if (zoneListView.height <= 0 || zoneListView.contentHeight <= 0)
+                return false
+
+            const index = groupsModel.coordinatorIndex(revealTimer.selectedUdn)
+            if (index < 0)
+                return false
+
+            zoneListView.forceLayout()
+            zoneListView.positionViewAtIndex(index, ListView.Center)
+            return true
         }
 
         // True from the moment a group/unlink action is requested until
@@ -241,6 +270,8 @@ Item {
                 zoneListView.revealSelectedZone()
             }
         }
+
+        Component.onCompleted: revealSelectedZone()
     }
 
     // Busy indicator shown while processing -- zoneListView's own

@@ -3,6 +3,7 @@
 #include "SoapResponse.h"
 #include "services/AVTransport.h"
 #include "services/ContentDirectory.h"
+#include "services/Queue.h"
 #include "services/RenderingControl.h"
 #include "../Logging.h"
 
@@ -26,10 +27,12 @@ QString soapErrorDetail(const SoapResponse &response)
 }
 
 SonosZoneControl::SonosZoneControl(AVTransport &avTransport, RenderingControl &renderingControl,
-                                   ContentDirectory &contentDirectory, std::function<QString()> roomNameProvider)
+                                   ContentDirectory &contentDirectory, Queue &queue,
+                                   std::function<QString()> roomNameProvider)
     : m_avTransport(avTransport)
     , m_renderingControl(renderingControl)
     , m_contentDirectory(contentDirectory)
+    , m_queue(queue)
     , m_roomNameProvider(std::move(roomNameProvider))
 {
 }
@@ -197,6 +200,35 @@ void SonosZoneControl::removeTrackFromQueue(QObject *context, const QString &obj
     });
 }
 
+void SonosZoneControl::reorderTrackInQueue(QObject *context, int fromIndex, int toIndex, int updateId,
+                                           std::function<void(bool)> callback)
+{
+    if (fromIndex == toIndex) {
+        if (callback)
+            callback(true);
+        return;
+    }
+
+    // Queue rows in QML/C++ are zero-based, but Sonos queue commands use
+    // one-based track numbers. InsertBefore is evaluated in the original
+    // queue coordinate space, so a downward move inserts before the item
+    // after the desired final slot.
+    const int startingIndex = fromIndex + 1;
+    const int insertBefore = fromIndex < toIndex ? toIndex + 2 : toIndex + 1;
+    QNetworkReply *reply = m_queue.ReorderTracks(/*queueId=*/0, QString::number(startingIndex), /*numberOfTracks=*/1,
+                                                  QString::number(insertBefore), updateId);
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
+
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "Queue.ReorderTracks failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
+}
+
 void SonosZoneControl::seek(QObject *context, const QString &unit, const QString &target, std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_avTransport.Seek(0, unit, target);
@@ -289,23 +321,37 @@ void SonosZoneControl::browse(QObject *context, const QString &objectId,
                               std::function<void(bool, const QString &, const QList<DidlItem> &)> callback,
                               int startingIndex, int requestedCount, const QString &browseFlag)
 {
+    browseDetailed(context, objectId, [callback](bool ok, const BrowseResult &result) {
+        if (callback)
+            callback(ok, result.errorMessage, result.items);
+    }, startingIndex, requestedCount, browseFlag);
+}
+
+void SonosZoneControl::browseDetailed(QObject *context, const QString &objectId,
+                                      std::function<void(bool, const BrowseResult &)> callback,
+                                      int startingIndex, int requestedCount, const QString &browseFlag)
+{
     QNetworkReply *reply = m_contentDirectory.Browse(objectId, browseFlag, QStringLiteral("*"), startingIndex, requestedCount);
     QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, objectId, callback]() {
         SoapResponse response(reply);
         reply->deleteLater();
 
+        BrowseResult result;
         if (response.error()) {
-            const QString detail = soapErrorDetail(response);
+            result.errorMessage = soapErrorDetail(response);
             QWARN() << roomName() << "Browse failed: objectId=" << objectId << "httpStatus=" << response.httpStatusCode()
-                    << "error=" << detail;
+                    << "error=" << result.errorMessage;
             if (callback)
-                callback(false, detail, {});
+                callback(false, result);
             return;
         }
 
-        const QList<DidlItem> items = Didl::parseItems(response.value(QStringLiteral("Result")).toUtf8());
+        result.items = Didl::parseItems(response.value(QStringLiteral("Result")).toUtf8());
+        bool updateIdOk = false;
+        result.updateId = response.value(QStringLiteral("UpdateID")).toInt(&updateIdOk);
+        result.updateIdKnown = updateIdOk;
         if (callback)
-            callback(true, QString(), items);
+            callback(true, result);
     });
 }
 

@@ -33,6 +33,7 @@ qt_add_library(roomtunes_core STATIC
     control/services/ContentDirectory.h
     control/services/DeviceProperties.h
     control/services/MusicServices.h
+    control/services/Queue.h
     control/services/SystemProperties.h
 
     media/MediaItem.h

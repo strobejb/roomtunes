@@ -88,6 +88,23 @@ public:
         return request.send(m_soapUrl);
     }
 
+    QNetworkReply *ReorderTracksInQueue(int instanceId, const QString &startingIndex, int numberOfTracks,
+                                        const QString &insertBefore,
+                                        int updateId)
+    {
+        SoapRequest request(m_netMgr, m_action, QStringLiteral("ReorderTracksInQueue"));
+        request.openEnvelope();
+        request.openCommand(QStringLiteral("u"));
+        request.writeIntParameter(QStringLiteral("InstanceID"), instanceId);
+        request.writeStrParameter(QStringLiteral("StartingIndex"), startingIndex);
+        request.writeIntParameter(QStringLiteral("NumberOfTracks"), numberOfTracks);
+        request.writeStrParameter(QStringLiteral("InsertBefore"), insertBefore);
+        request.writeIntParameter(QStringLiteral("UpdateID"), updateId);
+        request.closeCommand();
+        request.closeEnvelope();
+        return request.send(m_soapUrl);
+    }
+
     QNetworkReply *RemoveAllTracksFromQueue(int instanceId)
     {
         SoapRequest request(m_netMgr, m_action, QStringLiteral("RemoveAllTracksFromQueue"));

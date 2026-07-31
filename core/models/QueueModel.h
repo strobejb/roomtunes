@@ -41,6 +41,8 @@ public:
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
+    Q_INVOKABLE void moveTrack(int fromIndex, int toIndex);
+    Q_INVOKABLE void commitTrackMove(int fromIndex, int toIndex);
 
 signals:
     void zoneChanged();
@@ -51,6 +53,7 @@ private:
 private:
     ZonePlayer *m_zone = nullptr;
     QList<MediaItem *> m_items; // owned
+    int m_updateId = 0;
     QMetaObject::Connection m_queueChangedConnection;
 };
 
