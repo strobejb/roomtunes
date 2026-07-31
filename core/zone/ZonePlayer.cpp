@@ -1,6 +1,7 @@
 #include "ZonePlayer.h"
 
 #include <algorithm>
+#include <utility>
 
 #include <QImage>
 #include <QNetworkReply>
@@ -11,7 +12,7 @@
 
 #include "../Logging.h"
 #include "../media/AlbumColorAnalyzer.h"
-#include "../upnp/SoapResponse.h"
+#include "../control/SonosPlaybackPayload.h"
 
 #define QLOG_CATEGORY logZone
 
@@ -168,30 +169,6 @@ AvTransportTrackSnapshot avTransportTrackSnapshot(const QByteArray &body)
     return snapshot;
 }
 
-// Shared by playItem()/playItemNext()/addItemToQueue()/replaceQueueWithItem()
-// -- builds the DIDL <item> metadata for a browse/search result item (see
-// MusicService subclasses for the id/title/upnpClass/didlId/parentId/desc
-// shape).
-QByteArray buildItemMetadata(const QVariantMap &item)
-{
-    const QString upnpClass = item.value(QStringLiteral("upnpClass")).toString();
-    const QString title = item.value(QStringLiteral("title")).toString();
-    QString didlId = item.value(QStringLiteral("didlId")).toString();
-    if (didlId.isEmpty())
-        didlId = item.value(QStringLiteral("id")).toString();
-    const QString parentId = item.value(QStringLiteral("parentId")).toString();
-    const QString desc = item.value(QStringLiteral("desc")).toString();
-    return desc.isEmpty() ? Didl::buildItem(didlId, parentId, title, upnpClass)
-                           : Didl::buildItem(didlId, parentId, title, upnpClass, desc);
-}
-
-QString soapErrorDetail(const SoapResponse &response)
-{
-    return response.upnpErrorCode().isEmpty()
-        ? response.faultString()
-        : response.upnpErrorCode() + QStringLiteral(" ") + response.upnpErrorDescription();
-}
-
 QString genaProperty(const QByteArray &body, const QString &propertyName)
 {
     QXmlStreamReader xml(body);
@@ -241,6 +218,7 @@ ZonePlayer::ZonePlayer(QNetworkAccessManager *netMgr, const QString &deviceIp, c
     , m_zoneGroupTopology(netMgr, deviceIp)
     , m_musicServices(netMgr, deviceIp)
     , m_systemProperties(netMgr, deviceIp)
+    , m_control(m_avTransport, m_renderingControl, m_contentDirectory, [this]() { return m_roomName; })
 {
 }
 
@@ -440,57 +418,33 @@ void ZonePlayer::refreshAccentColor(const QString &imageUrl)
 
 void ZonePlayer::play()
 {
-    QNetworkReply *reply = m_avTransport.Play(0);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (!response.error())
+    m_control.play(this, [this](bool ok) {
+        if (ok)
             setPlayState(PlayState::Playing);
-        else
-            QWARN() << m_roomName << "Play failed:" << response.faultString();
     });
 }
 
 void ZonePlayer::pause()
 {
-    QNetworkReply *reply = m_avTransport.Pause(0);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (!response.error())
+    m_control.pause(this, [this](bool ok) {
+        if (ok)
             setPlayState(PlayState::Paused);
-        else
-            QWARN() << m_roomName << "Pause failed:" << response.faultString();
     });
 }
 
 void ZonePlayer::next()
 {
-    QNetworkReply *reply = m_avTransport.Next(0);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (!response.error())
+    m_control.next(this, [this](bool ok) {
+        if (ok)
             refreshTransportState();
-        else
-            QWARN() << m_roomName << "Next failed:" << response.faultString();
     });
 }
 
 void ZonePlayer::previous()
 {
-    QNetworkReply *reply = m_avTransport.Previous(0);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (!response.error())
+    m_control.previous(this, [this](bool ok) {
+        if (ok)
             refreshTransportState();
-        else
-            QWARN() << m_roomName << "Previous failed:" << response.faultString();
     });
 }
 
@@ -500,13 +454,8 @@ void ZonePlayer::setShuffleEnabled(bool enabled)
     const QString previousPlayMode = m_playMode;
     setPlayMode(requestedPlayMode);
 
-    QNetworkReply *reply = m_avTransport.SetPlayMode(0, requestedPlayMode);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, previousPlayMode]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (response.error()) {
-            QWARN() << m_roomName << "SetPlayMode failed:" << soapErrorDetail(response);
+    m_control.setPlayMode(this, requestedPlayMode, [this, previousPlayMode](bool ok) {
+        if (!ok) {
             setPlayMode(previousPlayMode);
             return;
         }
@@ -522,13 +471,8 @@ void ZonePlayer::cycleRepeatMode()
     const QString previousPlayMode = m_playMode;
     setPlayMode(requestedPlayMode);
 
-    QNetworkReply *reply = m_avTransport.SetPlayMode(0, requestedPlayMode);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, previousPlayMode]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (response.error()) {
-            QWARN() << m_roomName << "SetPlayMode failed:" << soapErrorDetail(response);
+    m_control.setPlayMode(this, requestedPlayMode, [this, previousPlayMode](bool ok) {
+        if (!ok) {
             setPlayMode(previousPlayMode);
             return;
         }
@@ -553,63 +497,34 @@ void ZonePlayer::joinGroup(ZonePlayer *targetCoordinator)
 
 void ZonePlayer::leaveGroup()
 {
-    QNetworkReply *reply = m_avTransport.BecomeCoordinatorOfStandaloneGroup(0);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (response.error())
-            QWARN() << m_roomName << "BecomeCoordinatorOfStandaloneGroup failed:" << response.faultString();
-    });
+    m_control.becomeCoordinatorOfStandaloneGroup(this, {});
 }
 
 void ZonePlayer::setAVTransportUri(const QString &uri, const QString &metaData, std::function<void(bool)> callback)
 {
-    QNetworkReply *reply = m_avTransport.SetAVTransportURI(0, uri, metaData);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        const bool ok = !response.error();
-        if (!ok)
-            QWARN() << m_roomName << "SetAVTransportURI failed:" << soapErrorDetail(response);
-        if (callback)
-            callback(ok);
-    });
+    m_control.setAVTransportUri(this, uri, metaData, std::move(callback));
 }
 
 void ZonePlayer::addUriToQueue(const QString &uri, const QString &metaData, int desiredFirstTrackNumberEnqueued, bool enqueueAsNext,
                                 std::function<void(bool ok, int firstTrackNumberEnqueued)> callback)
 {
-    QNetworkReply *reply = m_avTransport.AddURIToQueue(0, uri, metaData, desiredFirstTrackNumberEnqueued, enqueueAsNext);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (response.error()) {
-            QWARN() << m_roomName << "AddURIToQueue failed:" << soapErrorDetail(response);
+    m_control.addUriToQueue(this, uri, metaData, desiredFirstTrackNumberEnqueued, enqueueAsNext,
+                            [this, callback](bool ok, int firstTrackNumberEnqueued) {
+        if (!ok) {
             if (callback)
                 callback(false, 0);
             return;
         }
-
         emit queueChanged();
         if (callback)
-            callback(true, response.value(QStringLiteral("FirstTrackNumberEnqueued")).toInt());
+            callback(true, firstTrackNumberEnqueued);
     });
 }
 
 void ZonePlayer::removeAllTracksFromQueue(std::function<void(bool)> callback)
 {
-    QNetworkReply *reply = m_avTransport.RemoveAllTracksFromQueue(0);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        const bool ok = !response.error();
-        if (!ok)
-            QWARN() << m_roomName << "RemoveAllTracksFromQueue failed:" << soapErrorDetail(response);
-        else
+    m_control.removeAllTracksFromQueue(this, [this, callback](bool ok) {
+        if (ok)
             emit queueChanged();
         if (callback)
             callback(ok);
@@ -624,10 +539,9 @@ void ZonePlayer::playItem(const QVariantMap &item)
         return;
     }
 
-    const QString upnpClass = item.value(QStringLiteral("upnpClass")).toString();
-    const QByteArray metaData = buildItemMetadata(item);
+    const QByteArray metaData = SonosPlaybackPayload::buildItemMetadata(item);
 
-    if (upnpClass.endsWith(QStringLiteral(".audioBroadcast"))) {
+    if (SonosPlaybackPayload::isStreamItem(item)) {
         // A stream isn't queueable -- swap the transport straight to it.
         setAVTransportUri(uri, QString::fromUtf8(metaData), [this, item](bool ok) {
             if (ok) {
@@ -651,25 +565,24 @@ void ZonePlayer::playItem(const QVariantMap &item)
 void ZonePlayer::playItemNext(const QVariantMap &item)
 {
     const QString uri = item.value(QStringLiteral("uri")).toString();
-    const QString upnpClass = item.value(QStringLiteral("upnpClass")).toString();
-    if (uri.isEmpty() || upnpClass.endsWith(QStringLiteral(".audioBroadcast")))
+    if (!SonosPlaybackPayload::isQueueableItem(item))
         return;
 
     // roomtunes-bb10's play_next(): insert immediately after the current
     // queue track rather than just relying on EnqueueAsNext's default
     // placement.
-    addUriToQueue(uri, QString::fromUtf8(buildItemMetadata(item)), m_currentTrackNumber + 1, /*enqueueAsNext=*/true);
+    addUriToQueue(uri, QString::fromUtf8(SonosPlaybackPayload::buildItemMetadata(item)), m_currentTrackNumber + 1,
+                  /*enqueueAsNext=*/true);
 }
 
 void ZonePlayer::addItemToQueue(const QVariantMap &item)
 {
     const QString uri = item.value(QStringLiteral("uri")).toString();
-    const QString upnpClass = item.value(QStringLiteral("upnpClass")).toString();
-    if (uri.isEmpty() || upnpClass.endsWith(QStringLiteral(".audioBroadcast")))
+    if (!SonosPlaybackPayload::isQueueableItem(item))
         return;
 
-    addUriToQueue(uri, QString::fromUtf8(buildItemMetadata(item)), /*desiredFirstTrackNumberEnqueued=*/0,
-                  /*enqueueAsNext=*/false);
+    addUriToQueue(uri, QString::fromUtf8(SonosPlaybackPayload::buildItemMetadata(item)),
+                  /*desiredFirstTrackNumberEnqueued=*/0, /*enqueueAsNext=*/false);
 }
 
 void ZonePlayer::replaceQueueWithItem(const QVariantMap &item)
@@ -682,18 +595,9 @@ void ZonePlayer::replaceQueueWithItem(const QVariantMap &item)
 
 void ZonePlayer::removeQueueTrack(const QString &objectId)
 {
-    // UpdateID 0 -- Sonos treats it as "don't care", same as
-    // roomtunes-bb10's remove_track() always passed.
-    QNetworkReply *reply = m_avTransport.RemoveTrackFromQueue(0, objectId, 0);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (response.error()) {
-            QWARN() << m_roomName << "RemoveTrackFromQueue failed:" << soapErrorDetail(response);
-            return;
-        }
-        emit queueChanged();
+    m_control.removeTrackFromQueue(this, objectId, [this](bool ok) {
+        if (ok)
+            emit queueChanged();
     });
 }
 
@@ -717,15 +621,9 @@ void ZonePlayer::playQueueTrackInternal(int trackNumber, const QVariantMap &sele
         if (!ok)
             return;
 
-        QNetworkReply *reply = m_avTransport.Seek(0, QStringLiteral("TRACK_NR"), QString::number(trackNumber));
-        connect(reply, &QNetworkReply::finished, this, [this, reply, selectedItem]() {
-            SoapResponse response(reply);
-            reply->deleteLater();
-
-            if (response.error()) {
-                QWARN() << m_roomName << "Seek failed:" << soapErrorDetail(response);
+        m_control.seek(this, QStringLiteral("TRACK_NR"), QString::number(trackNumber), [this, selectedItem](bool ok) {
+            if (!ok)
                 return;
-            }
             if (!selectedItem.isEmpty())
                 emit playbackItemSelected(selectedItem);
             play();
@@ -735,12 +633,8 @@ void ZonePlayer::playQueueTrackInternal(int trackNumber, const QVariantMap &sele
 
 void ZonePlayer::setVolume(int level)
 {
-    QNetworkReply *reply = m_renderingControl.SetVolume(0, QStringLiteral("Master"), level);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, level]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (!response.error() && (level != m_volume || !m_volumeKnown)) {
+    m_control.setVolume(this, level, [this, level](bool ok) {
+        if (ok && (level != m_volume || !m_volumeKnown)) {
             m_volume = level;
             m_volumeKnown = true;
             emit volumeChanged();
@@ -762,64 +656,21 @@ void ZonePlayer::setMuted(bool muted)
         emit mutedChanged();
     }
 
-    QNetworkReply *reply = m_renderingControl.SetMute(0, QStringLiteral("Master"), muted);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (response.error())
-            QWARN() << m_roomName << "SetMute failed:" << response.faultString();
-    });
+    m_control.setMuted(this, muted, {});
 }
 
 void ZonePlayer::browse(const QString &objectId, std::function<void(bool, const QString &, const QList<DidlItem> &)> callback,
                          int startingIndex, int requestedCount, const QString &browseFlag)
 {
-    QNetworkReply *reply = m_contentDirectory.Browse(objectId, browseFlag, QStringLiteral("*"), startingIndex, requestedCount);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, objectId, callback]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (response.error()) {
-            // upnpErrorCode/Description (e.g. "701"/"No such object") is
-            // the actionable detail when present -- faultString alone is
-            // usually just the generic "UPnPError" SOAP fault string.
-            const QString detail = response.upnpErrorCode().isEmpty()
-                ? response.faultString()
-                : response.upnpErrorCode() + QStringLiteral(" ") + response.upnpErrorDescription();
-            QWARN() << m_roomName << "Browse failed: objectId=" << objectId << "httpStatus=" << response.httpStatusCode()
-                    << "error=" << detail;
-            if (callback)
-                callback(false, detail, {});
-            return;
-        }
-
-        const QList<DidlItem> items = Didl::parseItems(response.value(QStringLiteral("Result")).toUtf8());
-        if (callback)
-            callback(true, QString(), items);
-    });
+    m_control.browse(this, objectId, std::move(callback), startingIndex, requestedCount, browseFlag);
 }
 
 void ZonePlayer::refreshVolume()
 {
-    QNetworkReply *reply = m_renderingControl.GetVolume(0);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (response.error()) {
-            QWARN() << m_roomName << "GetVolume failed:" << response.faultString();
+    m_control.getVolume(this, [this](bool ok, int level) {
+        if (!ok)
             return;
-        }
-
-        bool ok = false;
-        const int level = response.value(QStringLiteral("CurrentVolume")).toInt(&ok);
-        if (!ok) {
-            QWARN() << m_roomName << "GetVolume returned invalid CurrentVolume:"
-                    << response.value(QStringLiteral("CurrentVolume"));
-            return;
-        }
-        if (ok && (level != m_volume || !m_volumeKnown)) {
+        if (level != m_volume || !m_volumeKnown) {
             m_volume = level;
             m_volumeKnown = true;
             emit volumeChanged();
@@ -830,23 +681,9 @@ void ZonePlayer::refreshVolume()
 
 void ZonePlayer::refreshMute()
 {
-    QNetworkReply *reply = m_renderingControl.GetMute(0);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (response.error()) {
-            QWARN() << m_roomName << "GetMute failed:" << response.faultString();
+    m_control.getMute(this, [this](bool ok, bool muted) {
+        if (!ok)
             return;
-        }
-
-        const QString currentMute = response.value(QStringLiteral("CurrentMute"));
-        if (currentMute != QStringLiteral("0") && currentMute != QStringLiteral("1")) {
-            QWARN() << m_roomName << "GetMute returned invalid CurrentMute:" << currentMute;
-            return;
-        }
-
-        const bool muted = currentMute == QStringLiteral("1");
         if (muted != m_muted || !m_muteKnown) {
             m_muted = muted;
             m_muteKnown = true;
@@ -924,17 +761,10 @@ void ZonePlayer::handleAudioInEvent(const QByteArray &)
 
 void ZonePlayer::refreshTransportState()
 {
-    QNetworkReply *transportReply = m_avTransport.GetTransportInfo(0);
-    connect(transportReply, &QNetworkReply::finished, this, [this, transportReply]() {
-        SoapResponse response(transportReply);
-        transportReply->deleteLater();
-
-        if (response.error()) {
-            QWARN() << m_roomName << "GetTransportInfo failed:" << response.faultString();
+    m_control.getTransportInfo(this, [this](bool ok, const QString &state) {
+        if (!ok)
             return;
-        }
 
-        const QString state = response.value(QStringLiteral("CurrentTransportState"));
         if (state == QStringLiteral("PLAYING"))
             setPlayState(PlayState::Playing);
         else if (state == QStringLiteral("PAUSED_PLAYBACK"))
@@ -945,17 +775,11 @@ void ZonePlayer::refreshTransportState()
             setPlayState(PlayState::Stopped);
     });
 
-    QNetworkReply *settingsReply = m_avTransport.GetTransportSettings(0);
-    connect(settingsReply, &QNetworkReply::finished, this, [this, settingsReply]() {
-        SoapResponse response(settingsReply);
-        settingsReply->deleteLater();
-
-        if (response.error()) {
-            QWARN() << m_roomName << "GetTransportSettings failed:" << response.faultString();
+    m_control.getTransportSettings(this, [this](bool ok, const QString &playMode) {
+        if (!ok)
             return;
-        }
 
-        setPlayMode(response.value(QStringLiteral("CurrentPlayMode")));
+        setPlayMode(playMode);
     });
 
     refreshPositionInfo();
@@ -963,25 +787,17 @@ void ZonePlayer::refreshTransportState()
 
 void ZonePlayer::refreshPositionInfo()
 {
-    QNetworkReply *positionReply = m_avTransport.GetPositionInfo(0);
-    connect(positionReply, &QNetworkReply::finished, this, [this, positionReply]() {
-        SoapResponse response(positionReply);
-        positionReply->deleteLater();
-
-        if (response.error())
+    m_control.getPositionInfo(this, [this](bool ok, const SonosZoneControl::PositionInfo &info) {
+        if (!ok)
             return;
 
-        const QString trackMetaData = response.value(QStringLiteral("TrackMetaData"));
-        const QString trackUri = response.value(QStringLiteral("TrackURI"));
-        bool trackNumberOk = false;
-        const int trackNumber = response.value(QStringLiteral("Track")).toInt(&trackNumberOk);
-        if (trackNumberOk)
-            m_currentTrackNumber = trackNumber;
+        if (info.trackNumberKnown)
+            m_currentTrackNumber = info.trackNumber;
 
-        QList<DidlItem> items = Didl::parseItems(trackMetaData.toUtf8());
+        QList<DidlItem> items = Didl::parseItems(info.trackMetaData.toUtf8());
         DidlItem didl = items.isEmpty() ? DidlItem{} : items.first();
         if (didl.res.isEmpty())
-            didl.res = trackUri;
+            didl.res = info.trackUri;
 
         // Local-library album art comes back as a path relative to the
         // zone itself (e.g. "/getaa?..."); streaming-service art is
@@ -990,7 +806,7 @@ void ZonePlayer::refreshPositionInfo()
         if (!didl.albumArtUri.isEmpty() && didl.albumArtUri.startsWith(QLatin1Char('/')))
             didl.albumArtUri = baseUrl().chopped(1) + didl.albumArtUri;
 
-        const QString sourceUri = trackUri.isEmpty() ? didl.res : trackUri;
+        const QString sourceUri = info.trackUri.isEmpty() ? didl.res : info.trackUri;
         QString sourceTitle;
         QString sourceArtist;
         QString sourceImageUrl;
@@ -1014,8 +830,7 @@ void ZonePlayer::refreshPositionInfo()
                                               sourceUri, QStringLiteral("object.item.audioItem"), sourceImageUrl,
                                               false, this));
             }
-            setPosition(parseUpnpTime(response.value(QStringLiteral("RelTime"))),
-                        parseUpnpTime(response.value(QStringLiteral("TrackDuration"))));
+            setPosition(parseUpnpTime(info.relTime), parseUpnpTime(info.trackDuration));
             return;
         }
 
@@ -1027,8 +842,7 @@ void ZonePlayer::refreshPositionInfo()
         if (!m_currentTrack || m_currentTrack->id() != didl.id || m_currentTrack->uri() != didl.res)
             setCurrentTrack(MediaItem::fromDidl(didl, this));
 
-        setPosition(parseUpnpTime(response.value(QStringLiteral("RelTime"))),
-                    parseUpnpTime(response.value(QStringLiteral("TrackDuration"))));
+        setPosition(parseUpnpTime(info.relTime), parseUpnpTime(info.trackDuration));
     });
 }
 
@@ -1055,15 +869,9 @@ void ZonePlayer::seek(qreal fraction)
         return;
 
     const int targetSeconds = qBound(0, int(fraction * m_durationSeconds), m_durationSeconds);
-    QNetworkReply *reply = m_avTransport.Seek(0, QStringLiteral("REL_TIME"), formatUpnpTime(targetSeconds));
-    connect(reply, &QNetworkReply::finished, this, [this, reply, targetSeconds]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
-
-        if (response.error()) {
-            QWARN() << m_roomName << "Seek failed:" << response.faultString();
+    m_control.seek(this, QStringLiteral("REL_TIME"), formatUpnpTime(targetSeconds), [this, targetSeconds](bool ok) {
+        if (!ok)
             return;
-        }
 
         // Optimistic -- reflects the seek immediately rather than waiting
         // for the next once-a-second GetPositionInfo poll to catch up.

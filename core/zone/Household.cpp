@@ -14,9 +14,9 @@
 #include "../Logging.h"
 #include "../services/SmapiService.h"
 #include "../services/SonosLibraryService.h"
-#include "../upnp/SoapResponse.h"
+#include "../control/SoapResponse.h"
 
-#define QLOG_CATEGORY logDiscovery
+#define QLOG_CATEGORY logServices
 static const QString LOGSEPARATOR(80, QLatin1Char('-'));
 
 namespace RoomTunes {

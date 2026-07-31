@@ -23,8 +23,8 @@
 
 #include "../Logging.h"
 #include "../settings/Settings.h"
-#include "../upnp/SoapResponse.h"
-#include "../upnp/services/MusicServices.h"
+#include "../control/SoapResponse.h"
+#include "../control/services/MusicServices.h"
 #include "../zone/Household.h"
 #include "../zone/ZonePlayer.h"
 

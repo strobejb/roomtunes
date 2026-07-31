@@ -67,7 +67,7 @@ public:
     // false on the base; SmapiService overrides. Search isn't offered at
     // all for a service that can't do it (e.g. the library -- UPnP
     // ContentDirectory's Search action was never ported, see
-    // core/upnp/services/ContentDirectory.h) rather than exposed and
+    // core/control/services/ContentDirectory.h) rather than exposed and
     // failing every time.
     virtual bool canSearch() const { return false; }
 

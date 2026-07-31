@@ -22,6 +22,7 @@ namespace RoomTunes {
 
 Q_LOGGING_CATEGORY(logDiscovery, "roomtunes.core.discovery")
 Q_LOGGING_CATEGORY(logZone, "roomtunes.core.zone")
+Q_LOGGING_CATEGORY(logServices, "roomtunes.core.services")
 Q_LOGGING_CATEGORY(logSoap, "roomtunes.core.soap")
 Q_LOGGING_CATEGORY(logSmapi, "roomtunes.core.smapi")
 Q_LOGGING_CATEGORY(logEventing, "roomtunes.core.eventing")

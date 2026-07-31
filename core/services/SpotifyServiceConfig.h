@@ -10,7 +10,7 @@ namespace RoomTunes {
 // endpoint URL for Spotify that's safe to hardcode here. Sonos assigns/lists
 // each partner's real endpoint per-region through a household's own
 // available-services catalog (MusicServices::ListAvailableServices(), see
-// upnp/services/MusicServices.h), not a stable public constant -- so rather
+// control/services/MusicServices.h), not a stable public constant -- so rather
 // than guessing a URL, the endpoint must be supplied by whoever wires this
 // up (e.g. from your own Sonos system's available-services list, or a
 // packet capture of the official app). Fetching and parsing that catalog

@@ -4,7 +4,7 @@
 #include <QString>
 #include <QVariantMap>
 
-#include "../upnp/Didl.h"
+#include "../control/Didl.h"
 
 namespace RoomTunes {
 

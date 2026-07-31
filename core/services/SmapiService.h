@@ -7,7 +7,7 @@
 #include <QElapsedTimer>
 #include <QString>
 
-#include "../upnp/Smapi.h"
+#include "Smapi.h"
 #include "MusicService.h"
 
 namespace RoomTunes {

@@ -14,8 +14,8 @@
 #include "services/MusicService.h"
 #include "services/SmapiService.h"
 #include "services/SpotifyServiceConfig.h"
-#include "upnp/SoapResponse.h"
-#include "upnp/services/MusicServices.h"
+#include "control/SoapResponse.h"
+#include "control/services/MusicServices.h"
 #include "zone/Household.h"
 #include "zone/ZonePlayer.h"
 

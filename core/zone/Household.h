@@ -10,8 +10,8 @@
 #include "../services/MusicServiceCatalog.h"
 #include "../services/ServiceLogoCatalog.h"
 #include "../services/ThirdPartyMediaServers.h"
-#include "NetworkWatcher.h"
-#include "ZoneDiscovery.h"
+#include "../discovery/NetworkWatcher.h"
+#include "../discovery/ZoneDiscovery.h"
 #include "ZonePlayer.h"
 
 namespace RoomTunes {

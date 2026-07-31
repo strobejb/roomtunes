@@ -7,14 +7,13 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QSet>
-#include <QUdpSocket>
 #include <QUrl>
 #include <QXmlStreamReader>
 #include <QXmlStreamWriter>
 
 #include "../Logging.h"
-#include "../upnp/Soap.h"
-#include "../upnp/SoapResponse.h"
+#include "../control/Soap.h"
+#include "../control/SoapResponse.h"
 
 #define QLOG_CATEGORY logDiscovery
 static const QString LOGSEPARATOR(80, QLatin1Char('-'));
@@ -46,51 +45,6 @@ QString normalizeIPv4(const QString &address)
     return ok ? QHostAddress(ipv4).toString() : address;
 }
 
-// What local address would the OS use to reach peerHost? Same trick as
-// Ssdp's interface picker: "connecting" a UDP socket does no I/O (UDP has
-// no handshake), it just resolves a route -- this is exactly the address a
-// GENA callback URL needs so the zone can call us back. Resolved per-peer
-// (not a single fixed "our address") because a machine with more than one
-// network path to the household (see the subnet-detection log in
-// onSsdpDiscovered) needs a different local address depending on which
-// zone it's talking to for the callback to actually be reachable.
-QString localAddressForPeer(const QString &peerHost)
-{
-    QUdpSocket probe;
-    probe.connectToHost(peerHost, 1400);
-    probe.waitForConnected(200);
-    const QString local = probe.localAddress().toString();
-    probe.close();
-    return local;
-}
-
-// GENA NOTIFY bodies are a <e:propertyset> of one or more <e:property>
-// elements, each wrapping a single differently-named child (e.g.
-// <ZoneGroupState>...</ZoneGroupState>). Finds the value of one by name.
-QString extractGenaProperty(const QByteArray &body, const QString &propertyName)
-{
-    QXmlStreamReader xml(body);
-
-    while (!xml.atEnd()) {
-        if (!xml.readNextStartElement())
-            continue;
-
-        // Don't skip non-"property" elements -- the root <e:propertyset>
-        // itself doesn't match "property" either, and needs descending into
-        // (via the next bare readNextStartElement()) rather than skipping.
-        if (xml.name() != QLatin1String("property"))
-            continue;
-
-        if (xml.readNextStartElement()) {
-            if (xml.name() == propertyName)
-                return xml.readElementText(QXmlStreamReader::SkipChildElements);
-            xml.skipCurrentElement();
-        }
-    }
-
-    return {};
-}
-
 QString serviceNameFromType(const QString &serviceType)
 {
     const QString marker = QStringLiteral(":service:");
@@ -104,11 +58,6 @@ QString serviceNameFromType(const QString &serviceType)
         return {};
 
     return serviceType.mid(nameStart, nameEnd - nameStart);
-}
-
-QString zoneEventSubscriptionKey(const QString &udn, const char *serviceName)
-{
-    return udn + QLatin1Char('|') + QLatin1String(serviceName);
 }
 
 QSet<QString> parseServiceList(QXmlStreamReader &xml)
@@ -257,8 +206,6 @@ QString prettyPrintXml(const QByteArray &xml)
     return output;
 }
 
-constexpr int kTopologySubscriptionTimeoutSeconds = 3600;
-
 // GetHouseholdID can fail transiently during the SSDP flood (a dozen+
 // zones all being hit with device_description/GetHouseholdID/etc requests
 // at once), and until *some* zone succeeds, nothing downstream can proceed
@@ -279,23 +226,17 @@ ZoneDiscovery::ZoneDiscovery(QNetworkAccessManager *netMgr, QObject *parent)
         QWARN() << "SSDP socket warning (non-fatal):" << errorString;
     });
 
-    m_notifyServer.listen();
-    connect(&m_notifyServer, &GenaNotifyServer::notified, this, &ZoneDiscovery::onGenaNotify);
-
-    // Renew comfortably before the subscription would otherwise expire.
-    m_topologyRenewTimer.setInterval(int(kTopologySubscriptionTimeoutSeconds * 0.6 * 1000));
-    connect(&m_topologyRenewTimer, &QTimer::timeout, this, &ZoneDiscovery::renewTopologySubscription);
-    m_zoneEventRenewTimer.setInterval(int(kTopologySubscriptionTimeoutSeconds * 0.6 * 1000));
-    connect(&m_zoneEventRenewTimer, &QTimer::timeout, this, &ZoneDiscovery::renewZoneEventSubscriptions);
+    m_eventing.listen();
+    connect(&m_eventing, &ZoneEventing::topologySubscriptionZonePicked,
+            this, &ZoneDiscovery::topologySubscriptionZonePicked);
+    connect(&m_eventing, &ZoneEventing::topologyStateReceived, this, &ZoneDiscovery::parseZoneGroupState);
+    connect(&m_eventing, &ZoneEventing::thirdPartyMediaServersXReceived,
+            this, &ZoneDiscovery::thirdPartyMediaServersXReceived);
 }
 
 ZoneDiscovery::~ZoneDiscovery()
 {
-    unsubscribeZoneEvents();
-
-    ZonePlayer *topologyZoneVal = m_zones.value(m_topologyZoneUdn);
-    if (topologyZoneVal && topologyZoneVal->zoneGroupTopology().subscribed())
-        topologyZoneVal->zoneGroupTopology().unsubscribe();
+    m_eventing.unsubscribeAll();
 }
 
 bool ZoneDiscovery::start(quint16 localPort)
@@ -317,20 +258,13 @@ void ZoneDiscovery::restart()
 
     emit aboutToResetZones();
 
-    ZonePlayer *topologyZoneVal = m_zones.value(m_topologyZoneUdn);
-    if (topologyZoneVal && topologyZoneVal->zoneGroupTopology().subscribed())
-        topologyZoneVal->zoneGroupTopology().unsubscribe();
-    unsubscribeZoneEvents();
-
-    m_topologyRenewTimer.stop();
+    m_eventing.unsubscribeAll();
 
     qDeleteAll(m_zones);
     m_zones.clear();
     m_householdId.clear();
     m_topologyZoneUdn.clear();
     m_readyCoordinatorUdn.clear();
-    m_topologySubscriptionSid.clear();
-    m_zoneEventSubscriptions.clear();
     m_lastSsdpResponseLogTimeMs.clear();
     m_zoneCapabilitySummaryLogged = false;
     m_parsingZoneGroupState = false;
@@ -396,9 +330,8 @@ void ZoneDiscovery::onSsdpDiscovered(const QString &fromAddr, const QMap<QString
     // multiple NICs, ...) can see the UDP reply arrive from one address
     // while the device's own LOCATION header names another -- LOCATION
     // (reported by the zone itself) is what's trusted for the zone's
-    // actual address below, but the mismatch is worth surfacing since it's
-    // exactly the situation localAddressForPeer() exists to handle
-    // correctly per-zone rather than assuming one fixed local address.
+    // actual address below, but the mismatch is worth surfacing since GENA
+    // callback routing has to resolve the matching local address per-zone.
     if (!locationHost.isEmpty() && locationHost != fromAddr && normalizeIPv4(fromAddr) != locationHost) {
         QLOG() << "Subnet detected: SSDP reply from" << fromAddr << "but LOCATION reports" << locationHost;
     } else if (locationHost.isEmpty()) {
@@ -526,7 +459,7 @@ void ZoneDiscovery::checkZoneReady(ZonePlayer *zone)
     if (!zone->householdId().isEmpty() && !zone->roomName().isEmpty() && zone->hasValidTopology() && !zone->ready()) {
         zone->setReady(true);
         emit zoneReady(zone);
-        subscribeZoneEvents(zone);
+        m_eventing.subscribeZoneEvents(zone);
         if (!zone->invisible() && zone->hasDeviceService(QStringLiteral("RenderingControl"))) {
             zone->refreshVolume();
             zone->refreshMute();
@@ -549,7 +482,7 @@ void ZoneDiscovery::ensureVisibleZoneEventsAndRenderingState()
             || (zone->hasDeviceService(QStringLiteral("AudioIn")) && !zone->audioIn().subscribed());
         if (needsEventSubscription) {
             QLOG() << "visible ready zone needs event subscription:" << zone->roomName();
-            subscribeZoneEvents(zone);
+            m_eventing.subscribeZoneEvents(zone);
         }
 
         if (zone->hasDeviceService(QStringLiteral("RenderingControl"))
@@ -637,7 +570,7 @@ void ZoneDiscovery::selectTopologySubscriptionZone(ZonePlayer *zone)
 
     m_topologyZoneUdn = zone->udn();
     QLOG() << "picked topology zone" << m_topologyZoneUdn;
-    subscribeTopology();
+    m_eventing.subscribeTopology(zone);
     refreshTopology();
 }
 
@@ -648,258 +581,6 @@ void ZoneDiscovery::updateTopologySubscriptionSelection()
 
     if (ZonePlayer *zone = findTopologySubscriptionCandidate())
         selectTopologySubscriptionZone(zone);
-}
-
-void ZoneDiscovery::subscribeTopology()
-{
-    ZonePlayer *topologyZoneVal = m_zones.value(m_topologyZoneUdn);
-    if (!topologyZoneVal)
-        return;
-
-    // Fired right here -- before the SUBSCRIBE reply even comes back --
-    // since by this point m_householdId is already guaranteed non-empty
-    // (updateTopologySubscriptionSelection only ever picks a zone once its
-    // household ID is known) and topologyZoneVal is now a reachable,
-    // known-good zone.
-    // Household uses this as the single trigger for its one-time
-    // music-service catalog/icon/serial fetches, and as one of the two
-    // retry points for ThirdPartyMediaServersX processing (the other being
-    // whenever a fresh TPMSX payload itself arrives) -- see the class
-    // comment on why both a household ID AND a topology zone have to be in
-    // hand before either of those can proceed.
-    emit topologySubscriptionZonePicked(topologyZoneVal);
-
-    const QString localAddress = localAddressForPeer(topologyZoneVal->deviceIp());
-    QLOG(logEventing) << "ZoneGroupTopology SUBSCRIBE to" << topologyZoneVal->deviceIp() << "callback" << localAddress
-                      << m_notifyServer.port();
-    const QString topologyZoneUdn = topologyZoneVal->udn();
-    QNetworkReply *reply = topologyZoneVal->zoneGroupTopology().subscribe(localAddress, m_notifyServer.port(),
-                                                                           kTopologySubscriptionTimeoutSeconds);
-
-    connect(reply, &QNetworkReply::finished, this, [this, reply, topologyZoneUdn, topologyZoneIp = topologyZoneVal->deviceIp()]() {
-        reply->deleteLater();
-        const ScopedLogEndpoint logEndpoint(topologyZoneIp, LogDirection::Outbound);
-
-        if (reply->error() != QNetworkReply::NoError) {
-            QWARN(logEventing) << "ZoneGroupTopology subscribe failed:" << reply->errorString()
-                               << "-- continuing with one-shot GetZoneGroupState refreshes";
-            return;
-        }
-
-        ZonePlayer *topologyZoneVal = m_zones.value(topologyZoneUdn);
-        if (!topologyZoneVal)
-            return;
-
-        const QString sid = QString::fromUtf8(reply->rawHeader("SID"));
-        m_topologySubscriptionSid = sid;
-        topologyZoneVal->zoneGroupTopology().setSid(sid);
-
-        QLOG(logEventing) << "subscribed to ZoneGroupTopology, SID=" << sid;
-
-        m_topologyRenewTimer.start();
-
-        // UPnP eventing requires the publisher to send an initial NOTIFY
-        // with the current state right after a successful SUBSCRIBE, but
-        // startup has already issued GetZoneGroupState directly. The
-        // NOTIFY remains the live update channel; readiness is not blocked
-        // on callback delivery timing.
-    });
-}
-
-void ZoneDiscovery::renewTopologySubscription()
-{
-    ZonePlayer *topologyZoneVal = m_zones.value(m_topologyZoneUdn);
-    if (!topologyZoneVal || !topologyZoneVal->zoneGroupTopology().subscribed())
-        return;
-
-    const QString localAddress = localAddressForPeer(topologyZoneVal->deviceIp());
-    const QString topologyZoneUdn = topologyZoneVal->udn();
-    QNetworkReply *reply = topologyZoneVal->zoneGroupTopology().subscribe(localAddress, m_notifyServer.port(),
-                                                                           kTopologySubscriptionTimeoutSeconds);
-
-    connect(reply, &QNetworkReply::finished, this, [this, reply, topologyZoneUdn, topologyZoneIp = topologyZoneVal->deviceIp()]() {
-        reply->deleteLater();
-        const ScopedLogEndpoint logEndpoint(topologyZoneIp, LogDirection::Outbound);
-
-        if (reply->error() != QNetworkReply::NoError) {
-            QWARN(logEventing) << "ZoneGroupTopology resubscribe failed:" << reply->errorString();
-            return;
-        }
-
-        ZonePlayer *topologyZoneVal = m_zones.value(topologyZoneUdn);
-        if (!topologyZoneVal)
-            return;
-
-        const QString sid = QString::fromUtf8(reply->rawHeader("SID"));
-        m_topologySubscriptionSid = sid;
-        topologyZoneVal->zoneGroupTopology().setSid(sid);
-    });
-}
-
-void ZoneDiscovery::subscribeZoneEvents(ZonePlayer *zone)
-{
-    if (!zone || zone->invisible())
-        return;
-
-    if (zone->hasDeviceService(QStringLiteral("AVTransport")))
-        subscribeZoneEvent(zone, zone->avTransport(), ZoneEventService::AVTransport);
-    if (zone->hasDeviceService(QStringLiteral("RenderingControl")))
-        subscribeZoneEvent(zone, zone->renderingControl(), ZoneEventService::RenderingControl);
-    if (zone->hasDeviceService(QStringLiteral("ContentDirectory")))
-        subscribeZoneEvent(zone, zone->contentDirectory(), ZoneEventService::ContentDirectory);
-    if (zone->hasDeviceService(QStringLiteral("AudioIn")))
-        subscribeZoneEvent(zone, zone->audioIn(), ZoneEventService::AudioIn);
-}
-
-void ZoneDiscovery::subscribeZoneEvent(ZonePlayer *zone, UpnpService &service, ZoneEventService serviceType)
-{
-    const QString udn = zone->udn();
-    const QString pendingKey = zoneEventSubscriptionKey(udn, service.serviceName());
-    if (m_pendingZoneEventSubscriptions.contains(pendingKey))
-        return;
-
-    const QString localAddress = localAddressForPeer(zone->deviceIp());
-    const QString oldSid = service.sid();
-    m_pendingZoneEventSubscriptions.insert(pendingKey);
-    QNetworkReply *reply = service.subscribe(localAddress, m_notifyServer.port(), kTopologySubscriptionTimeoutSeconds);
-
-    connect(reply, &QNetworkReply::finished, this, [this, reply, udn, oldSid, serviceType,
-                                                    serviceName = service.serviceName(), pendingKey]() {
-        reply->deleteLater();
-        m_pendingZoneEventSubscriptions.remove(pendingKey);
-
-        ZonePlayer *zone = m_zones.value(udn);
-        if (!zone)
-            return;
-        const ScopedLogEndpoint logEndpoint(zone->deviceIp(), LogDirection::Outbound);
-
-        UpnpService *service = nullptr;
-        switch (serviceType) {
-        case ZoneEventService::AVTransport:
-            service = &zone->avTransport();
-            break;
-        case ZoneEventService::RenderingControl:
-            service = &zone->renderingControl();
-            break;
-        case ZoneEventService::ContentDirectory:
-            service = &zone->contentDirectory();
-            break;
-        case ZoneEventService::AudioIn:
-            service = &zone->audioIn();
-            break;
-        }
-
-        if (reply->error() != QNetworkReply::NoError) {
-            QWARN(logEventing) << zone->roomName() << serviceName << "subscribe failed:" << reply->errorString();
-            return;
-        }
-
-        const QString sid = QString::fromUtf8(reply->rawHeader("SID"));
-        if (sid.isEmpty()) {
-            QWARN(logEventing) << zone->roomName() << serviceName << "subscribe returned no SID";
-            return;
-        }
-
-        if (!oldSid.isEmpty() && oldSid != sid)
-            m_zoneEventSubscriptions.remove(oldSid);
-
-        service->setSid(sid);
-        m_zoneEventSubscriptions.insert(sid, ZoneEventSubscription{udn, serviceType, serviceName});
-        m_zoneEventRenewTimer.start();
-        QLOG(logEventing) << "SUBSCRIBED:" << sid << serviceName;
-    });
-}
-
-void ZoneDiscovery::renewZoneEventSubscriptions()
-{
-    for (ZonePlayer *zone : std::as_const(m_zones)) {
-        if (zone && zone->ready())
-            subscribeZoneEvents(zone);
-    }
-}
-
-void ZoneDiscovery::unsubscribeZoneEvents()
-{
-    m_zoneEventRenewTimer.stop();
-
-    for (ZonePlayer *zone : std::as_const(m_zones)) {
-        if (!zone)
-            continue;
-        if (zone->avTransport().subscribed())
-            zone->avTransport().unsubscribe();
-        if (zone->renderingControl().subscribed())
-            zone->renderingControl().unsubscribe();
-        if (zone->contentDirectory().subscribed())
-            zone->contentDirectory().unsubscribe();
-        if (zone->audioIn().subscribed())
-            zone->audioIn().unsubscribe();
-    }
-
-    m_zoneEventSubscriptions.clear();
-    m_pendingZoneEventSubscriptions.clear();
-}
-
-void ZoneDiscovery::routeZoneEvent(const ZoneEventSubscription &subscription, const QByteArray &body)
-{
-    ZonePlayer *zone = m_zones.value(subscription.zoneUdn);
-    if (!zone)
-        return;
-
-    switch (subscription.service) {
-    case ZoneEventService::AVTransport:
-        zone->handleAVTransportEvent(body);
-        break;
-    case ZoneEventService::RenderingControl:
-        zone->handleRenderingControlEvent(body);
-        break;
-    case ZoneEventService::ContentDirectory:
-        zone->handleContentDirectoryEvent(body);
-        break;
-    case ZoneEventService::AudioIn:
-        zone->handleAudioInEvent(body);
-        break;
-    }
-}
-
-void ZoneDiscovery::onGenaNotify(const QString &peerAddress, const QString &sid, const QByteArray &body)
-{
-    const ScopedLogEndpoint logEndpoint(peerAddress, LogDirection::Inbound);
-    const auto zoneEvent = m_zoneEventSubscriptions.constFind(sid);
-    if (zoneEvent != m_zoneEventSubscriptions.constEnd()) {
-        const ZoneEventSubscription subscription = zoneEvent.value();
-        ZonePlayer *zone = m_zones.value(subscription.zoneUdn);
-        QLOG(logEventing) << "GENA NOTIFY " << subscription.serviceName
-                          << sid
-                          << (zone ? zone->roomName() : subscription.zoneUdn)
-                          << "(" << body.size() << "bytes)";
-
-        routeZoneEvent(subscription, body);
-        return;
-    }
-
-    if (sid != m_topologySubscriptionSid) {
-        QLOG(logEventing) << "GENA UNKNOWN " << sid << "(" << body.size() << "bytes)";
-        return;
-    }
-
-    QLOG(logEventing) << "GENA NOTIFY  ZoneGroupTopology " << sid << "(" << body.size() << "bytes)";
-
-    const QString zoneGroupState = extractGenaProperty(body, QStringLiteral("ZoneGroupState"));
-    if (zoneGroupState.isEmpty())
-        QLOG(logEventing) << "ZoneGroupTopology NOTIFY carried no ZoneGroupState property";
-    else
-        parseZoneGroupState(zoneGroupState.toUtf8());
-
-    // Sent on the same event channel whenever the household's configured
-    // music service accounts change (a login, a logout, a new device
-    // link). Just forwarded, not processed here -- decrypting it needs the
-    // household ID, which is a music-services concern handled by
-    // Household, not discovery. Household re-attempts processing both when
-    // this arrives AND when topologySubscriptionZonePicked fires, since
-    // either could be the one still missing when the other happens.
-    const QString tpmsx = extractGenaProperty(body, QStringLiteral("ThirdPartyMediaServersX"));
-    if (!tpmsx.isEmpty())
-        emit thirdPartyMediaServersXReceived(tpmsx);
 }
 
 void ZoneDiscovery::refreshTopology()

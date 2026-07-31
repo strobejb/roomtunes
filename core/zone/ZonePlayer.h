@@ -10,15 +10,16 @@
 #include <QString>
 
 #include "../media/MediaItem.h"
-#include "../upnp/Didl.h"
-#include "../upnp/services/AudioIn.h"
-#include "../upnp/services/AVTransport.h"
-#include "../upnp/services/ContentDirectory.h"
-#include "../upnp/services/DeviceProperties.h"
-#include "../upnp/services/MusicServices.h"
-#include "../upnp/services/RenderingControl.h"
-#include "../upnp/services/SystemProperties.h"
-#include "../upnp/services/ZoneGroupTopology.h"
+#include "../control/Didl.h"
+#include "../control/SonosZoneControl.h"
+#include "../control/services/AudioIn.h"
+#include "../control/services/AVTransport.h"
+#include "../control/services/ContentDirectory.h"
+#include "../control/services/DeviceProperties.h"
+#include "../control/services/MusicServices.h"
+#include "../control/services/RenderingControl.h"
+#include "../control/services/SystemProperties.h"
+#include "../control/services/ZoneGroupTopology.h"
 
 namespace RoomTunes {
 
@@ -283,6 +284,7 @@ private:
     ZoneGroupTopology m_zoneGroupTopology;
     MusicServices m_musicServices;
     SystemProperties m_systemProperties;
+    SonosZoneControl m_control;
 };
 
 }

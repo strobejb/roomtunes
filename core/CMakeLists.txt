@@ -13,30 +13,41 @@ qt_add_library(roomtunes_core STATIC
     crypto/Aes128Cbc.h
     crypto/Aes128Cbc.cpp
 
-    upnp/UpnpService.h
-    upnp/Soap.h
-    upnp/SoapResponse.h
-    upnp/SoapResponse.cpp
-    upnp/UpnpServiceBase.h
-    upnp/Ssdp.h
-    upnp/Ssdp.cpp
-    upnp/GenaNotifyServer.h
-    upnp/GenaNotifyServer.cpp
-    upnp/Didl.h
-    upnp/Didl.cpp
-    upnp/Smapi.h
-    upnp/services/AudioIn.h
-    upnp/services/AVTransport.h
-    upnp/services/RenderingControl.h
-    upnp/services/ZoneGroupTopology.h
-    upnp/services/ContentDirectory.h
-    upnp/services/DeviceProperties.h
-    upnp/services/MusicServices.h
-    upnp/services/SystemProperties.h
+    control/UpnpService.h
+    control/Soap.h
+    control/SoapResponse.h
+    control/SoapResponse.cpp
+    control/UpnpServiceBase.h
+    control/Didl.h
+    control/Didl.cpp
+    control/SonosPlaybackPayload.h
+    control/SonosPlaybackPayload.cpp
+    control/SonosZoneControl.h
+    control/SonosZoneControl.cpp
+    control/services/AudioIn.h
+    control/services/AVTransport.h
+    control/services/RenderingControl.h
+    control/services/ZoneGroupTopology.h
+    control/services/ContentDirectory.h
+    control/services/DeviceProperties.h
+    control/services/MusicServices.h
+    control/services/SystemProperties.h
 
     media/MediaItem.h
     media/AlbumColorAnalyzer.h
     media/AlbumColorAnalyzer.cpp
+
+    discovery/Ssdp.h
+    discovery/Ssdp.cpp
+    discovery/ZoneDiscovery.h
+    discovery/ZoneDiscovery.cpp
+    discovery/NetworkWatcher.h
+    discovery/NetworkWatcher.cpp
+
+    eventing/GenaNotifyServer.h
+    eventing/GenaNotifyServer.cpp
+    eventing/ZoneEventing.h
+    eventing/ZoneEventing.cpp
 
     models/GroupedZoneModel.h
     models/GroupedZoneModel.cpp
@@ -49,15 +60,12 @@ qt_add_library(roomtunes_core STATIC
 
     zone/ZonePlayer.h
     zone/ZonePlayer.cpp
-    zone/ZoneDiscovery.h
-    zone/ZoneDiscovery.cpp
-    zone/NetworkWatcher.h
-    zone/NetworkWatcher.cpp
     zone/Household.h
     zone/Household.cpp
 
     services/MusicService.h
     services/MusicService.cpp
+    services/Smapi.h
     services/MusicServiceCatalog.h
     services/MusicServiceCatalog.cpp
     services/ServiceLogoCatalog.h

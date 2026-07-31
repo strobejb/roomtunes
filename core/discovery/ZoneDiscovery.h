@@ -3,14 +3,11 @@
 #include <QMap>
 #include <QNetworkAccessManager>
 #include <QObject>
-#include <QSet>
 #include <QString>
-#include <QTimer>
 
-#include "../upnp/GenaNotifyServer.h"
-#include "../upnp/Ssdp.h"
-#include "../upnp/UpnpService.h"
-#include "ZonePlayer.h"
+#include "Ssdp.h"
+#include "../eventing/ZoneEventing.h"
+#include "../zone/ZonePlayer.h"
 
 namespace RoomTunes {
 
@@ -134,35 +131,14 @@ signals:
 private slots:
     void onSsdpDiscovered(const QString &fromAddr, const QMap<QString, QString> &headers);
     void onSsdpTimeout();
-    void onGenaNotify(const QString &peerAddress, const QString &sid, const QByteArray &body);
-    void renewTopologySubscription();
-    void renewZoneEventSubscriptions();
 
 private:
-    enum class ZoneEventService {
-        AVTransport,
-        RenderingControl,
-        ContentDirectory,
-        AudioIn
-    };
-
-    struct ZoneEventSubscription {
-        QString zoneUdn;
-        ZoneEventService service;
-        QString serviceName;
-    };
-
     ZonePlayer *allocateZone(const QString &deviceIp, const QString &udn);
     void fetchDeviceDescription(ZonePlayer *zone);
     void fetchHouseholdId(ZonePlayer *zone);
     ZonePlayer *findTopologySubscriptionCandidate() const;
     void selectTopologySubscriptionZone(ZonePlayer *zone);
     void updateTopologySubscriptionSelection();
-    void subscribeTopology();
-    void subscribeZoneEvents(ZonePlayer *zone);
-    void subscribeZoneEvent(ZonePlayer *zone, UpnpService &service, ZoneEventService serviceType);
-    void unsubscribeZoneEvents();
-    void routeZoneEvent(const ZoneEventSubscription &subscription, const QByteArray &body);
     void parseZoneGroupState(const QByteArray &xml);
     void checkZoneReady(ZonePlayer *zone);
     void ensureVisibleZoneEventsAndRenderingState();
@@ -176,7 +152,7 @@ private:
 private:
     QNetworkAccessManager *m_netMgr;
     Ssdp m_ssdp;
-    GenaNotifyServer m_notifyServer;
+    ZoneEventing m_eventing;
 
     quint16 m_localPort = Ssdp::kDefaultRecvPort; // captured in start(), reused by restart() to rebind Ssdp
 
@@ -187,11 +163,6 @@ private:
     bool m_parsingZoneGroupState = false;
     QString m_topologyZoneUdn;
     QString m_readyCoordinatorUdn;
-    QString m_topologySubscriptionSid;
-    QMap<QString, ZoneEventSubscription> m_zoneEventSubscriptions;
-    QSet<QString> m_pendingZoneEventSubscriptions;
-    QTimer m_topologyRenewTimer;
-    QTimer m_zoneEventRenewTimer;
 };
 
 }

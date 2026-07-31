@@ -1,11 +1,11 @@
 #include "SonosLibraryService.h"
 
 #include "../Logging.h"
-#include "../upnp/Didl.h"
+#include "../control/Didl.h"
 #include "../zone/Household.h"
 #include "../zone/ZonePlayer.h"
 
-#define QLOG_CATEGORY logZone
+#define QLOG_CATEGORY logServices
 
 namespace RoomTunes {
 

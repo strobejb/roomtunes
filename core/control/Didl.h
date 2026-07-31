@@ -34,7 +34,7 @@ struct DidlItem
 };
 
 // DIDL-Lite building (QXmlStreamWriter) and parsing (QXmlStreamReader).
-// Replaces upnp/didl.hpp's manual byte-buffer concatenation and Qt::escape().
+// Replaces control/didl.hpp's manual byte-buffer concatenation and Qt::escape().
 class Didl
 {
 public:

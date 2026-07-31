@@ -10,7 +10,7 @@
 #include "../Logging.h"
 #include "../crypto/Aes128Cbc.h"
 
-#define QLOG_CATEGORY logDiscovery
+#define QLOG_CATEGORY logServices
 
 namespace RoomTunes {
 

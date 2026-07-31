@@ -9,12 +9,12 @@
 
 #include <cstdlib>
 
-#include "Soap.h"
+#include "../control/Soap.h"
 
 namespace RoomTunes {
 
 // Generic Sonos Music API (SMAPI) client. This is the protocol Spotify (and
-// most other Sonos music partners) use -- ported from upnp/smapi.h.
+// most other Sonos music partners) use -- ported from services/smapi.h.
 class Smapi
 {
 public:
