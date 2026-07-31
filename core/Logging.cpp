@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QHash>
+#include <QHostAddress>
 #include <QLocale>
 #include <QNetworkAddressEntry>
 #include <QNetworkInterface>
@@ -23,14 +24,16 @@ Q_LOGGING_CATEGORY(logDiscovery, "roomtunes.core.discovery")
 Q_LOGGING_CATEGORY(logZone, "roomtunes.core.zone")
 Q_LOGGING_CATEGORY(logSoap, "roomtunes.core.soap")
 Q_LOGGING_CATEGORY(logSmapi, "roomtunes.core.smapi")
+Q_LOGGING_CATEGORY(logEventing, "roomtunes.core.eventing")
 
 namespace {
 
 qint64 g_startMsecs = 0;
 thread_local QString g_logEndpoint;
 LogVerbosity g_logVerbosity = LogVerbosity::Normal;
-constexpr qsizetype kCategoryWidth = 24;
-constexpr qsizetype kEndpointWidth = 22;
+constexpr qsizetype kIpEndpointWidth = 15;
+constexpr qsizetype kHostEndpointWidth = 22;
+constexpr qsizetype kHeaderWidth = 38;
 
 QString directedEndpoint(const QString &address, LogDirection direction)
 {
@@ -38,6 +41,14 @@ QString directedEndpoint(const QString &address, LogDirection direction)
         return {};
     const QChar marker = direction == LogDirection::Outbound ? QLatin1Char('>') : QLatin1Char('<');
     return QString(marker) + address;
+}
+
+qsizetype endpointWidth(const QString &endpoint)
+{
+    QHostAddress address(endpoint);
+    if (!address.isNull())
+        return kIpEndpointWidth;
+    return kHostEndpointWidth;
 }
 
 QHash<QString, QStringList> defaultGatewaysByInterface()
@@ -162,27 +173,31 @@ void logMessageHandler(QtMsgType type, const QMessageLogContext &context, const 
 
     // Directed network logs pass their endpoint as the first message field
     // or via ScopedLogEndpoint. Pull it out of the message and render it
-    // after the fixed-width header as "[time|source] < peer message", so
-    // scan-heavy logs keep both the message and endpoint columns aligned.
-    const QString destination = !g_logEndpoint.isEmpty()
-        ? g_logEndpoint
-        : ((isSoap || hasDirectedEndpoint) ? takeFirstLogField(&outputMessage) : QString());
+    // after the compact "[time|source]" header. The rendered header is padded
+    // after the closing bracket so the bracket text stays clean while scan-heavy
+    // logs keep their message and endpoint columns aligned.
+    QString destination;
+    if (isSoap || hasDirectedEndpoint)
+        destination = takeFirstLogField(&outputMessage);
+    if (destination.isEmpty())
+        destination = g_logEndpoint;
 
     if (context.category && qstrcmp(context.category, "default") != 0) {
         const QString category = QString::fromUtf8(context.category);
-        bracket += QLatin1Char('|') + category.leftJustified(kCategoryWidth);
+        bracket += QLatin1Char('|') + category;
     }
 
-    QString line = QStringLiteral("[%1]").arg(bracket);
+    const QString prefix = (QStringLiteral("[%1]").arg(bracket) + QLatin1Char(' ')).leftJustified(kHeaderWidth);
+    QString line = prefix;
     if (!destination.isEmpty()) {
         const QChar direction = destination.front();
         const QString endpoint = destination.mid(1);
-        line += QStringLiteral(" %1 %2 %3")
+        line += QStringLiteral("%1 %2 %3")
                     .arg(direction)
-                    .arg(endpoint.leftJustified(kEndpointWidth))
+                    .arg(endpoint.leftJustified(endpointWidth(endpoint)))
                     .arg(outputMessage);
     } else {
-        line += QLatin1Char(' ') + outputMessage;
+        line += outputMessage;
     }
 
     // Routing everything through stderr made Qt Creator's Application

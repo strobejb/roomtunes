@@ -10,6 +10,7 @@ Q_DECLARE_LOGGING_CATEGORY(logDiscovery)
 Q_DECLARE_LOGGING_CATEGORY(logZone)
 Q_DECLARE_LOGGING_CATEGORY(logSoap)
 Q_DECLARE_LOGGING_CATEGORY(logSmapi)
+Q_DECLARE_LOGGING_CATEGORY(logEventing)
 
 enum class LogDirection {
     Inbound,
@@ -56,8 +57,8 @@ private:
 // handler moves that into the prefix so lines use
 // "[SSS.mmm|category] > dest  Method(...)" or
 // "[SSS.mmm|category] < source  NOTIFY ...", while ordinary logs stay
-// "[SSS.mmm|category] message". Category and endpoint fields are padded
-// for readability.
+// "[SSS.mmm|category] message". The bracketed prefix stays compact; any
+// alignment padding is added after the closing bracket's single space.
 void installLogMessagePattern();
 
 // Call once, right after installLogMessagePattern(). Matches
@@ -79,8 +80,10 @@ void logStartupBanner(const QString &appName);
 //   #define QLOG_CATEGORY logDiscovery
 //
 // every QLOG()/QWARN() in that file then logs under the right category
-// automatically. A file that uses QLOG()/QWARN() without defining
-// QLOG_CATEGORY first fails to compile at the first call site, naming the
-// missing macro -- not silent/wrong-category output.
-#define QLOG() qCDebug(QLOG_CATEGORY).noquote()
-#define QWARN() qCWarning(QLOG_CATEGORY).noquote()
+// automatically. Use QLOG(otherCategory)/QWARN(otherCategory) for the rare
+// call site that belongs to a different category without changing the rest
+// of the file.
+#define ROOMTUNES_FIRST_LOG_CATEGORY(first, ...) first
+#define ROOMTUNES_LOG_CATEGORY_OR_DEFAULT(...) ROOMTUNES_FIRST_LOG_CATEGORY(__VA_OPT__(__VA_ARGS__,) QLOG_CATEGORY)
+#define QLOG(...) qCDebug(ROOMTUNES_LOG_CATEGORY_OR_DEFAULT(__VA_ARGS__)).noquote()
+#define QWARN(...) qCWarning(ROOMTUNES_LOG_CATEGORY_OR_DEFAULT(__VA_ARGS__)).noquote()
