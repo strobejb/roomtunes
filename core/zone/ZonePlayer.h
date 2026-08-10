@@ -168,6 +168,7 @@ public:
     Q_INVOKABLE void clearQueue();
     Q_INVOKABLE void saveQueueAsSonosPlaylist(const QString &title);
     Q_INVOKABLE void addCurrentTrackToSonosFavourites();
+    Q_INVOKABLE void removeCurrentTrackFromSonosFavourites(const QString &objectId);
 
     // Plays a browse/search result item (a QVariantMap in the shape
     // MusicService subclasses produce -- id/title/uri/upnpClass/didlId/
@@ -245,12 +246,15 @@ signals:
     // succeeds -- QueueModel listens to keep the "Up Next" list in sync
     // without polling.
     void queueChanged();
+    void sonosFavouriteAdded(const QString &objectId);
+    void sonosFavouriteStatus(bool isFavourite, const QString &objectId);
 
 private:
     void setPlayState(PlayState state);
     void setPlayMode(const QString &playMode);
     void setCrossfadeState(bool enabled, bool known = true);
     void setCurrentTrack(MediaItem *track);
+    void checkCurrentTrackFavouriteStatus();
     void refreshAccentColor(const QString &imageUrl);
     void refreshPositionInfo();
     void setPosition(int positionSeconds, int durationSeconds);

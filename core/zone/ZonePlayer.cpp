@@ -392,6 +392,37 @@ void ZonePlayer::setCurrentTrack(MediaItem *track)
     if (oldSupportsTvSource != supportsTvSource())
         emit supportsTvSourceChanged();
     refreshAccentColor(track ? track->imageUrl() : QString());
+    checkCurrentTrackFavouriteStatus();
+}
+
+void ZonePlayer::checkCurrentTrackFavouriteStatus()
+{
+    if (!m_currentTrack || m_currentTrack->uri().isEmpty()) {
+        emit sonosFavouriteStatus(false, QString());
+        return;
+    }
+
+    const QString trackUri = m_currentTrack->uri();
+    const int q = trackUri.indexOf(QLatin1Char('?'));
+    const QString baseTrackUri = q >= 0 ? trackUri.left(q) : trackUri;
+
+    browse(QStringLiteral("FV:2"), [this, trackUri, baseTrackUri](bool ok, const QString &, const QList<DidlItem> &items) {
+        if (!m_currentTrack || m_currentTrack->uri() != trackUri)
+            return;
+        if (!ok) {
+            emit sonosFavouriteStatus(false, QString());
+            return;
+        }
+        for (const DidlItem &item : items) {
+            const int fq = item.res.indexOf(QLatin1Char('?'));
+            const QString baseFavUri = fq >= 0 ? item.res.left(fq) : item.res;
+            if (baseFavUri == baseTrackUri) {
+                emit sonosFavouriteStatus(true, item.id);
+                return;
+            }
+        }
+        emit sonosFavouriteStatus(false, QString());
+    }, 0, 400);
 }
 
 void ZonePlayer::refreshAccentColor(const QString &imageUrl)
@@ -660,7 +691,17 @@ void ZonePlayer::addCurrentTrackToSonosFavourites()
     item.desc = m_currentTrack->desc();
     item.albumArtUri = m_currentTrack->imageUrl();
 
-    m_control.addToSonosFavourites(this, item, [](bool) {});
+    m_control.addToSonosFavourites(this, item, [this](bool ok, const QString &objectId) {
+        if (ok)
+            emit sonosFavouriteAdded(objectId);
+    });
+}
+
+void ZonePlayer::removeCurrentTrackFromSonosFavourites(const QString &objectId)
+{
+    if (objectId.isEmpty())
+        return;
+    m_control.removeFromSonosFavourites(this, objectId, [](bool) {});
 }
 
 void ZonePlayer::removeQueueTrack(const QString &objectId)

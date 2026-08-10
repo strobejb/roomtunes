@@ -217,7 +217,7 @@ void SonosZoneControl::saveQueueAsSonosPlaylist(QObject *context, const QString 
     });
 }
 
-void SonosZoneControl::addToSonosFavourites(QObject *context, const DidlItem &item, std::function<void(bool)> callback)
+void SonosZoneControl::addToSonosFavourites(QObject *context, const DidlItem &item, std::function<void(bool, QString)> callback)
 {
     QNetworkReply *reply = m_contentDirectory.CreateObject(QStringLiteral("FV:2"), Didl::buildFavoriteItem(item));
     QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
@@ -227,6 +227,21 @@ void SonosZoneControl::addToSonosFavourites(QObject *context, const DidlItem &it
         const bool ok = !response.error();
         if (!ok)
             QWARN() << roomName() << "CreateObject(FV:2) failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok, ok ? response.value(QStringLiteral("ObjectID")) : QString());
+    });
+}
+
+void SonosZoneControl::removeFromSonosFavourites(QObject *context, const QString &objectId, std::function<void(bool)> callback)
+{
+    QNetworkReply *reply = m_contentDirectory.DestroyObject(objectId);
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback, objectId]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
+
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "DestroyObject(" << objectId << ") failed:" << soapErrorDetail(response);
         if (callback)
             callback(ok);
     });

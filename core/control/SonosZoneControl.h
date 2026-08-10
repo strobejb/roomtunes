@@ -53,7 +53,8 @@ public:
                        bool enqueueAsNext, std::function<void(bool ok, int firstTrackNumberEnqueued)> callback);
     void removeAllTracksFromQueue(QObject *context, std::function<void(bool)> callback);
     void saveQueueAsSonosPlaylist(QObject *context, const QString &title, std::function<void(bool)> callback);
-    void addToSonosFavourites(QObject *context, const DidlItem &item, std::function<void(bool)> callback);
+    void addToSonosFavourites(QObject *context, const DidlItem &item, std::function<void(bool, QString)> callback);
+    void removeFromSonosFavourites(QObject *context, const QString &objectId, std::function<void(bool)> callback);
     void removeTrackFromQueue(QObject *context, const QString &objectId, std::function<void(bool)> callback);
     void reorderTrackInQueue(QObject *context, int fromIndex, int toIndex, int updateId,
                              std::function<void(bool)> callback);

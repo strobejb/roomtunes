@@ -127,6 +127,8 @@ qt_add_qml_module(RoomTunes
         resources/icons/repeat_light.svg
         resources/icons/heart.svg
         resources/icons/heart_light.svg
+        resources/icons/heart_outline.svg
+        resources/icons/heart_outline_light.svg
         resources/icons/shuffle.svg
         resources/icons/shuffle_light.svg
         resources/icons/volume_0.svg

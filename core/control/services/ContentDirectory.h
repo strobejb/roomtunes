@@ -46,6 +46,17 @@ public:
         request.closeEnvelope();
         return request.send(m_soapUrl);
     }
+
+    QNetworkReply *DestroyObject(const QString &objectId)
+    {
+        SoapRequest request(m_netMgr, m_action, QStringLiteral("DestroyObject"));
+        request.openEnvelope();
+        request.openCommand(QStringLiteral("u"));
+        request.writeStrParameter(QStringLiteral("ObjectID"), objectId);
+        request.closeCommand();
+        request.closeEnvelope();
+        return request.send(m_soapUrl);
+    }
 };
 
 }

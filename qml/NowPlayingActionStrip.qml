@@ -10,6 +10,20 @@ Item {
     property color controlHoverColor: Qt.rgba(0, 0, 0, 0.1)
     property color controlPressedColor: Qt.rgba(0, 0, 0, 0.2)
     property bool volumeExpanded: false
+    property bool isFavourited: false
+    property string favouriteObjectId: ""
+
+    Connections {
+        target: root.zone
+        function onSonosFavouriteAdded(objectId) {
+            root.isFavourited = true
+            root.favouriteObjectId = objectId
+        }
+        function onSonosFavouriteStatus(isFavourite, objectId) {
+            root.isFavourited = isFavourite
+            root.favouriteObjectId = objectId
+        }
+    }
 
     function musicServiceName() {
         const uri = track && track.uri ? String(track.uri).toLowerCase() : ""
@@ -54,14 +68,24 @@ Item {
             Layout.preferredWidth: 44
             Layout.preferredHeight: 44
             buttonSize: 44
-            iconSource: root.backgroundIsLight ? "../resources/icons/heart.svg" : "../resources/icons/heart_light.svg"
+            iconSource: {
+                if (root.isFavourited)
+                    return root.backgroundIsLight ? "../resources/icons/heart.svg" : "../resources/icons/heart_light.svg"
+                else
+                    return root.backgroundIsLight ? "../resources/icons/heart_outline.svg" : "../resources/icons/heart_outline_light.svg"
+            }
             iconSize: 19
             hoverColor: root.controlHoverColor
             pressedColor: root.controlPressedColor
             enabled: root.track !== null
             onClicked: {
-                if (root.zone)
+                if (root.isFavourited) {
+                    root.zone.removeCurrentTrackFromSonosFavourites(root.favouriteObjectId)
+                    root.isFavourited = false
+                    root.favouriteObjectId = ""
+                } else if (root.zone) {
                     root.zone.addCurrentTrackToSonosFavourites()
+                }
             }
         }
 
