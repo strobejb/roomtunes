@@ -1,0 +1,141 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version
+        shell: python
+        run: |
+          import os
+          import subprocess
+          import sys
+
+          subprocess.check_call([
+              sys.executable, "scripts/stamp_version.py",
+              "--build-count", os.environ["GITHUB_RUN_NUMBER"],
+              "--ref-name", os.environ["GITHUB_REF_NAME"],
+          ])
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.*'
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          cache: true
+
+      - name: Set up swap
+        run: |
+          sudo dd if=/dev/zero of=/swap2 bs=1M count=4096
+          sudo chmod 600 /swap2
+          sudo mkswap /swap2
+          sudo swapon /swap2
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package (linuxdeploy)
+        run: |
+          sudo apt-get install -y imagemagick
+          convert resources/icons/app.png -resize 512x512! resources/icons/app.png
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/metainfo
+          cp build/roomtunes AppDir/usr/bin/
+          cp resources/roomtunes.metainfo.xml AppDir/usr/share/metainfo/
+          appimage="roomtunes-${ROOMTUNES_FILE_VERSION}-linux-x86_64.AppImage"
+          QMAKE="$QT_ROOT_DIR/bin/qmake" \
+          QML_SOURCES_PATHS="$PWD/qml" \
+          LDAI_OUTPUT="${appimage}" \
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --plugin qt \
+            --output appimage \
+            --desktop-file resources/roomtunes.desktop \
+            --icon-file resources/icons/app.png
+          test -f "${appimage}"
+          echo "Created AppImage: ${appimage}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: roomtunes-linux
+          path: roomtunes-*-linux-x86_64.AppImage
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version
+        shell: python
+        run: |
+          import os
+          import subprocess
+          import sys
+
+          subprocess.check_call([
+              sys.executable, "scripts/stamp_version.py",
+              "--build-count", os.environ["GITHUB_RUN_NUMBER"],
+              "--ref-name", os.environ["GITHUB_REF_NAME"],
+          ])
+
+      - name: Convert PNG to ICO
+        shell: pwsh
+        run: |
+          magick resources/icons/app.png -define icon:auto-resize=256,128,64,48,32,16 resources/icons/app.ico
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.*'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Configure (MSVC)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Deploy Qt DLLs (windeployqt)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item build\Release\RoomTunes.exe dist\
+          windeployqt --release --no-translations --qmldir qml dist\RoomTunes.exe
+          foreach ($file in @("LICENSE", "NOTICES", "CHANGELOG.md", "README.md")) {
+            if (Test-Path $file) {
+              Copy-Item $file dist\
+            }
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: roomtunes-windows
+          path: dist\

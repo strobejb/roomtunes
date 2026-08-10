@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>roomtunes.desktop</id>
+  <name>Room Tunes</name>
+  <summary>Desktop controller for Sonos rooms and music services</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-Proprietary</project_license>
+  <launchable type="desktop-id">roomtunes.desktop</launchable>
+  <provides>
+    <binary>roomtunes</binary>
+  </provides>
+  <description>
+    <p>Room Tunes is a cross-platform desktop controller for Sonos rooms, playback queues, and music services.</p>
+  </description>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Player</category>
+  </categories>
+  <url type="homepage">https://github.com/strobejb/roomtunes</url>
+</component>

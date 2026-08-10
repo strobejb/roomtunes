@@ -190,6 +190,9 @@ if(UNIX AND NOT APPLE)
     install(FILES resources/roomtunes.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
     )
+    install(FILES resources/roomtunes.metainfo.xml
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo
+    )
     install(FILES resources/icons/app.png
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps
         RENAME roomtunes.png
