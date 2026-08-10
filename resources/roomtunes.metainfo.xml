@@ -4,7 +4,7 @@
   <name>Room Tunes</name>
   <summary>Desktop controller for Sonos rooms and music services</summary>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>LicenseRef-Proprietary</project_license>
+  <project_license>GPL-3.0-or-later</project_license>
   <launchable type="desktop-id">roomtunes.desktop</launchable>
   <provides>
     <binary>roomtunes</binary>

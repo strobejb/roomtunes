@@ -1,0 +1,50 @@
+Room Tunes Third-Party Notices
+==============================
+
+Room Tunes is licensed under GPL-3.0-or-later.  This file records notices
+for third-party software and artwork used by, linked with, or bundled with
+Room Tunes.
+
+
+Qt
+--
+
+Room Tunes is built with the Qt application framework.
+
+Project: Qt
+Upstream: https://www.qt.io/
+License: Qt is available under commercial and open-source licenses.  The
+Qt open-source licensing options include LGPLv3 and GPLv3; some Qt modules
+may have different or additional license terms.
+
+Room Tunes uses Qt Quick, Qt Quick Controls, Qt Network, Qt SVG, and related
+Qt tooling.  Binary packages may include Qt runtime libraries deployed by
+Qt's deployment tools or by linuxdeploy's Qt plugin.  See Qt's license
+documentation for the applicable notices and redistribution obligations:
+
+  https://www.qt.io/licensing
+  https://www.qt.io/licensing/open-source-lgpl-obligations
+  https://doc.qt.io/qt-6/licenses-used-in-qt.html
+
+
+Icons and Artwork
+-----------------
+
+Room Tunes bundles application icons, window-control icons, media-control
+icons, and other UI artwork.  Some icons are original Room Tunes artwork;
+some are adapted from external open-source icon sets or public icon sources.
+
+Known or likely upstream icon sources include:
+
+  Material Design Icons
+  https://pictogrammers.com/library/mdi/
+
+  Bootstrap Icons
+  https://icons.getbootstrap.com/
+
+  GNOME / Adwaita icon artwork
+  https://gitlab.gnome.org/GNOME/adwaita-icon-theme
+
+The bundled icon files may have been resized, recolored, simplified, or
+otherwise adapted for Room Tunes' UI.  Their original projects retain their
+respective copyrights and license terms.
