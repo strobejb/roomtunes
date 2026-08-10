@@ -81,10 +81,6 @@ void logStartupBanner(const QString &appName);
 //   #define QLOG_CATEGORY logDiscovery
 //
 // every QLOG()/QWARN() in that file then logs under the right category
-// automatically. Use QLOG(otherCategory)/QWARN(otherCategory) for the rare
-// call site that belongs to a different category without changing the rest
-// of the file.
-#define ROOMTUNES_FIRST_LOG_CATEGORY(first, ...) first
-#define ROOMTUNES_LOG_CATEGORY_OR_DEFAULT(...) ROOMTUNES_FIRST_LOG_CATEGORY(__VA_OPT__(__VA_ARGS__,) QLOG_CATEGORY)
-#define QLOG(...) qCDebug(ROOMTUNES_LOG_CATEGORY_OR_DEFAULT(__VA_ARGS__)).noquote()
-#define QWARN(...) qCWarning(ROOMTUNES_LOG_CATEGORY_OR_DEFAULT(__VA_ARGS__)).noquote()
+// automatically.
+#define QLOG() qCDebug(QLOG_CATEGORY).noquote()
+#define QWARN() qCWarning(QLOG_CATEGORY).noquote()
