@@ -95,8 +95,7 @@ MusicService *Household::serviceById(int serviceId) const
     // Sonos exposes two related ids for a partner service. TPMSX/
     // ListAvailableServices gives us the household-scoped serviceId used
     // as m_smapiServicesByKey's stable key, while favourite metadata and
-    // playable URIs can refer to the SMAPI id instead (the sid= value; BB10
-    // carried both via its smapimap.xml). Accept either so a Spotify
+    // playable URIs can refer to the SMAPI id instead. Accept either so a Spotify
     // favourite parsed from SA_RINCON9_ can still resolve the installed
     // Spotify service whose household id may be 2311/3079.
     for (SmapiService *service : m_smapiServicesByKey)
@@ -110,11 +109,7 @@ MusicService *Household::serviceById(int serviceId) const
 
 ZonePlayer *Household::browseCoordinator() const
 {
-    // Match roomtunes-bb10's stable "gateway" choice:
-    // findGatewayCandidate() picked a ready group coordinator, and
-    // ZonePlayer::isSelectable() further required visible/not-Bridge/
-    // configured. We do not track configured yet, so use the same
-    // observable constraints this port already has.
+    // make a gateway choice - cannot be a DOCK/BRIDGE/SUB/non-coordinator
     for (ZonePlayer *zone : m_discovery.zones())
     {
         if (!zone || !zone->ready() || zone->invisible())
@@ -339,7 +334,7 @@ void Household::onServiceCatalogFetched(const QByteArray &descriptorList, const 
         QLOG() << redactedFormattedXml(QString::fromUtf8(descriptorList));
     }
 
-    m_smapiCatalog        = MusicServiceCatalog::build(descriptorList, typeList);
+    m_smapiCatalog        = MusicServiceCatalog::buildSmapiMap(descriptorList, typeList);
     m_serviceCatalogReady = true;
 
     logServiceMap();
@@ -347,10 +342,6 @@ void Household::onServiceCatalogFetched(const QByteArray &descriptorList, const 
     rebuildMusicServices();
 }
 
-// Matches roomtunes-bb10's "building service map:" dump (ServiceDiscovery.cpp)
-// -- one line per catalog entry: household-scoped serviceId -> smapiId,
-// title, auth policy, capabilities, container type, selected SMAPI
-// endpoint, and AppLink manifest location.
 void Household::logServiceMap() const
 {
     QLOG() << "--------------------------------------------------------------------------------";
@@ -500,11 +491,8 @@ void Household::rebuildMusicServices()
     if (m_libraryService)
         rebuilt.append(m_libraryService);
 
-    // Matches roomtunes-bb10's "installed services:" summary block
-    // (SonosBrowse.cpp's login() dump) -- one line per resolved TPMSX
-    // entry, reconstructing the UDN shape Sonos itself uses
-    // ("SA_RINCON<serviceId>_<username>") since InstalledService only
-    // keeps the fields parsed out of it, not the raw string.
+    // Build an "installed services:" summary block - one line per
+    // resolved TPMSX entry, reconstructing the UDN shape Sonos itself uses
     QStringList installedServiceLines;
 
     for (InstalledService service : std::as_const(m_rawInstalledServices))
@@ -524,6 +512,7 @@ void Household::rebuildMusicServices()
         service.serviceUri = catalogEntry->secureUri.isEmpty() ? catalogEntry->uri : catalogEntry->secureUri;
         service.authPolicy = catalogEntry->auth;
         const int smapiId  = catalogEntry->smapiId;
+
         // Confirmed empirically against the live mslogo.xml feed: unlike
         // bb10-era Sonos (where the icon feed and the SMAPI descriptor list
         // used genuinely different id schemes, needing the smapiId
@@ -537,9 +526,7 @@ void Household::rebuildMusicServices()
         // username for UserId-auth services, or the synthetic
         // "X_#Svc<id>-0-Token" placeholder for a DeviceLink/AppLink service
         // linked via the official Sonos app's own OAuth flow (see
-        // ThirdPartyMediaServers.h) -- matches roomtunes-bb10's own
-        // "installed services:" dump, which repeats this same identifier
-        // twice (once in the reconstructed UDN, once as its own column).
+        // ThirdPartyMediaServers.h)
         const QString loginName =
             service.username.isEmpty() ? QStringLiteral("X_#Svc%1-0-Token").arg(service.serviceId) : service.username;
         installedServiceLines << QStringLiteral("  SA_RINCON%1_%2 -> %3 %4")

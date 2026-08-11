@@ -55,9 +55,11 @@ SoapResponse::SoapResponse(QObject *senderObject) : m_reply(qobject_cast<QNetwor
         {
             qCWarning(logSoap).noquote() << directedHost(m_reply) << QStringLiteral("SOAPERR:") << diagnosticText();
             const QString requestXml = m_reply->property("soapBody").toString();
+
             if (!requestXml.isEmpty())
                 qCWarning(logSoap).noquote()
                     << directedHost(m_reply) << QStringLiteral("SOAPENV:") << compactXmlForLog(requestXml);
+
             if (!m_rawBody.isEmpty())
                 qCWarning(logSoap).noquote() << directedHost(m_reply) << QStringLiteral("SOAPXML:")
                                              << compactXmlForLog(QString::fromUtf8(m_rawBody));
@@ -86,24 +88,18 @@ QString SoapResponse::diagnosticText() const
     const QString url        = m_reply->url().toString();
     const QString httpReason = m_reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString();
 
-    if (!method.isEmpty())
-        parts << QStringLiteral("method=%1").arg(method);
-    if (!action.isEmpty())
-        parts << QStringLiteral("action=%1").arg(action);
-    if (!url.isEmpty())
-        parts << QStringLiteral("url=%1").arg(url);
+    if (!method.isEmpty())     parts << QStringLiteral("method=%1").arg(method);
+    if (!action.isEmpty())     parts << QStringLiteral("action=%1").arg(action);
+    if (!url.isEmpty())        parts << QStringLiteral("url=%1").arg(url);
 
     parts << QStringLiteral("network=%1 %2").arg(int(m_reply->error())).arg(m_reply->errorString());
     parts << QStringLiteral("http=%1%2")
                  .arg(httpStatusCode())
                  .arg(httpReason.isEmpty() ? QString() : QStringLiteral(" ") + httpReason);
 
-    if (!m_faultCode.isEmpty())
-        parts << QStringLiteral("faultCode=%1").arg(m_faultCode);
-    if (!m_faultString.isEmpty())
-        parts << QStringLiteral("faultString=%1").arg(m_faultString);
-    if (!m_upnpErrorCode.isEmpty())
-        parts << QStringLiteral("upnp=%1 %2").arg(m_upnpErrorCode, m_upnpErrorDescription);
+    if (!m_faultCode.isEmpty())      parts << QStringLiteral("faultCode=%1").arg(m_faultCode);
+    if (!m_faultString.isEmpty())    parts << QStringLiteral("faultString=%1").arg(m_faultString);
+    if (!m_upnpErrorCode.isEmpty())  parts << QStringLiteral("upnp=%1 %2").arg(m_upnpErrorCode, m_upnpErrorDescription);
 
     return parts.join(QStringLiteral("; "));
 }

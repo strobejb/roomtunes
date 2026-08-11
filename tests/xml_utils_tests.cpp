@@ -304,7 +304,7 @@ void XmlUtilsTests::catalogParsesServiceDescriptors()
 </Services>
 )xml";
 
-    const QHash<int, SmapiCatalogEntry> catalog = MusicServiceCatalog::build(xml, QStringLiteral("2567"));
+    const QHash<int, SmapiCatalogEntry> catalog = MusicServiceCatalog::buildSmapiMap(xml, QStringLiteral("2567"));
     const SmapiCatalogEntry             entry   = catalog.value(2567);
 
     QCOMPARE(catalog.size(), 1);

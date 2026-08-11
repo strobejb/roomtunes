@@ -55,7 +55,7 @@ QMap<QString, QString> parseHttpHeaders(const QString &response)
 
 Ssdp::Ssdp(QObject *parent) : QObject(parent), m_socket(new QUdpSocket(this)), m_timer(new QTimer(this))
 {
-    connect(m_timer, &QTimer::timeout, this, &Ssdp::sendDiscover);
+    connect(m_timer,  &QTimer::timeout,       this, &Ssdp::sendDiscover);
     connect(m_socket, &QUdpSocket::readyRead, this, &Ssdp::receiveDatagrams);
 }
 
@@ -90,6 +90,7 @@ QHostAddress probeRoutedLocalAddress(const QHostAddress &target, quint16 port)
     QUdpSocket probe;
     probe.connectToHost(target, port);
     probe.waitForConnected(200);
+
     const QHostAddress local = probe.localAddress();
     probe.close();
     return local;

@@ -25,11 +25,11 @@ QHash<int, QString> ServiceLogoCatalog::parse(const QByteArray &xml)
         const int id = service.attrInt("id");
         QString   icon;
 
-        // bb10's parseMSLogo() matched a bare "x-large" placement --
+        // roomtunes-bb10's parseMSLogo() matched a bare "x-large" placement --
         // the feed has since moved to a "square:*" naming scheme
         // ("square:x-small" through "square:x-large", plus separate
         // "BrandLogo-v2:*" and "Attribution*" variants); "square:x-large"
-        // is the modern equivalent of what the original was after.
+        // is the modern equivalent of what the original code was after.
         for (const XmlNode &image : service.all(".//image"))
             if (image.attr("placement") == QStringLiteral("square:x-large"))
                 icon = image.text().trimmed();

@@ -7,8 +7,7 @@ namespace RoomTunes
 {
 
 // One resolved entry from Sonos' global SMAPI service catalog
-// (MusicServices::ListAvailableServices()) -- the ported equivalent of
-// bb10's SmapiMetric, trimmed to what's needed to display/browse a service.
+// (MusicServices::ListAvailableServices())
 struct SmapiCatalogEntry
 {
     int     smapiId = 0;
@@ -25,12 +24,15 @@ struct SmapiCatalogEntry
 // Resolves a bare serviceId (from ThirdPartyMediaServersX, see
 // ThirdPartyMediaServers.h) to a usable title/uri/auth via Sonos' global
 // SMAPI catalog. Sonos exposes two ids for the same modern service:
+//
 // AvailableServiceDescriptorList/@Id is the compact SMAPI id used by
 // getSessionId/URI metadata, while ThirdPartyMediaServersX and favourites
-// use the Sonos service type id. The legacy BB10 code noted the stable
-// encoding: serviceTypeId = smapiId * 256 + 7. Prefer that direct mapping;
-// keep sorted-list pairing only as a compatibility fallback for any service
-// whose ids do not follow the normal encoding.
+// use the Sonos service type id. The mapping is discovered to be:
+//
+//     serviceTypeId = smapiId * 256 + 7.
+//
+// Prefer this direct mapping; keep sorted-list pairing only as a
+// compatibility fallback for any service whose ids do not follow the normal encoding.
 class MusicServiceCatalog
 {
   public:
@@ -38,7 +40,7 @@ class MusicServiceCatalog
     // response body (a <Services><Service .../>...</Services> document);
     // availableServiceTypeList is the raw comma-separated
     // <AvailableServiceTypeList> text (includes legacy ids < 16).
-    static QHash<int, SmapiCatalogEntry> build(const QByteArray &descriptorListXml,
+    static QHash<int, SmapiCatalogEntry> buildSmapiMap(const QByteArray &descriptorListXml,
                                                const QString    &availableServiceTypeList);
 
     // Human name for a legacy (serviceId < 16) service that never appears

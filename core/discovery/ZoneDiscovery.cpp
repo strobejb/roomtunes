@@ -140,14 +140,10 @@ QString zoneDisplayName(const ZonePlayer *zone)
 
 bool isUsableReadyCoordinator(const ZonePlayer *zone)
 {
-    if (!zone || !zone->ready() || zone->invisible() || !zone->isCoordinator())
-        return false;
-    if (zone->modelName().compare(QStringLiteral("DOCK"), Qt::CaseInsensitive) == 0)
-        return false;
-    if (zone->modelName().contains(QStringLiteral("BRIDGE"), Qt::CaseInsensitive))
-        return false;
-    if (zone->modelName().contains(QStringLiteral("Sub"), Qt::CaseInsensitive))
-        return false;
+    if (!zone || !zone->ready() || zone->invisible() || !zone->isCoordinator())        return false;
+    if (zone->modelName().compare (QStringLiteral("DOCK"), Qt::CaseInsensitive) == 0)  return false;
+    if (zone->modelName().contains(QStringLiteral("BRIDGE"), Qt::CaseInsensitive))     return false;
+    if (zone->modelName().contains(QStringLiteral("Sub"), Qt::CaseInsensitive))        return false;
     return true;
 }
 
@@ -272,13 +268,12 @@ void ZoneDiscovery::onSsdpDiscovered(const QString &fromAddr, const QMap<QString
     const qint64     now                        = QDateTime::currentMSecsSinceEpoch();
     const qint64     lastLog                    = m_lastSsdpResponseLogTimeMs.value(udn, -kSsdpResponseLogSuppressMs);
     const bool       shouldLogResponse          = now - lastLog >= kSsdpResponseLogSuppressMs;
+
     if (shouldLogResponse)
     {
-        // Full header dump, matching roomtunes-bb10's own SSDP response
-        // block (household ID/USN/LOCATION). Repeated NOTIFY/M-SEARCH
-        // replies for already-known zones are noisy, so the block is
-        // rate-limited per UDN while discovery behavior itself is unchanged.
-        m_lastSsdpResponseLogTimeMs.insert(udn, now);
+        // Full header dump. Repeated NOTIFY/M-SEARCH replies for already-known zones are noisy,
+        // so the block is rate-limited per UDN while discovery behavior itself is unchanged.
+        m_lastSsdpResponseLogTimeMs.insert(udn, now);        
         QLOG() << LOGSEPARATOR;
         QLOG() << "SSDP response from" << fromAddr;
         QLOG() << "  X-RINCON-HOUSEHOLD:" << headers.value(QStringLiteral("X-RINCON-HOUSEHOLD"));

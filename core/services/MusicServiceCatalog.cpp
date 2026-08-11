@@ -72,7 +72,48 @@ QList<ParsedEntry> parseDescriptors(const QByteArray &xml)
 
 } // namespace
 
-QHash<int, SmapiCatalogEntry> MusicServiceCatalog::build(const QByteArray &descriptorListXml,
+
+/*
+    buildSmapiMap
+
+    Process the results of MusicServices::ListAvailableServices.
+    There are two pieces of information:
+        AvailableServiceDescriptorList - list of SMAPI endpoints
+        AvailableServiceTypeList - list of ALL available sonos services
+
+    we can build a mapping from serviceId -> smapiId because the two lists are
+    sorted in the same direction. We just need to special-case non-smapi services which
+    have known servicetype Ids < 16
+
+    NOTE: there seem to be duplicates in the SMAPI list.
+          The presentation map version can be different in each one. The newest service
+          appears to be listed first so make sure we watch out for DUPS!!
+
+    NOTE: from reverse-engineering we observe that:
+          smapiId = serviceId * 256 + 7
+
+    <AvailableServiceDescriptorList>
+     <Service Id="9" Name="Spotify" Version="1.1"
+           Uri="http://spotify.west.sonos-ws-eu.com/smapi"
+           SecureUri="https://spotify.west.sonos-ws-eu.com/smapi"
+           ContainerType="MService"
+           Capabilities="1"
+           MaxMessagingChars="0">
+       <Policy Auth="UserId" PollInterval="30"/>
+       <Presentation>
+         <Strings Version="6" Uri="http://spotify-static-resources.s3.amazonaws.com/strings.xml"/>
+         <PresentationMap Version="7" Uri="http://sonos-pmap.ws.sonos.com/spotify_pmap.7.xml"/>
+       </Presentation>
+     </Service>
+     <Service /> ...
+    </AvailableServiceDescriptorList>
+
+ <AvailableServiceTypeList>
+     11,13,519,775,1799,2055,2311,2823,3335,6151,9223,9735
+ </AvailableServiceTypeList>
+
+*/
+QHash<int, SmapiCatalogEntry> MusicServiceCatalog::buildSmapiMap(const QByteArray &descriptorListXml,
                                                          const QString    &availableServiceTypeList)
 {
     QHash<int, SmapiCatalogEntry> result;
@@ -91,6 +132,7 @@ QHash<int, SmapiCatalogEntry> MusicServiceCatalog::build(const QByteArray &descr
     QSet<int> availableIds;
     for (const QString &idText : availableServiceTypeList.split(QLatin1Char(','), Qt::SkipEmptyParts))
         availableIds.insert(idText.toInt());
+
     // TuneIn never appears in AvailableServiceTypeList at all -- Sonos
     // expects the client to know about it out of band.
     availableIds.insert(kRadioServiceId);
@@ -145,20 +187,13 @@ QString MusicServiceCatalog::legacyServiceName(int serviceId)
 {
     switch (serviceId)
     {
-    case kRhapsodyTrialId:
-        return QStringLiteral("Rhapsody Trial");
-    case kRhapsodyServiceId:
-        return QStringLiteral("Rhapsody");
-    case kNapsterTrialId:
-        return QStringLiteral("Napster Trial");
-    case kNapsterServiceId:
-        return QStringLiteral("Napster");
-    case kPandoraServiceId:
-        return QStringLiteral("Pandora");
-    case kLastFmServiceId:
-        return QStringLiteral("Last.fm");
-    default:
-        return {};
+    case kRhapsodyTrialId:        return QStringLiteral("Rhapsody Trial");
+    case kRhapsodyServiceId:      return QStringLiteral("Rhapsody");
+    case kNapsterTrialId:         return QStringLiteral("Napster Trial");
+    case kNapsterServiceId:       return QStringLiteral("Napster");
+    case kPandoraServiceId:       return QStringLiteral("Pandora");
+    case kLastFmServiceId:        return QStringLiteral("Last.fm");
+    default:                      return {};
     }
 }
 

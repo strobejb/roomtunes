@@ -11,8 +11,6 @@ namespace
 #ifndef Q_OS_WIN
 // Returns a layout string like ":minimize,maximize,close" or "close:" from
 // GNOME's own setting, so the custom title bar matches native windows.
-// Ported from roomtunes-bb10's sibling project qexed
-// (src/HexEdit/chrome/titlebar.cpp, platformButtonLayout()).
 QString platformButtonLayout()
 {
     const QString desktop =

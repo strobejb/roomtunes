@@ -68,7 +68,7 @@ bool isLineInStreamUri(const QString &uri)
 
 bool modelSupportsTvSource(const QString &modelName)
 {
-    // BB10 only checked for PLAYBAR because that was the only Sonos TV
+    // roomtunes-bb10 only checked for PLAYBAR because that was the only Sonos TV
     // source product at the time. Modern home-theater players use the same
     // x-sonos-htastream URI family, so keep this as a product capability
     // list until we parse a richer device-description service capability.

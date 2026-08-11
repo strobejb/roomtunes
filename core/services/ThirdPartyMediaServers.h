@@ -19,8 +19,7 @@ struct InstalledService
     // sharing the same serviceId prefix but with no Username0/Password0 of
     // its own) -- ThirdPartyMediaServers::parse() merges that element's
     // Token0/Key0 into the same InstalledService as the regular one. See
-    // ServiceBrowser::browse(), which reuses this token/key exactly the way
-    // roomtunes-bb10's SmapiService::updateToken() did, rather than
+    // ServiceBrowser::browse(), which reuses this token/key, rather than
     // attempting a fresh OAuth handshake (RoomTunes has no deviceId of its
     // own that Sonos would recognize for that).
     QString token;
