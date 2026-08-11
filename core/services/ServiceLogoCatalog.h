@@ -3,7 +3,8 @@
 #include <QHash>
 #include <QString>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Parses Sonos' mslogo.xml feed (a static, unauthenticated resource) into a
 // smapiId/legacy-id -> icon URL map. Ported from ServiceDiscovery.cpp's
@@ -13,10 +14,10 @@ namespace RoomTunes {
 // pre-SMAPI services (Pandora/Rhapsody/Napster/Last.fm).
 class ServiceLogoCatalog
 {
-public:
+  public:
     static constexpr const char *kUrl = "http://update-services.sonos.com/services/mslogo.xml";
 
     static QHash<int, QString> parse(const QByteArray &xml);
 };
 
-}
+} // namespace RoomTunes

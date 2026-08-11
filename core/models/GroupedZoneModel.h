@@ -5,7 +5,8 @@
 
 #include "../zone/ZonePlayer.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 class Household;
 
@@ -17,26 +18,27 @@ class GroupedZoneModel : public QAbstractListModel
 {
     Q_OBJECT
 
-public:
-    enum Role {
+  public:
+    enum Role
+    {
         CoordinatorRole = Qt::UserRole + 1,
         MembersRole, // QVariantList of ZonePlayer*, coordinator first
     };
 
     explicit GroupedZoneModel(Household *household, QObject *parent = nullptr);
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    int                    rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    QVariant               data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
     Q_INVOKABLE RoomTunes::ZonePlayer *firstCoordinator() const;
     Q_INVOKABLE RoomTunes::ZonePlayer *coordinatorByUdn(const QString &udn) const;
-    Q_INVOKABLE int coordinatorIndex(const QString &udn) const;
+    Q_INVOKABLE int                    coordinatorIndex(const QString &udn) const;
     Q_INVOKABLE RoomTunes::ZonePlayer *canonicalCoordinator(RoomTunes::ZonePlayer *zone) const;
 
-private slots:
+  private slots:
     void rebuild();
 
-private:
+  private:
     // Every zone property change (roomName, ready, coordinator, invisible)
     // requests a rebuild, and there can be a dozen zones each firing
     // several of these in a burst during startup. Rebuilding is a full
@@ -47,15 +49,15 @@ private:
 
     struct Group
     {
-        ZonePlayer *coordinator = nullptr;
+        ZonePlayer         *coordinator = nullptr;
         QList<ZonePlayer *> members;
     };
 
-private:
-    Household *m_household;
-    QList<Group> m_groups;
+  private:
+    Household         *m_household;
+    QList<Group>       m_groups;
     QSet<ZonePlayer *> m_connected;
-    bool m_rebuildScheduled = false;
+    bool               m_rebuildScheduled = false;
 };
 
-}
+} // namespace RoomTunes

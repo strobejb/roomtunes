@@ -8,7 +8,8 @@
 
 #include "Didl.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 class AVTransport;
 class ContentDirectory;
@@ -17,28 +18,27 @@ class RenderingControl;
 
 class SonosZoneControl
 {
-public:
+  public:
     struct PositionInfo
     {
         QString trackMetaData;
         QString trackUri;
         QString relTime;
         QString trackDuration;
-        int trackNumber = 0;
-        bool trackNumberKnown = false;
+        int     trackNumber      = 0;
+        bool    trackNumberKnown = false;
     };
 
     struct BrowseResult
     {
-        QString errorMessage;
+        QString         errorMessage;
         QList<DidlItem> items;
-        int updateId = 0;
-        bool updateIdKnown = false;
+        int             updateId      = 0;
+        bool            updateIdKnown = false;
     };
 
     SonosZoneControl(AVTransport &avTransport, RenderingControl &renderingControl, ContentDirectory &contentDirectory,
-                     Queue &queue,
-                     std::function<QString()> roomNameProvider);
+                     Queue &queue, std::function<QString()> roomNameProvider);
 
     void play(QObject *context, std::function<void(bool)> callback);
     void pause(QObject *context, std::function<void(bool)> callback);
@@ -48,9 +48,11 @@ public:
 
     void setPlayMode(QObject *context, const QString &playMode, std::function<void(bool)> callback);
     void setCrossfadeEnabled(QObject *context, bool enabled, std::function<void(bool)> callback);
-    void setAVTransportUri(QObject *context, const QString &uri, const QString &metaData, std::function<void(bool)> callback);
-    void addUriToQueue(QObject *context, const QString &uri, const QString &metaData, int desiredFirstTrackNumberEnqueued,
-                       bool enqueueAsNext, std::function<void(bool ok, int firstTrackNumberEnqueued)> callback);
+    void setAVTransportUri(QObject *context, const QString &uri, const QString &metaData,
+                           std::function<void(bool)> callback);
+    void addUriToQueue(QObject *context, const QString &uri, const QString &metaData,
+                       int desiredFirstTrackNumberEnqueued, bool enqueueAsNext,
+                       std::function<void(bool ok, int firstTrackNumberEnqueued)> callback);
     void removeAllTracksFromQueue(QObject *context, std::function<void(bool)> callback);
     void saveQueueAsSonosPlaylist(QObject *context, const QString &title, std::function<void(bool)> callback);
     void addToSonosFavourites(QObject *context, const DidlItem &item, std::function<void(bool, QString)> callback);
@@ -69,21 +71,21 @@ public:
                 std::function<void(bool ok, const QString &errorMessage, const QList<DidlItem> &items)> callback,
                 int startingIndex, int requestedCount, const QString &browseFlag);
     void browseDetailed(QObject *context, const QString &objectId,
-                        std::function<void(bool ok, const BrowseResult &result)> callback,
-                        int startingIndex, int requestedCount, const QString &browseFlag);
+                        std::function<void(bool ok, const BrowseResult &result)> callback, int startingIndex,
+                        int requestedCount, const QString &browseFlag);
     void getTransportInfo(QObject *context, std::function<void(bool ok, const QString &state)> callback);
     void getTransportSettings(QObject *context, std::function<void(bool ok, const QString &playMode)> callback);
     void getCrossfadeMode(QObject *context, std::function<void(bool ok, bool enabled)> callback);
     void getPositionInfo(QObject *context, std::function<void(bool ok, const PositionInfo &info)> callback);
 
-private:
+  private:
     QString roomName() const;
 
-    AVTransport &m_avTransport;
-    RenderingControl &m_renderingControl;
-    ContentDirectory &m_contentDirectory;
-    Queue &m_queue;
+    AVTransport             &m_avTransport;
+    RenderingControl        &m_renderingControl;
+    ContentDirectory        &m_contentDirectory;
+    Queue                   &m_queue;
     std::function<QString()> m_roomNameProvider;
 };
 
-}
+} // namespace RoomTunes

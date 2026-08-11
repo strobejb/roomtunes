@@ -18,7 +18,8 @@
 #include <QSysInfo>
 #include <QtGlobal>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 Q_LOGGING_CATEGORY(logDiscovery, "roomtunes.core.discovery")
 Q_LOGGING_CATEGORY(logZone, "roomtunes.core.zone")
@@ -27,14 +28,15 @@ Q_LOGGING_CATEGORY(logSoap, "roomtunes.core.soap")
 Q_LOGGING_CATEGORY(logSmapi, "roomtunes.core.smapi")
 Q_LOGGING_CATEGORY(logEventing, "roomtunes.core.eventing")
 
-namespace {
+namespace
+{
 
-qint64 g_startMsecs = 0;
+qint64               g_startMsecs = 0;
 thread_local QString g_logEndpoint;
-LogVerbosity g_logVerbosity = LogVerbosity::Normal;
-constexpr qsizetype kIpEndpointWidth = 15;
-constexpr qsizetype kHostEndpointWidth = 22;
-constexpr qsizetype kHeaderWidth = 38;
+LogVerbosity         g_logVerbosity     = LogVerbosity::Normal;
+constexpr qsizetype  kIpEndpointWidth   = 15;
+constexpr qsizetype  kHostEndpointWidth = 22;
+constexpr qsizetype  kHeaderWidth       = 38;
 
 QString directedEndpoint(const QString &address, LogDirection direction)
 {
@@ -61,15 +63,18 @@ QHash<QString, QStringList> defaultGatewaysByInterface()
     // Keep this as best-effort startup diagnostics only: unsupported
     // platforms simply omit gwN lines rather than affecting discovery.
     QString ipTool = QStandardPaths::findExecutable(QStringLiteral("ip"));
-    if (ipTool.isEmpty()) {
+    if (ipTool.isEmpty())
+    {
         const QStringList candidates = {
             QStringLiteral("/usr/sbin/ip"),
             QStringLiteral("/sbin/ip"),
             QStringLiteral("/usr/bin/ip"),
             QStringLiteral("/bin/ip"),
         };
-        for (const QString &candidate : candidates) {
-            if (QFile::exists(candidate)) {
+        for (const QString &candidate : candidates)
+        {
+            if (QFile::exists(candidate))
+            {
                 ipTool = candidate;
                 break;
             }
@@ -80,16 +85,17 @@ QHash<QString, QStringList> defaultGatewaysByInterface()
         return gateways;
 
     QProcess process;
-    process.start(ipTool, { QStringLiteral("-o"), QStringLiteral("-4"), QStringLiteral("route"),
-                            QStringLiteral("show"), QStringLiteral("default") });
+    process.start(ipTool, {QStringLiteral("-o"), QStringLiteral("-4"), QStringLiteral("route"), QStringLiteral("show"),
+                           QStringLiteral("default")});
     if (!process.waitForFinished(1000) || process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0)
         return gateways;
 
     const QString output = QString::fromUtf8(process.readAllStandardOutput());
-    for (const QString &line : output.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
-        const QStringList fields = line.simplified().split(QLatin1Char(' '), Qt::SkipEmptyParts);
-        const qsizetype devIndex = fields.indexOf(QStringLiteral("dev"));
-        const qsizetype viaIndex = fields.indexOf(QStringLiteral("via"));
+    for (const QString &line : output.split(QLatin1Char('\n'), Qt::SkipEmptyParts))
+    {
+        const QStringList fields   = line.simplified().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+        const qsizetype   devIndex = fields.indexOf(QStringLiteral("dev"));
+        const qsizetype   viaIndex = fields.indexOf(QStringLiteral("via"));
         if (devIndex < 0 || devIndex + 1 >= fields.size() || viaIndex < 0 || viaIndex + 1 >= fields.size())
             continue;
 
@@ -114,16 +120,23 @@ QString takeFirstLogField(QString *message)
         return {};
 
     QString field;
-    if (text.startsWith(QLatin1Char('"'))) {
-        qsizetype end = 1;
-        bool escaped = false;
-        for (; end < text.size(); ++end) {
+    if (text.startsWith(QLatin1Char('"')))
+    {
+        qsizetype end     = 1;
+        bool      escaped = false;
+        for (; end < text.size(); ++end)
+        {
             const QChar ch = text.at(end);
-            if (escaped) {
+            if (escaped)
+            {
                 escaped = false;
-            } else if (ch == QLatin1Char('\\')) {
+            }
+            else if (ch == QLatin1Char('\\'))
+            {
                 escaped = true;
-            } else if (ch == QLatin1Char('"')) {
+            }
+            else if (ch == QLatin1Char('"'))
+            {
                 break;
             }
         }
@@ -132,15 +145,20 @@ QString takeFirstLogField(QString *message)
             return {};
 
         field = text.mid(1, end - 1);
-        text = text.mid(end + 1).trimmed();
-    } else {
+        text  = text.mid(end + 1).trimmed();
+    }
+    else
+    {
         const qsizetype end = text.indexOf(QLatin1Char(' '));
-        if (end < 0) {
+        if (end < 0)
+        {
             field = text;
             text.clear();
-        } else {
+        }
+        else
+        {
             field = text.left(end);
-            text = text.mid(end + 1).trimmed();
+            text  = text.mid(end + 1).trimmed();
         }
     }
 
@@ -160,17 +178,17 @@ QString takeFirstLogField(QString *message)
 // applies its own formatting, so this is the only formatting logic run.
 void logMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &message)
 {
-    QString outputMessage = message;
-    const qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - g_startMsecs;
-    const qint64 seconds = elapsed / 1000;
-    const qint64 millis = elapsed % 1000;
+    QString      outputMessage = message;
+    const qint64 elapsed       = QDateTime::currentMSecsSinceEpoch() - g_startMsecs;
+    const qint64 seconds       = elapsed / 1000;
+    const qint64 millis        = elapsed % 1000;
 
-    QString bracket = QStringLiteral("%1.%2")
-                           .arg(seconds, 3, 10, QLatin1Char('0'))
-                           .arg(millis, 3, 10, QLatin1Char('0'));
+    QString bracket =
+        QStringLiteral("%1.%2").arg(seconds, 3, 10, QLatin1Char('0')).arg(millis, 3, 10, QLatin1Char('0'));
 
     const bool isSoap = context.category && qstrcmp(context.category, "roomtunes.core.soap") == 0;
-    const bool hasDirectedEndpoint = outputMessage.startsWith(QLatin1Char('>')) || outputMessage.startsWith(QLatin1Char('<'));
+    const bool hasDirectedEndpoint =
+        outputMessage.startsWith(QLatin1Char('>')) || outputMessage.startsWith(QLatin1Char('<'));
 
     // Directed network logs pass their endpoint as the first message field
     // or via ScopedLogEndpoint. Pull it out of the message and render it
@@ -183,21 +201,25 @@ void logMessageHandler(QtMsgType type, const QMessageLogContext &context, const 
     if (destination.isEmpty())
         destination = g_logEndpoint;
 
-    if (context.category && qstrcmp(context.category, "default") != 0) {
-        const QString category = QString::fromUtf8(context.category);
-        bracket += QLatin1Char('|') + category;
+    if (context.category && qstrcmp(context.category, "default") != 0)
+    {
+        const QString category  = QString::fromUtf8(context.category);
+        bracket                += QLatin1Char('|') + category;
     }
 
     const QString prefix = (QStringLiteral("[%1]").arg(bracket) + QLatin1Char(' ')).leftJustified(kHeaderWidth);
-    QString line = prefix;
-    if (!destination.isEmpty()) {
-        const QChar direction = destination.front();
-        const QString endpoint = destination.mid(1);
-        line += QStringLiteral("%1 %2 %3")
+    QString       line   = prefix;
+    if (!destination.isEmpty())
+    {
+        const QChar   direction  = destination.front();
+        const QString endpoint   = destination.mid(1);
+        line                    += QStringLiteral("%1 %2 %3")
                     .arg(direction)
                     .arg(endpoint.leftJustified(endpointWidth(endpoint)))
                     .arg(outputMessage);
-    } else {
+    }
+    else
+    {
         line += outputMessage;
     }
 
@@ -210,10 +232,9 @@ void logMessageHandler(QtMsgType type, const QMessageLogContext &context, const 
     std::fflush(stream);
 }
 
-}
+} // namespace
 
-ScopedLogEndpoint::ScopedLogEndpoint(QString address, LogDirection direction)
-    : m_previousEndpoint(g_logEndpoint)
+ScopedLogEndpoint::ScopedLogEndpoint(QString address, LogDirection direction) : m_previousEndpoint(g_logEndpoint)
 {
     g_logEndpoint = directedEndpoint(address, direction);
 }
@@ -240,12 +261,17 @@ bool verboseLoggingEnabled()
 
 QString redactedNetworkBodyForLog(QString body, qsizetype maxLength)
 {
-    body.replace(QRegularExpression(QStringLiteral("<((?:[A-Za-z_][\\w.-]*:)?(?:authToken|privateKey|sessionId|password|token|key))([^>]*)>.*?</\\1>"),
-                                    QRegularExpression::CaseInsensitiveOption),
-                 QStringLiteral("<\\1\\2><redacted></\\1>"));
-    body.replace(QRegularExpression(QStringLiteral("(\"?(?:authToken|privateKey|sessionId|password|token|key)\"?\\s*[:=]\\s*\")([^\"]*)(\")"),
-                                    QRegularExpression::CaseInsensitiveOption),
-                 QStringLiteral("\\1<redacted>\\3"));
+    body.replace(
+        QRegularExpression(
+            QStringLiteral(
+                "<((?:[A-Za-z_][\\w.-]*:)?(?:authToken|privateKey|sessionId|password|token|key))([^>]*)>.*?</\\1>"),
+            QRegularExpression::CaseInsensitiveOption),
+        QStringLiteral("<\\1\\2><redacted></\\1>"));
+    body.replace(
+        QRegularExpression(
+            QStringLiteral("(\"?(?:authToken|privateKey|sessionId|password|token|key)\"?\\s*[:=]\\s*\")([^\"]*)(\")"),
+            QRegularExpression::CaseInsensitiveOption),
+        QStringLiteral("\\1<redacted>\\3"));
     body.replace(QLatin1Char('\r'), QLatin1Char(' '));
     body.replace(QLatin1Char('\n'), QLatin1Char(' '));
     body.replace(QLatin1Char('\t'), QLatin1Char(' '));
@@ -261,16 +287,17 @@ QString networkReplyDiagnosticText(const QNetworkReply *reply)
     if (!reply)
         return QStringLiteral("no QNetworkReply");
 
-    QStringList parts;
-    const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    const QString httpReason = reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString();
-    const QByteArray method = reply->operation() == QNetworkAccessManager::GetOperation ? QByteArrayLiteral("GET")
-        : reply->operation() == QNetworkAccessManager::PostOperation ? QByteArrayLiteral("POST")
-        : reply->operation() == QNetworkAccessManager::PutOperation ? QByteArrayLiteral("PUT")
-        : reply->operation() == QNetworkAccessManager::DeleteOperation ? QByteArrayLiteral("DELETE")
-        : reply->operation() == QNetworkAccessManager::CustomOperation
-            ? reply->request().attribute(QNetworkRequest::CustomVerbAttribute).toByteArray()
-            : QByteArrayLiteral("?");
+    QStringList      parts;
+    const int        httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QString    httpReason = reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString();
+    const QByteArray method     = reply->operation() == QNetworkAccessManager::GetOperation ? QByteArrayLiteral("GET")
+                                  : reply->operation() == QNetworkAccessManager::PostOperation ? QByteArrayLiteral("POST")
+                                  : reply->operation() == QNetworkAccessManager::PutOperation ? QByteArrayLiteral("PUT")
+                                  : reply->operation() == QNetworkAccessManager::DeleteOperation
+                                      ? QByteArrayLiteral("DELETE")
+                                  : reply->operation() == QNetworkAccessManager::CustomOperation
+                                      ? reply->request().attribute(QNetworkRequest::CustomVerbAttribute).toByteArray()
+                                      : QByteArrayLiteral("?");
 
     if (!method.isEmpty())
         parts << QStringLiteral("method=%1").arg(QString::fromLatin1(method));
@@ -286,7 +313,7 @@ QString networkReplyDiagnosticText(const QNetworkReply *reply)
 void logNetworkReplyError(const QLoggingCategory &category, const QString &context, const QNetworkReply *reply,
                           const QByteArray &body)
 {
-    const QString endpoint = reply ? reply->url().host() : QString();
+    const QString     endpoint = reply ? reply->url().host() : QString();
     ScopedLogEndpoint scoped(endpoint, LogDirection::Inbound);
 
     QMessageLogger().warning(category).noquote()
@@ -294,31 +321,28 @@ void logNetworkReplyError(const QLoggingCategory &category, const QString &conte
 
     if (!body.isEmpty())
         QMessageLogger().warning(category).noquote()
-            << QStringLiteral("HTTPXML:") << context
-            << redactedNetworkBodyForLog(QString::fromUtf8(body), 0);
+            << QStringLiteral("HTTPXML:") << context << redactedNetworkBodyForLog(QString::fromUtf8(body), 0);
 }
 
 void installLogMessagePattern()
 {
     g_logVerbosity = verbosityFromEnvironment();
-    g_startMsecs = QDateTime::currentMSecsSinceEpoch();
+    g_startMsecs   = QDateTime::currentMSecsSinceEpoch();
     qInstallMessageHandler(logMessageHandler);
 }
 
 void logStartupBanner(const QString &appName)
 {
-    const QString version = QCoreApplication::applicationVersion().isEmpty()
-        ? QStringLiteral("(unknown)")
-        : QCoreApplication::applicationVersion();
-    const QString hostName = QSysInfo::machineHostName().isEmpty()
-        ? QStringLiteral("(unknown)")
-        : QSysInfo::machineHostName();
+    const QString version = QCoreApplication::applicationVersion().isEmpty() ? QStringLiteral("(unknown)")
+                                                                             : QCoreApplication::applicationVersion();
+    const QString hostName =
+        QSysInfo::machineHostName().isEmpty() ? QStringLiteral("(unknown)") : QSysInfo::machineHostName();
 
     qCDebug(logDiscovery).noquote() << QStringLiteral("%1: %2").arg(appName, version);
     qCDebug(logDiscovery).noquote() << QStringLiteral("  locale:       %1").arg(QLocale::system().name());
     qCDebug(logDiscovery).noquote() << QStringLiteral("  os:           %1").arg(QSysInfo::prettyProductName());
-    qCDebug(logDiscovery).noquote() << QStringLiteral("  kernel:       %1 %2")
-                                            .arg(QSysInfo::kernelType(), QSysInfo::kernelVersion());
+    qCDebug(logDiscovery).noquote()
+        << QStringLiteral("  kernel:       %1 %2").arg(QSysInfo::kernelType(), QSysInfo::kernelVersion());
     qCDebug(logDiscovery).noquote() << QStringLiteral("  qt:           %1").arg(qVersion());
     qCDebug(logDiscovery).noquote() << QStringLiteral("  cpu:          %1").arg(QSysInfo::currentCpuArchitecture());
     qCDebug(logDiscovery).noquote() << QStringLiteral("  build cpu:    %1").arg(QSysInfo::buildCpuArchitecture());
@@ -331,29 +355,30 @@ void logStartupBanner(const QString &appName)
     // NetworkWatcher/Ssdp end up picking -- this exact dump would have
     // made the SSDP-bind-port saga earlier in this app's development
     // obvious in seconds instead of a long debugging session.
-    for (const QNetworkInterface &iface : QNetworkInterface::allInterfaces()) {
+    for (const QNetworkInterface &iface : QNetworkInterface::allInterfaces())
+    {
         const bool running = iface.flags().testFlag(QNetworkInterface::IsRunning);
         qCDebug(logDiscovery).noquote() << QStringLiteral("%1  [%2]")
-                                                .arg(iface.humanReadableName(), -20)
-                                                .arg(running ? QStringLiteral("connected") : QStringLiteral("down"));
+                                               .arg(iface.humanReadableName(), -20)
+                                               .arg(running ? QStringLiteral("connected") : QStringLiteral("down"));
 
         int ipIndex = 0;
-        for (const QNetworkAddressEntry &entry : iface.addressEntries()) {
+        for (const QNetworkAddressEntry &entry : iface.addressEntries())
+        {
             qCDebug(logDiscovery).noquote() << QStringLiteral("  ip%1: %2 / %3")
-                                                    .arg(ipIndex++)
-                                                    .arg(entry.ip().toString(), -28)
-                                                    .arg(entry.netmask().toString());
+                                                   .arg(ipIndex++)
+                                                   .arg(entry.ip().toString(), -28)
+                                                   .arg(entry.netmask().toString());
         }
 
         int gatewayIndex = 0;
-        for (const QString &gateway : gateways.value(iface.name())) {
-            qCDebug(logDiscovery).noquote() << QStringLiteral("  gw%1: %2")
-                                                    .arg(gatewayIndex++)
-                                                    .arg(gateway);
+        for (const QString &gateway : gateways.value(iface.name()))
+        {
+            qCDebug(logDiscovery).noquote() << QStringLiteral("  gw%1: %2").arg(gatewayIndex++).arg(gateway);
         }
     }
 
     qCDebug(logDiscovery) << "--------------------------------------------------------------------------------";
 }
 
-}
+} // namespace RoomTunes

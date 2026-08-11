@@ -14,9 +14,11 @@
 
 #define QLOG_CATEGORY logZone
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
+namespace
+{
 constexpr int kMaxEntries = 30;
 
 QString recentlyPlayedFilePath()
@@ -39,11 +41,10 @@ QVariantMap jsonObjectToVariantMap(const QJsonObject &object)
         map.insert(it.key(), it.value().toVariant());
     return map;
 }
-}
+} // namespace
 
 RecentlyPlayedModel::RecentlyPlayedModel(Household *household, QObject *parent)
-    : QAbstractListModel(parent)
-    , m_household(household)
+    : QAbstractListModel(parent), m_household(household)
 {
     load();
 
@@ -65,7 +66,8 @@ QVariant RecentlyPlayedModel::data(const QModelIndex &index, int role) const
         return {};
 
     const QVariantMap entry = m_entries.at(index.row()).toMap();
-    switch (role) {
+    switch (role)
+    {
     case TitleRole:
         return entry.value(QStringLiteral("title"));
     case ArtistRole:
@@ -82,10 +84,10 @@ QVariant RecentlyPlayedModel::data(const QModelIndex &index, int role) const
 QHash<int, QByteArray> RecentlyPlayedModel::roleNames() const
 {
     return {
-        { TitleRole, "title" },
-        { ArtistRole, "artist" },
-        { ImageUrlRole, "imageUrl" },
-        { ItemRole, "item" },
+        {TitleRole, "title"},
+        {ArtistRole, "artist"},
+        {ImageUrlRole, "imageUrl"},
+        {ItemRole, "item"},
     };
 }
 
@@ -105,24 +107,25 @@ void RecentlyPlayedModel::recordSelectedItem(const QVariantMap &item)
         return;
 
     QVariantMap entry;
-    entry[QStringLiteral("id")] = item.value(QStringLiteral("id"));
-    entry[QStringLiteral("parentId")] = item.value(QStringLiteral("parentId"));
-    entry[QStringLiteral("title")] = item.value(QStringLiteral("title"));
-    entry[QStringLiteral("artist")] = item.value(QStringLiteral("artist"));
-    entry[QStringLiteral("album")] = item.value(QStringLiteral("album"));
-    entry[QStringLiteral("imageUrl")] = item.value(QStringLiteral("imageUrl"));
-    entry[QStringLiteral("uri")] = uri;
+    entry[QStringLiteral("id")]        = item.value(QStringLiteral("id"));
+    entry[QStringLiteral("parentId")]  = item.value(QStringLiteral("parentId"));
+    entry[QStringLiteral("title")]     = item.value(QStringLiteral("title"));
+    entry[QStringLiteral("artist")]    = item.value(QStringLiteral("artist"));
+    entry[QStringLiteral("album")]     = item.value(QStringLiteral("album"));
+    entry[QStringLiteral("imageUrl")]  = item.value(QStringLiteral("imageUrl"));
+    entry[QStringLiteral("uri")]       = uri;
     entry[QStringLiteral("upnpClass")] = item.value(QStringLiteral("upnpClass"));
     entry[QStringLiteral("container")] = false;
 
-    QLOG() << "recently played: selected track:" << entry.value(QStringLiteral("title")).toString()
-           << "--" << entry.value(QStringLiteral("artist")).toString();
+    QLOG() << "recently played: selected track:" << entry.value(QStringLiteral("title")).toString() << "--"
+           << entry.value(QStringLiteral("artist")).toString();
 
     beginResetModel();
 
     // Any existing entry for the same uri moves back to the front rather
     // than appearing twice.
-    for (int i = m_entries.size() - 1; i >= 0; --i) {
+    for (int i = m_entries.size() - 1; i >= 0; --i)
+    {
         if (m_entries.at(i).toMap().value(QStringLiteral("uri")).toString() == uri)
             m_entries.removeAt(i);
     }
@@ -143,7 +146,8 @@ void RecentlyPlayedModel::load()
         return;
 
     const QJsonArray entries = QJsonDocument::fromJson(file.readAll()).array();
-    for (const QJsonValue &entry : entries) {
+    for (const QJsonValue &entry : entries)
+    {
         if (entry.isObject())
             m_entries.append(jsonObjectToVariantMap(entry.toObject()));
     }
@@ -162,4 +166,4 @@ void RecentlyPlayedModel::save()
     file.write(QJsonDocument(entries).toJson(QJsonDocument::Indented));
 }
 
-}
+} // namespace RoomTunes

@@ -5,7 +5,8 @@
 #include <QProcessEnvironment>
 #endif
 
-namespace {
+namespace
+{
 
 #ifndef Q_OS_WIN
 // Returns a layout string like ":minimize,maximize,close" or "close:" from
@@ -14,12 +15,16 @@ namespace {
 // (src/HexEdit/chrome/titlebar.cpp, platformButtonLayout()).
 QString platformButtonLayout()
 {
-    const QString desktop = QProcessEnvironment::systemEnvironment().value(QStringLiteral("XDG_CURRENT_DESKTOP")).toLower();
-    if (desktop.contains(QStringLiteral("gnome")) || desktop.contains(QStringLiteral("unity"))) {
+    const QString desktop =
+        QProcessEnvironment::systemEnvironment().value(QStringLiteral("XDG_CURRENT_DESKTOP")).toLower();
+    if (desktop.contains(QStringLiteral("gnome")) || desktop.contains(QStringLiteral("unity")))
+    {
         QProcess proc;
         proc.start(QStringLiteral("gsettings"),
-                    { QStringLiteral("get"), QStringLiteral("org.gnome.desktop.wm.preferences"), QStringLiteral("button-layout") });
-        if (proc.waitForFinished(500) && proc.exitCode() == 0) {
+                   {QStringLiteral("get"), QStringLiteral("org.gnome.desktop.wm.preferences"),
+                    QStringLiteral("button-layout")});
+        if (proc.waitForFinished(500) && proc.exitCode() == 0)
+        {
             QString s = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
             s.remove(QLatin1Char('\'')); // gsettings wraps string values in single-quotes
             if (!s.isEmpty())
@@ -31,26 +36,31 @@ QString platformButtonLayout()
 
 void parseButtonLayout(const QString &layout, QStringList &left, QStringList &right)
 {
-    auto split = [](const QString &s) { return s.split(QLatin1Char(','), Qt::SkipEmptyParts); };
+    auto split = [](const QString &s)
+    {
+        return s.split(QLatin1Char(','), Qt::SkipEmptyParts);
+    };
     const int colon = layout.indexOf(QLatin1Char(':'));
-    if (colon < 0) {
+    if (colon < 0)
+    {
         right = split(layout);
-    } else {
-        left = split(layout.left(colon));
+    }
+    else
+    {
+        left  = split(layout.left(colon));
         right = split(layout.mid(colon + 1));
     }
 }
 #endif
 
-}
+} // namespace
 
-PlatformChrome::PlatformChrome(QObject *parent)
-    : QObject(parent)
+PlatformChrome::PlatformChrome(QObject *parent) : QObject(parent)
 {
 #ifndef Q_OS_WIN
     parseButtonLayout(platformButtonLayout(), m_leftButtons, m_rightButtons);
 #else
-    m_rightButtons = { QStringLiteral("minimize"), QStringLiteral("maximize"), QStringLiteral("close") };
+    m_rightButtons = {QStringLiteral("minimize"), QStringLiteral("maximize"), QStringLiteral("close")};
 #endif
 }
 
@@ -78,7 +88,8 @@ bool PlatformChrome::isGnome() const
 #ifdef Q_OS_WIN
     return false;
 #else
-    static const bool gnome = [] {
+    static const bool gnome = []
+    {
         const QByteArray desktop = qgetenv("XDG_CURRENT_DESKTOP").toUpper();
         return desktop.contains("GNOME") || desktop.contains("UNITY");
     }();

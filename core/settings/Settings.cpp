@@ -4,19 +4,21 @@
 #include <QDir>
 #include <QStandardPaths>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
+namespace
+{
 
 constexpr auto kOrganizationName = "catch22";
-constexpr auto kApplicationName = "roomtunes";
+constexpr auto kApplicationName  = "roomtunes";
 
 QString appConfigDirPath()
 {
     const QString configRoot = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
-    QDir dir(configRoot);
-    const QString appConfigDir = QString::fromLatin1(kOrganizationName) + QLatin1Char('/')
-        + QString::fromLatin1(kApplicationName);
+    QDir          dir(configRoot);
+    const QString appConfigDir =
+        QString::fromLatin1(kOrganizationName) + QLatin1Char('/') + QString::fromLatin1(kApplicationName);
     dir.mkpath(appConfigDir);
     return dir.filePath(appConfigDir);
 }
@@ -27,7 +29,7 @@ QString settingsFilePath(const QString &fileName)
     return dir.filePath(fileName);
 }
 
-}
+} // namespace
 
 void configureApplicationSettings()
 {
@@ -50,4 +52,4 @@ QString smapiSettingsFilePath()
     return settingsFilePath(QStringLiteral("smapi.conf"));
 }
 
-}
+} // namespace RoomTunes

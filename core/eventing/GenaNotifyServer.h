@@ -8,7 +8,8 @@
 class QTcpServer;
 class QTcpSocket;
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Minimal HTTP listener for UPnP GENA NOTIFY callbacks -- the receiving
 // half of the subscribe()/unsubscribe() calls already in UpnpServiceBase.
@@ -21,30 +22,30 @@ class GenaNotifyServer : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit GenaNotifyServer(QObject *parent = nullptr);
 
     // Binds an ephemeral port on all IPv4 interfaces; use port() for the
     // actual bound value to put in a SUBSCRIBE request's callback URL.
-    bool listen();
+    bool    listen();
     quint16 port() const;
 
-signals:
+  signals:
     // peerAddress is the zone IP that sent the NOTIFY; sid is the NOTIFY's
     // SID header (identifies which subscription this is for); body is the
     // raw GENA propertyset XML payload.
     void notified(const QString &peerAddress, const QString &sid, const QByteArray &body);
 
-private slots:
+  private slots:
     void onNewConnection();
 
-private:
+  private:
     void onReadyRead(QTcpSocket *socket);
     void tryParse(QTcpSocket *socket);
 
-private:
-    QTcpServer *m_server;
+  private:
+    QTcpServer                     *m_server;
     QHash<QTcpSocket *, QByteArray> m_buffers;
 };
 
-}
+} // namespace RoomTunes

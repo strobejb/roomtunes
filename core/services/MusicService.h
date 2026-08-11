@@ -7,7 +7,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Abstract interface for a browsable music service -- a SMAPI partner
 // (Spotify, Pandora, ...), the Sonos local Music Library, or (eventually)
@@ -53,27 +54,48 @@ class MusicService : public QObject
     // calls search() again with that category's id.
     Q_PROPERTY(QString activeSearchCategory READ activeSearchCategory NOTIFY activeSearchCategoryChanged)
 
-public:
+  public:
     using ResultCallback = std::function<void(bool ok, const QString &errorMessage, const QVariantList &items)>;
 
     MusicService(QString serviceKey, QString title, QString iconSource, QObject *parent = nullptr);
     ~MusicService() override = default;
 
-    const QString &serviceKey() const { return m_serviceKey; }
-    virtual int serviceId() const { return -1; }
-    QString title() const { return m_title; }
-    QString iconSource() const { return m_iconSource; }
+    const QString &serviceKey() const
+    {
+        return m_serviceKey;
+    }
+
+    virtual int serviceId() const
+    {
+        return -1;
+    }
+
+    QString title() const
+    {
+        return m_title;
+    }
+
+    QString iconSource() const
+    {
+        return m_iconSource;
+    }
 
     // false on the base; SmapiService overrides. Search isn't offered at
     // all for a service that can't do it (e.g. the library -- UPnP
     // ContentDirectory's Search action was never ported, see
     // core/control/services/ContentDirectory.h) rather than exposed and
     // failing every time.
-    virtual bool canSearch() const { return false; }
+    virtual bool canSearch() const
+    {
+        return false;
+    }
 
     // false on the base; SmapiService overrides for DeviceLink/AppLink
     // services with no stored token/key yet.
-    virtual bool needsSignIn() const { return false; }
+    virtual bool needsSignIn() const
+    {
+        return false;
+    }
 
     // Reauthorization is only meaningful for services whose auth policy
     // supports a browser/link-code flow. The default implementation is
@@ -82,8 +104,15 @@ public:
     Q_INVOKABLE virtual bool shouldOfferReauthorize(const QString &errorMessage) const;
 
     // Empty on the base -- see the Q_PROPERTY comments above.
-    virtual QVariantList searchCategories() const { return {}; }
-    virtual QString activeSearchCategory() const { return {}; }
+    virtual QVariantList searchCategories() const
+    {
+        return {};
+    }
+
+    virtual QString activeSearchCategory() const
+    {
+        return {};
+    }
 
     Q_INVOKABLE void browse(const QString &requestToken, const QString &objectId);
     Q_INVOKABLE void browseItem(const QString &requestToken, const QVariantMap &item);
@@ -97,7 +126,7 @@ public:
     // ContentDirectory::Browse.
     void browseDirect(const QString &objectId, ResultCallback callback);
 
-signals:
+  signals:
     void browseFinished(const QString &requestToken, bool ok, const QString &errorMessage, const QVariantList &items);
     void needsSignInChanged();
     void searchCategoriesChanged();
@@ -106,7 +135,7 @@ signals:
     void titleChanged();
     void iconSourceChanged();
 
-protected:
+  protected:
     virtual void doBrowse(const QString &objectId, ResultCallback callback) = 0;
     virtual void doBrowseItem(const QVariantMap &item, ResultCallback callback);
     // Base default: reports "not supported". A subclass only overrides
@@ -114,14 +143,14 @@ protected:
     virtual void doSearch(const QString &category, const QString &term, ResultCallback callback);
     virtual void doSearchPreview(const QString &term, int limit, ResultCallback callback);
 
-protected:
+  protected:
     void setTitle(const QString &title);
     void setIconSource(const QString &iconSource);
 
-private:
+  private:
     QString m_serviceKey;
     QString m_title;
     QString m_iconSource;
 };
 
-}
+} // namespace RoomTunes

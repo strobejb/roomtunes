@@ -4,7 +4,8 @@
 #include <QString>
 #include <QXmlStreamReader>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 inline QString xmlEscape(const QString &text)
 {
@@ -26,4 +27,4 @@ inline QMap<QString, QString> flattenElement(QXmlStreamReader &xml)
     return values;
 }
 
-}
+} // namespace RoomTunes

@@ -11,7 +11,8 @@
 
 class QNetworkReply;
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 class RoundedImage : public QQuickPaintedItem
 {
@@ -20,8 +21,9 @@ class RoundedImage : public QQuickPaintedItem
     Q_PROPERTY(qreal radius READ radius WRITE setRadius NOTIFY radiusChanged)
     Q_PROPERTY(Status status READ status NOTIFY statusChanged)
 
-public:
-    enum Status {
+  public:
+    enum Status
+    {
         Null,
         Loading,
         Ready,
@@ -32,22 +34,33 @@ public:
     explicit RoundedImage(QQuickItem *parent = nullptr);
     ~RoundedImage() override;
 
-    QUrl source() const { return m_source; }
+    QUrl source() const
+    {
+        return m_source;
+    }
+
     void setSource(const QUrl &source);
 
-    qreal radius() const { return m_radius; }
+    qreal radius() const
+    {
+        return m_radius;
+    }
+
     void setRadius(qreal radius);
 
-    Status status() const { return m_status; }
+    Status status() const
+    {
+        return m_status;
+    }
 
     void paint(QPainter *painter) override;
 
-signals:
+  signals:
     void sourceChanged();
     void radiusChanged();
     void statusChanged();
 
-private:
+  private:
     void load();
     void cancelPendingReply();
     bool loadSvg(const QByteArray &data);
@@ -55,14 +68,14 @@ private:
     void setStatus(Status status);
     void finishLoad(const QByteArray &data);
 
-private:
-    QUrl m_source;
-    qreal m_radius = 0;
-    Status m_status = Null;
-    QImage m_image;
+  private:
+    QUrl                          m_source;
+    qreal                         m_radius = 0;
+    Status                        m_status = Null;
+    QImage                        m_image;
     std::unique_ptr<QSvgRenderer> m_svg;
-    QNetworkAccessManager m_network;
-    QPointer<QNetworkReply> m_reply;
+    QNetworkAccessManager         m_network;
+    QPointer<QNetworkReply>       m_reply;
 };
 
 } // namespace RoomTunes

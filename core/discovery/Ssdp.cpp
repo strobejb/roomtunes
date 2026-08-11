@@ -9,12 +9,14 @@
 
 #define QLOG_CATEGORY logDiscovery
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
+namespace
+{
 constexpr char kMulticastAddress[] = "239.255.255.250";
-constexpr int kMulticastTtl = 3;
-constexpr int kMaxDatagramSize = 1024;
+constexpr int  kMulticastTtl       = 3;
+constexpr int  kMaxDatagramSize    = 1024;
 
 // How many consecutive ports past the requested one to try before giving
 // up -- SSDP M-SEARCH replies are unicast back to whatever source port the
@@ -24,23 +26,23 @@ constexpr int kMaxDatagramSize = 1024;
 // discovery failure.
 constexpr int kMaxBindAttempts = 8;
 
-const char kDiscoverMessage[] =
-    "M-SEARCH * HTTP/1.1\r\n"
-    "HOST: 239.255.255.250:1900\r\n"
-    "MAN: \"ssdp:discover\"\r\n"
-    "MX: 1\r\n"
-    "ST: urn:schemas-upnp-org:device:ZonePlayer:1\r\n"
-    "\r\n";
+const char kDiscoverMessage[] = "M-SEARCH * HTTP/1.1\r\n"
+                                "HOST: 239.255.255.250:1900\r\n"
+                                "MAN: \"ssdp:discover\"\r\n"
+                                "MX: 1\r\n"
+                                "ST: urn:schemas-upnp-org:device:ZonePlayer:1\r\n"
+                                "\r\n";
 
 QMap<QString, QString> parseHttpHeaders(const QString &response)
 {
     QMap<QString, QString> headers;
-    const QStringList lines = response.split(QStringLiteral("\r\n"));
+    const QStringList      lines = response.split(QStringLiteral("\r\n"));
 
     // line 0 is the status line ("HTTP/1.1 200 OK" or "NOTIFY * HTTP/1.1")
-    for (int i = 1; i < lines.size(); ++i) {
-        const QString &line = lines.at(i);
-        const int colon = line.indexOf(QLatin1Char(':'));
+    for (int i = 1; i < lines.size(); ++i)
+    {
+        const QString &line  = lines.at(i);
+        const int      colon = line.indexOf(QLatin1Char(':'));
         if (colon <= 0)
             continue;
 
@@ -49,12 +51,9 @@ QMap<QString, QString> parseHttpHeaders(const QString &response)
 
     return headers;
 }
-}
+} // namespace
 
-Ssdp::Ssdp(QObject *parent)
-    : QObject(parent)
-    , m_socket(new QUdpSocket(this))
-    , m_timer(new QTimer(this))
+Ssdp::Ssdp(QObject *parent) : QObject(parent), m_socket(new QUdpSocket(this)), m_timer(new QTimer(this))
 {
     connect(m_timer, &QTimer::timeout, this, &Ssdp::sendDiscover);
     connect(m_socket, &QUdpSocket::readyRead, this, &Ssdp::receiveDatagrams);
@@ -76,7 +75,8 @@ QString Ssdp::socketErrorString() const
     return m_socket->errorString();
 }
 
-namespace {
+namespace
+{
 // Guessing the right adapter from interface flags/type is unreliable:
 // machines commonly have several "Up + Running + CanMulticast" adapters
 // (virtual switches from Hyper-V/WSL/Docker, VPN leftovers, etc.) that
@@ -97,7 +97,8 @@ QHostAddress probeRoutedLocalAddress(const QHostAddress &target, quint16 port)
 
 QNetworkInterface pickMulticastInterface()
 {
-    QHostAddress routedLocalAddress = probeRoutedLocalAddress(QHostAddress(QLatin1String(kMulticastAddress)), Ssdp::kMulticastPort);
+    QHostAddress routedLocalAddress =
+        probeRoutedLocalAddress(QHostAddress(QLatin1String(kMulticastAddress)), Ssdp::kMulticastPort);
 
     // On some Windows setups (observed with WiFi-only -- no wired adapter
     // present) the OS resolves the route to the *multicast group*
@@ -110,9 +111,12 @@ QNetworkInterface pickMulticastInterface()
     if (routedLocalAddress.isLoopback() || routedLocalAddress.isNull())
         routedLocalAddress = probeRoutedLocalAddress(QHostAddress(QStringLiteral("1.1.1.1")), 80);
 
-    if (!routedLocalAddress.isNull() && !routedLocalAddress.isLoopback()) {
-        for (const QNetworkInterface &iface : QNetworkInterface::allInterfaces()) {
-            for (const QNetworkAddressEntry &entry : iface.addressEntries()) {
+    if (!routedLocalAddress.isNull() && !routedLocalAddress.isLoopback())
+    {
+        for (const QNetworkInterface &iface : QNetworkInterface::allInterfaces())
+        {
+            for (const QNetworkAddressEntry &entry : iface.addressEntries())
+            {
                 if (entry.ip() == routedLocalAddress)
                     return iface;
             }
@@ -121,7 +125,7 @@ QNetworkInterface pickMulticastInterface()
 
     return QNetworkInterface();
 }
-}
+} // namespace
 
 bool Ssdp::listen(quint16 localPort)
 {
@@ -134,7 +138,8 @@ bool Ssdp::listen(quint16 localPort)
     // Tearing the bind down and redoing it from scratch re-runs
     // pickMulticastInterface() against whatever the OS currently considers
     // the routed interface, which is the actual fix.
-    if (m_socket->state() != QAbstractSocket::UnconnectedState) {
+    if (m_socket->state() != QAbstractSocket::UnconnectedState)
+    {
         m_socket->leaveMulticastGroup(QHostAddress(QLatin1String(kMulticastAddress)));
         m_socket->close();
     }
@@ -151,9 +156,11 @@ bool Ssdp::listen(quint16 localPort)
     // level condition around it) shouldn't be a fatal discovery failure
     // when the next port over works just as well.
     bool bound = false;
-    for (int attempt = 0; attempt < kMaxBindAttempts; ++attempt) {
+    for (int attempt = 0; attempt < kMaxBindAttempts; ++attempt)
+    {
         const quint16 tryPort = static_cast<quint16>(localPort + attempt);
-        if (m_socket->bind(QHostAddress::AnyIPv4, tryPort, QUdpSocket::ShareAddress)) {
+        if (m_socket->bind(QHostAddress::AnyIPv4, tryPort, QUdpSocket::ShareAddress))
+        {
             bound = true;
             break;
         }
@@ -161,15 +168,17 @@ bool Ssdp::listen(quint16 localPort)
                 << (attempt + 1 < kMaxBindAttempts ? "-- trying next port" : "-- giving up");
     }
 
-    if (!bound) {
+    if (!bound)
+    {
         emit socketErrorOccurred(m_socket->error(), m_socket->errorString());
         return false;
     }
 
-    const QHostAddress group{QLatin1String(kMulticastAddress)};
+    const QHostAddress      group{QLatin1String(kMulticastAddress)};
     const QNetworkInterface iface = pickMulticastInterface();
 
-    const bool joined = iface.isValid() ? m_socket->joinMulticastGroup(group, iface) : m_socket->joinMulticastGroup(group);
+    const bool joined =
+        iface.isValid() ? m_socket->joinMulticastGroup(group, iface) : m_socket->joinMulticastGroup(group);
     if (!joined)
         emit socketErrorOccurred(m_socket->error(), m_socket->errorString());
 
@@ -195,13 +204,14 @@ void Ssdp::discover()
 void Ssdp::sendDiscover()
 {
     const qint64 sent = m_socket->writeDatagram(kDiscoverMessage, sizeof(kDiscoverMessage) - 1,
-                                                 QHostAddress(QLatin1String(kMulticastAddress)), kMulticastPort);
+                                                QHostAddress(QLatin1String(kMulticastAddress)), kMulticastPort);
     QLOG() << "SSDP M-SEARCH sent," << sent << "bytes";
 
     if (sent < 0)
         emit socketErrorOccurred(m_socket->error(), m_socket->errorString());
 
-    if (++m_messageCount >= kResendMax) {
+    if (++m_messageCount >= kResendMax)
+    {
         m_timer->stop();
         emit timeout();
     }
@@ -209,21 +219,22 @@ void Ssdp::sendDiscover()
 
 void Ssdp::receiveDatagrams()
 {
-    while (m_socket->hasPendingDatagrams()) {
+    while (m_socket->hasPendingDatagrams())
+    {
         QByteArray packet;
         packet.resize(int(m_socket->pendingDatagramSize()));
 
         QHostAddress fromAddr;
-        quint16 fromPort = 0;
-        const qint64 len = m_socket->readDatagram(packet.data(), packet.size(), &fromAddr, &fromPort);
+        quint16      fromPort = 0;
+        const qint64 len      = m_socket->readDatagram(packet.data(), packet.size(), &fromAddr, &fromPort);
         if (len < 0)
             continue;
 
-        const QString response = QString::fromLatin1(packet.constData(), int(len));
+        const QString           response = QString::fromLatin1(packet.constData(), int(len));
         const ScopedLogEndpoint logEndpoint(fromAddr.toString(), LogDirection::Inbound);
-        //QLOG() << "SSDP received" << len << "bytes from port" << fromPort;
-        emit discovered(fromAddr.toString(), parseHttpHeaders(response));
+        // QLOG() << "SSDP received" << len << "bytes from port" << fromPort;
+        emit                    discovered(fromAddr.toString(), parseHttpHeaders(response));
     }
 }
 
-}
+} // namespace RoomTunes

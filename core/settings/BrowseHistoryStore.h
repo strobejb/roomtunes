@@ -5,7 +5,8 @@
 #include <QObject>
 #include <QString>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // App-owned browse ordering state. Today this is persisted local browse
 // history, but callers go through this single object so a future
@@ -16,24 +17,28 @@ class BrowseHistoryStore : public QObject
     Q_OBJECT
     Q_PROPERTY(int revision READ revision NOTIFY changed)
 
-public:
+  public:
     explicit BrowseHistoryStore(QObject *parent = nullptr);
 
-    int revision() const { return m_revision; }
-    Q_INVOKABLE void recordUse(const QString &key);
-    Q_INVOKABLE qint64 score(const QString &key) const;
-    Q_INVOKABLE void refresh();
+    int revision() const
+    {
+        return m_revision;
+    }
 
-signals:
+    Q_INVOKABLE void   recordUse(const QString &key);
+    Q_INVOKABLE qint64 score(const QString &key) const;
+    Q_INVOKABLE void   refresh();
+
+  signals:
     void changed();
 
-private:
-    void load();
-    void save() const;
+  private:
+    void   load();
+    void   save() const;
     qint64 now() const;
 
-    int m_revision = 0;
+    int                    m_revision = 0;
     QHash<QString, qint64> m_scores;
 };
 
-}
+} // namespace RoomTunes

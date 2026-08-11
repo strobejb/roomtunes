@@ -7,14 +7,15 @@
 #include <QSet>
 #include <QString>
 
+#include "../discovery/NetworkWatcher.h"
+#include "../discovery/ZoneDiscovery.h"
 #include "../services/MusicServiceCatalog.h"
 #include "../services/ServiceLogoCatalog.h"
 #include "../services/ThirdPartyMediaServers.h"
-#include "../discovery/NetworkWatcher.h"
-#include "../discovery/ZoneDiscovery.h"
 #include "ZonePlayer.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 class MusicService;
 class SmapiService;
@@ -47,7 +48,7 @@ class Household : public QObject
     Q_OBJECT
     Q_PROPERTY(bool musicServicesReady READ musicServicesReady NOTIFY musicServicesReadyChanged)
 
-public:
+  public:
     explicit Household(QObject *parent = nullptr);
 
     // The Sonos Music Library service specifically -- QML-callable so a
@@ -59,21 +60,46 @@ public:
     // reachable (see rebuildMusicServices()).
     Q_INVOKABLE MusicService *libraryService() const;
     Q_INVOKABLE MusicService *serviceById(int serviceId) const;
-    bool musicServicesReady() const { return m_musicServicesReady; }
 
-    bool startDiscovery(quint16 localPort = Ssdp::kDefaultRecvPort) { return m_discovery.start(localPort); }
+    bool musicServicesReady() const
+    {
+        return m_musicServicesReady;
+    }
 
-    const QString &householdId() const { return m_discovery.householdId(); }
+    bool startDiscovery(quint16 localPort = Ssdp::kDefaultRecvPort)
+    {
+        return m_discovery.start(localPort);
+    }
 
-    QList<ZonePlayer *> zones() const { return m_discovery.zones(); }
-    ZonePlayer *zone(const QString &udn) const { return m_discovery.zone(udn); }
-    ZonePlayer *zoneByRoomName(const QString &roomName) const { return m_discovery.zoneByRoomName(roomName); }
+    const QString &householdId() const
+    {
+        return m_discovery.householdId();
+    }
+
+    QList<ZonePlayer *> zones() const
+    {
+        return m_discovery.zones();
+    }
+
+    ZonePlayer *zone(const QString &udn) const
+    {
+        return m_discovery.zone(udn);
+    }
+
+    ZonePlayer *zoneByRoomName(const QString &roomName) const
+    {
+        return m_discovery.zoneByRoomName(roomName);
+    }
 
     // The zone holding the ZoneGroupTopology subscription -- also the zone
     // SmapiService issues MusicServices:1 GetSessionId calls against
     // (any zone would do; this one's already known-reachable), and the
     // initial fallback zone for household-level service calls.
-    ZonePlayer *topologyZone() const { return m_discovery.topologyZone(); }
+    ZonePlayer *topologyZone() const
+    {
+        return m_discovery.topologyZone();
+    }
+
     ZonePlayer *browseCoordinator() const;
 
     // R_TrialZPSerial, a per-household serial Sonos itself uses as the
@@ -81,14 +107,23 @@ public:
     // SmapiService::withCredentials()) -- ported from
     // SonosApp::getSerialFinished(). Empty until fetchServiceDeviceSerial()
     // completes.
-    const QString &serviceDeviceSerial() const { return m_serviceDeviceSerial; }
+    const QString &serviceDeviceSerial() const
+    {
+        return m_serviceDeviceSerial;
+    }
 
-    QNetworkAccessManager *networkAccessManager() { return &m_netMgr; }
+    QNetworkAccessManager *networkAccessManager()
+    {
+        return &m_netMgr;
+    }
 
     // One-shot GetZoneGroupState poll of the topology zone. Used as a
     // fallback if the GENA subscription fails, and available for a manual
     // "refresh" gesture; normal updates arrive via NOTIFY once subscribed.
-    void refreshTopology() { m_discovery.refreshTopology(); }
+    void refreshTopology()
+    {
+        m_discovery.refreshTopology();
+    }
 
     // Every browsable music service for this household: the Sonos local
     // Music Library (always present once a zone is reachable, regardless
@@ -99,9 +134,12 @@ public:
     // is resolved, and rebuildMusicServices() for the instance-preserving
     // rebuild that keeps this list's pointers stable across catalog/icon
     // fetches.
-    QList<MusicService *> services() const { return m_services; }
+    QList<MusicService *> services() const
+    {
+        return m_services;
+    }
 
-signals:
+  signals:
     void zoneReady(ZonePlayer *zone);
     void zoneListChanged();
     void discoveryTimedOut();
@@ -112,48 +150,48 @@ signals:
     // before a network-change-triggered restart() destroys it.
     void aboutToResetZones();
 
-private:
+  private:
     void onTopologySubscriptionZonePicked(ZonePlayer *zone);
     void onReadyCoordinator(ZonePlayer *zone);
     void onThirdPartyMediaServersXReceived(const QString &encoded);
     void onNetworkChanged();
 
     ZonePlayer *pickCatalogFetchZone() const;
-    void startMusicServiceStartup(ZonePlayer *coordinator);
-    void fetchMusicServiceCatalog();
-    void onServiceCatalogFetched(const QByteArray &descriptorList, const QString &typeList);
-    void fetchServiceIcons();
-    void onServiceIconsFetched(const QHash<int, QString> &icons);
-    void fetchServiceDeviceSerial();
-    void onServiceDeviceSerialFetched(const QString &serial);
-    void decodeInstalledServicesWhenReady();
-    void rebuildMusicServices();
-    void updateMusicServicesReady();
-    void logServiceMap() const;
-    void logUnavailableInstalledServices();
+    void        startMusicServiceStartup(ZonePlayer *coordinator);
+    void        fetchMusicServiceCatalog();
+    void        onServiceCatalogFetched(const QByteArray &descriptorList, const QString &typeList);
+    void        fetchServiceIcons();
+    void        onServiceIconsFetched(const QHash<int, QString> &icons);
+    void        fetchServiceDeviceSerial();
+    void        onServiceDeviceSerialFetched(const QString &serial);
+    void        decodeInstalledServicesWhenReady();
+    void        rebuildMusicServices();
+    void        updateMusicServicesReady();
+    void        logServiceMap() const;
+    void        logUnavailableInstalledServices();
 
-private:
+  private:
     // Declaration order matters: m_discovery holds a pointer to m_netMgr,
     // taken in the member-initializer list, so m_netMgr must be
     // constructed first.
     QNetworkAccessManager m_netMgr;
-    ZoneDiscovery m_discovery;
-    NetworkWatcher m_networkWatcher;
+    ZoneDiscovery         m_discovery;
+    NetworkWatcher        m_networkWatcher;
 
-    bool m_musicServiceStartupStarted = false;
-    bool m_serviceCatalogReady = false;
-    bool m_serviceIconsReady = false;
-    bool m_serviceDeviceSerialReady = false;
-    bool m_installedServicesReady = false;
-    bool m_unavailableInstalledServicesLogged = false;
-    bool m_musicServicesReady = false;
-    QSet<QString> m_catalogFailedZoneUdns; // zones ListAvailableServices has already failed against this session
+    bool            m_musicServiceStartupStarted         = false;
+    bool            m_serviceCatalogReady                = false;
+    bool            m_serviceIconsReady                  = false;
+    bool            m_serviceDeviceSerialReady           = false;
+    bool            m_installedServicesReady             = false;
+    bool            m_unavailableInstalledServicesLogged = false;
+    bool            m_musicServicesReady                 = false;
+    QSet<QString>   m_catalogFailedZoneUdns; // zones ListAvailableServices has already failed against this session
     mutable QString m_loggedContentDirectoryCoordinatorUdn;
     mutable QString m_loggedCatalogFetchCoordinatorUdn;
-    QString m_serviceDeviceSerial;
+    QString         m_serviceDeviceSerial;
     QHash<int, SmapiCatalogEntry> m_smapiCatalog;
-    QHash<int, QString> m_serviceIcons; // keyed by smapiId (SMAPI) or raw legacy id
-    QList<InstalledService> m_rawInstalledServices; // as decrypted, titles unresolved
+    QHash<int, QString>           m_serviceIcons;         // keyed by smapiId (SMAPI) or raw legacy id
+    QList<InstalledService>       m_rawInstalledServices; // as decrypted, titles unresolved
 
     // rebuildMusicServices() fires repeatedly (catalog fetch, icon fetch,
     // TPMSX arrival) -- recreating service objects on every rebuild would
@@ -162,9 +200,9 @@ private:
     // SmapiService::updateResolved() instead; only genuinely new services
     // are constructed, and only ones that truly disappear are removed. Both
     // maps/pointers own their objects (parented to this Household).
-    QHash<QString, SmapiService *> m_smapiServicesByKey; // keyed by "smapi:<serviceId>"
-    SonosLibraryService *m_libraryService = nullptr;     // created lazily once any zone is reachable
-    QList<MusicService *> m_services;                    // [library] + [smapi services...], ready for display
+    QHash<QString, SmapiService *> m_smapiServicesByKey;       // keyed by "smapi:<serviceId>"
+    SonosLibraryService           *m_libraryService = nullptr; // created lazily once any zone is reachable
+    QList<MusicService *>          m_services;                 // [library] + [smapi services...], ready for display
 
     // Raw encrypted <ThirdPartyMediaServersX> payload, cached as soon as it
     // arrives regardless of whether the household ID/topology zone are
@@ -172,4 +210,4 @@ private:
     QString m_pendingTpmsxRaw;
 };
 
-}
+} // namespace RoomTunes

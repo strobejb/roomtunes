@@ -13,46 +13,62 @@
 
 #include "../Logging.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Builds and sends a single SOAP request. Ported from the original
 // soapy.hpp::Soap, modernized (toAscii() -> toUtf8(), no Cascades types).
 class SoapRequest
 {
-public:
+  public:
     SoapRequest(QNetworkAccessManager *netMgr, const QString &action, const QString &method,
                 const QString &language = QString(), QSslConfiguration *sslConfig = nullptr)
-        : m_netMgr(netMgr)
-        , m_action(action)
-        , m_method(method)
-        , m_xml(&m_envelope)
-        , m_language(language)
-        , m_sslConfig(sslConfig)
+        : m_netMgr(netMgr), m_action(action), m_method(method), m_xml(&m_envelope), m_language(language),
+          m_sslConfig(sslConfig)
     {
         m_xml.setAutoFormatting(true);
         m_xml.setAutoFormattingIndent(2);
     }
 
-    QXmlStreamWriter &xmlWriter() { return m_xml; }
-    void setSoapEncodingStyleEnabled(bool enabled) { m_useSoapEncodingStyle = enabled; }
-    static void setUserAgent(const QString &userAgent) { s_userAgent = userAgent; }
-    static const QString &userAgent() { return s_userAgent; }
+    QXmlStreamWriter &xmlWriter()
+    {
+        return m_xml;
+    }
+
+    void setSoapEncodingStyleEnabled(bool enabled)
+    {
+        m_useSoapEncodingStyle = enabled;
+    }
+
+    static void setUserAgent(const QString &userAgent)
+    {
+        s_userAgent = userAgent;
+    }
+
+    static const QString &userAgent()
+    {
+        return s_userAgent;
+    }
 
     void openEnvelope()
     {
         m_xml.writeStartElement(QStringLiteral("s:Envelope"));
         m_xml.writeNamespace(QStringLiteral("http://schemas.xmlsoap.org/soap/envelope/"), QStringLiteral("s"));
         if (m_useSoapEncodingStyle)
-            m_xml.writeAttribute(QStringLiteral("s:encodingStyle"), QStringLiteral("http://schemas.xmlsoap.org/soap/encoding/"));
+            m_xml.writeAttribute(QStringLiteral("s:encodingStyle"),
+                                 QStringLiteral("http://schemas.xmlsoap.org/soap/encoding/"));
     }
 
     void openCommand(const QString &xmlns = QString())
     {
         m_xml.writeStartElement(QStringLiteral("s:Body"));
-        if (xmlns.isEmpty()) {
+        if (xmlns.isEmpty())
+        {
             m_xml.writeStartElement(m_method);
             m_xml.writeDefaultNamespace(m_action);
-        } else {
+        }
+        else
+        {
             m_xml.writeStartElement(xmlns + QLatin1Char(':') + m_method);
             m_xml.writeNamespace(m_action, xmlns);
         }
@@ -64,7 +80,10 @@ public:
         m_xml.writeEndElement();
     }
 
-    void closeEnvelope() { m_xml.writeEndElement(); }
+    void closeEnvelope()
+    {
+        m_xml.writeEndElement();
+    }
 
     void writeIntParameter(const QString &name, qint64 value)
     {
@@ -99,7 +118,7 @@ public:
     QNetworkReply *unsubscribe(const QString &url, const QString &sid)
     {
         qCDebug(logSoap).noquote() << directedHost(url, QLatin1Char('>')) << "UNSUBSCRIBE" << QUrl(url).path()
-                                    << "sid=" << sid;
+                                   << "sid=" << sid;
         QNetworkRequest request{QUrl(url)};
         request.setRawHeader("SID", sid.toUtf8());
         return m_netMgr->sendCustomRequest(request, "UNSUBSCRIBE");
@@ -130,15 +149,17 @@ public:
         request.setRawHeader("SOAPACTION", action.toUtf8());
         request.setRawHeader("Content-Type", "text/xml; charset=\"utf-8\"");
         request.setRawHeader("Connection", "close");
-        const QString userAgent = s_userAgent.isEmpty()
-            ? QStringLiteral("Linux UPnP/1.0 Sonos/80.0-00000 (WDCR:Microsoft Windows NT 10.0.22631)")
-            : s_userAgent;
+        const QString userAgent =
+            s_userAgent.isEmpty()
+                ? QStringLiteral("Linux UPnP/1.0 Sonos/80.0-00000 (WDCR:Microsoft Windows NT 10.0.22631)")
+                : s_userAgent;
         request.setRawHeader("User-Agent", userAgent.toUtf8());
 
         // Sonos SOAP endpoints only reply in some locales unless we always
         // append 'en' as a fallback.
         QString lang = m_language;
-        if (lang.isEmpty()) {
+        if (lang.isEmpty())
+        {
             const QString locale = QLocale::system().name().replace(QLatin1Char('_'), QLatin1Char('-'));
             if (locale == QStringLiteral("C") || locale.startsWith(QStringLiteral("en-")))
                 lang = QStringLiteral("en-US,*");
@@ -162,19 +183,21 @@ public:
         reply->setProperty("soapAction", action);
         reply->setProperty("soapBody", QString::fromUtf8(m_envelope));
         reply->setProperty("destHost", QUrl(url).host());
-        QObject::connect(reply, &QNetworkReply::sslErrors, reply, [reply](const QList<QSslError> &errors) {
-            for (const QSslError &error : errors) {
-                qCWarning(logSoap).noquote()
-                    << QStringLiteral("%1 %2 SSL error: %3")
-                           .arg(QLatin1Char('<') + reply->property("destHost").toString(),
-                                reply->property("soapMethod").toString(),
-                                error.errorString());
-            }
-        });
+        QObject::connect(reply, &QNetworkReply::sslErrors, reply,
+                         [reply](const QList<QSslError> &errors)
+                         {
+                             for (const QSslError &error : errors)
+                             {
+                                 qCWarning(logSoap).noquote()
+                                     << QStringLiteral("%1 %2 SSL error: %3")
+                                            .arg(QLatin1Char('<') + reply->property("destHost").toString(),
+                                                 reply->property("soapMethod").toString(), error.errorString());
+                             }
+                         });
         return reply;
     }
 
-private:
+  private:
     static QString directedHost(const QString &url, QChar direction)
     {
         return direction + QUrl(url).host();
@@ -183,8 +206,8 @@ private:
     static bool isSensitiveParameter(const QString &name)
     {
         const QString lower = name.toLower();
-        return lower.contains(QStringLiteral("password")) || lower.contains(QStringLiteral("token"))
-            || lower.contains(QStringLiteral("key"));
+        return lower.contains(QStringLiteral("password")) || lower.contains(QStringLiteral("token")) ||
+               lower.contains(QStringLiteral("key"));
     }
 
     static bool isLargeXmlParameter(const QString &name)
@@ -215,15 +238,20 @@ private:
     void recordParameter(const QString &name, const QString &value, bool quote)
     {
         QString display;
-        bool forceUnquoted = false;
+        bool    forceUnquoted = false;
 
-        if (isSensitiveParameter(name)) {
-            display = QStringLiteral("<redacted>");
+        if (isSensitiveParameter(name))
+        {
+            display       = QStringLiteral("<redacted>");
             forceUnquoted = true;
-        } else if (isLargeXmlParameter(name)) {
-            display = QStringLiteral("<%1 chars>").arg(value.size());
+        }
+        else if (isLargeXmlParameter(name))
+        {
+            display       = QStringLiteral("<%1 chars>").arg(value.size());
             forceUnquoted = true;
-        } else {
+        }
+        else
+        {
             display = compactLogValue(value);
         }
 
@@ -239,15 +267,15 @@ private:
     }
 
     QNetworkAccessManager *m_netMgr;
-    QString m_action;
-    QString m_method;
-    QByteArray m_envelope;
-    QXmlStreamWriter m_xml;
-    QString m_language;
-    QSslConfiguration *m_sslConfig;
-    QStringList m_parameters;
-    bool m_useSoapEncodingStyle = true;
-    inline static QString s_userAgent;
+    QString                m_action;
+    QString                m_method;
+    QByteArray             m_envelope;
+    QXmlStreamWriter       m_xml;
+    QString                m_language;
+    QSslConfiguration     *m_sslConfig;
+    QStringList            m_parameters;
+    bool                   m_useSoapEncodingStyle = true;
+    inline static QString  s_userAgent;
 };
 
-}
+} // namespace RoomTunes

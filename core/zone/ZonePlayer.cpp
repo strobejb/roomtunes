@@ -11,14 +11,16 @@
 #include <QXmlStreamReader>
 
 #include "../Logging.h"
-#include "../media/AlbumColorAnalyzer.h"
 #include "../control/SonosPlaybackPayload.h"
+#include "../media/AlbumColorAnalyzer.h"
 
 #define QLOG_CATEGORY logZone
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
+namespace
+{
 
 QString genaProperty(const QByteArray &body, const QString &propertyName);
 
@@ -32,8 +34,8 @@ int parseUpnpTime(const QString &text)
     if (parts.size() != 3)
         return 0;
 
-    bool hoursOk = false, minutesOk = false, secondsOk = false;
-    const int hours = parts.at(0).toInt(&hoursOk);
+    bool      hoursOk = false, minutesOk = false, secondsOk = false;
+    const int hours   = parts.at(0).toInt(&hoursOk);
     const int minutes = parts.at(1).toInt(&minutesOk);
     const int seconds = parts.at(2).toInt(&secondsOk);
     if (!hoursOk || !minutesOk || !secondsOk)
@@ -44,8 +46,8 @@ int parseUpnpTime(const QString &text)
 
 QString formatUpnpTime(int totalSeconds)
 {
-    totalSeconds = std::max(totalSeconds, 0);
-    const int hours = totalSeconds / 3600;
+    totalSeconds      = std::max(totalSeconds, 0);
+    const int hours   = totalSeconds / 3600;
     const int minutes = (totalSeconds % 3600) / 60;
     const int seconds = totalSeconds % 60;
     return QStringLiteral("%1:%2:%3")
@@ -70,13 +72,13 @@ bool modelSupportsTvSource(const QString &modelName)
     // source product at the time. Modern home-theater players use the same
     // x-sonos-htastream URI family, so keep this as a product capability
     // list until we parse a richer device-description service capability.
-    return modelName.contains(QStringLiteral("PLAYBAR"), Qt::CaseInsensitive)
-        || modelName.contains(QStringLiteral("PLAYBASE"), Qt::CaseInsensitive)
-        || modelName.contains(QStringLiteral("Beam"), Qt::CaseInsensitive)
-        || modelName.contains(QStringLiteral("Arc"), Qt::CaseInsensitive)
-        || modelName.contains(QStringLiteral("Ray"), Qt::CaseInsensitive)
-        || modelName.compare(QStringLiteral("Amp"), Qt::CaseInsensitive) == 0
-        || modelName.contains(QStringLiteral("Sonos Amp"), Qt::CaseInsensitive);
+    return modelName.contains(QStringLiteral("PLAYBAR"), Qt::CaseInsensitive) ||
+           modelName.contains(QStringLiteral("PLAYBASE"), Qt::CaseInsensitive) ||
+           modelName.contains(QStringLiteral("Beam"), Qt::CaseInsensitive) ||
+           modelName.contains(QStringLiteral("Arc"), Qt::CaseInsensitive) ||
+           modelName.contains(QStringLiteral("Ray"), Qt::CaseInsensitive) ||
+           modelName.compare(QStringLiteral("Amp"), Qt::CaseInsensitive) == 0 ||
+           modelName.contains(QStringLiteral("Sonos Amp"), Qt::CaseInsensitive);
 }
 
 QString tvInputNameFromUri(const QString &uri)
@@ -94,7 +96,7 @@ QString tvInputNameFromUri(const QString &uri)
 
 QString tvAudioInfoFromStreamCode(const QString &streamInfo)
 {
-    bool ok = false;
+    bool      ok   = false;
     const int code = streamInfo.trimmed().toInt(&ok);
     if (!ok)
         return {};
@@ -104,7 +106,8 @@ QString tvAudioInfoFromStreamCode(const QString &streamInfo)
     // the SPDIF input; newer HT players also report codec-style HT audio
     // codes here/status endpoints. Keep this mapping deliberately explicit so
     // unknown firmware values fall back to the URI input name instead.
-    switch (code) {
+    switch (code)
+    {
     case 19:
         return QStringLiteral("SPDIF");
     case 22:
@@ -130,9 +133,9 @@ QString tvAudioInfoFromStreamCode(const QString &streamInfo)
 
 QString tvAudioInfoFromMetadata(const QString &trackMetaData, const QString &trackUri)
 {
-    const QList<DidlItem> items = Didl::parseItems(trackMetaData.toUtf8());
-    const QString streamInfo = items.isEmpty() ? QString() : items.first().streamInfo;
-    const QString audioInfo = tvAudioInfoFromStreamCode(streamInfo);
+    const QList<DidlItem> items      = Didl::parseItems(trackMetaData.toUtf8());
+    const QString         streamInfo = items.isEmpty() ? QString() : items.first().streamInfo;
+    const QString         audioInfo  = tvAudioInfoFromStreamCode(streamInfo);
     return audioInfo.isEmpty() ? tvInputNameFromUri(trackUri) : audioInfo;
 }
 
@@ -148,12 +151,13 @@ struct AvTransportTrackSnapshot
 AvTransportTrackSnapshot avTransportTrackSnapshot(const QByteArray &body)
 {
     AvTransportTrackSnapshot snapshot;
-    const QString lastChange = genaProperty(body, QStringLiteral("LastChange"));
+    const QString            lastChange = genaProperty(body, QStringLiteral("LastChange"));
     if (lastChange.isEmpty())
         return snapshot;
 
     QXmlStreamReader xml(lastChange);
-    while (!xml.atEnd()) {
+    while (!xml.atEnd())
+    {
         if (!xml.readNextStartElement())
             continue;
 
@@ -176,7 +180,8 @@ QString genaProperty(const QByteArray &body, const QString &propertyName)
 {
     QXmlStreamReader xml(body);
 
-    while (!xml.atEnd()) {
+    while (!xml.atEnd())
+    {
         if (!xml.readNextStartElement())
             continue;
         if (xml.name() != QLatin1String("property"))
@@ -190,7 +195,8 @@ QString genaProperty(const QByteArray &body, const QString &propertyName)
 
 QString playModeFor(bool shuffleEnabled, int repeatMode)
 {
-    if (shuffleEnabled) {
+    if (shuffleEnabled)
+    {
         if (repeatMode == 2)
             return QStringLiteral("SHUFFLE_REPEAT_ONE");
         if (repeatMode == 1)
@@ -205,30 +211,25 @@ QString playModeFor(bool shuffleEnabled, int repeatMode)
     return QStringLiteral("NORMAL");
 }
 
-}
+} // namespace
 
 ZonePlayer::ZonePlayer(QNetworkAccessManager *netMgr, const QString &deviceIp, const QString &udn, QObject *parent)
-    : QObject(parent)
-    , m_netMgr(netMgr)
-    , m_deviceIp(deviceIp)
-    , m_udn(udn)
-    , m_coordinatorUdn(udn)
-    , m_avTransport(netMgr, deviceIp)
-    , m_renderingControl(netMgr, deviceIp)
-    , m_contentDirectory(netMgr, deviceIp)
-    , m_audioIn(netMgr, deviceIp)
-    , m_queue(netMgr, deviceIp)
-    , m_deviceProperties(netMgr, deviceIp)
-    , m_zoneGroupTopology(netMgr, deviceIp)
-    , m_musicServices(netMgr, deviceIp)
-    , m_systemProperties(netMgr, deviceIp)
-    , m_control(m_avTransport, m_renderingControl, m_contentDirectory, m_queue, [this]() { return m_roomName; })
+    : QObject(parent), m_netMgr(netMgr), m_deviceIp(deviceIp), m_udn(udn), m_coordinatorUdn(udn),
+      m_avTransport(netMgr, deviceIp), m_renderingControl(netMgr, deviceIp), m_contentDirectory(netMgr, deviceIp),
+      m_audioIn(netMgr, deviceIp), m_queue(netMgr, deviceIp), m_deviceProperties(netMgr, deviceIp),
+      m_zoneGroupTopology(netMgr, deviceIp), m_musicServices(netMgr, deviceIp), m_systemProperties(netMgr, deviceIp),
+      m_control(m_avTransport, m_renderingControl, m_contentDirectory, m_queue,
+                [this]()
+                {
+                    return m_roomName;
+                })
 {
 }
 
 void ZonePlayer::setRoomName(const QString &name)
 {
-    if (m_roomName != name) {
+    if (m_roomName != name)
+    {
         m_roomName = name;
         emit roomNameChanged();
     }
@@ -240,7 +241,7 @@ void ZonePlayer::setModelName(const QString &name)
         return;
 
     const bool oldSupportsTvSource = supportsTvSource();
-    m_modelName = name;
+    m_modelName                    = name;
     if (oldSupportsTvSource != supportsTvSource())
         emit supportsTvSourceChanged();
 }
@@ -256,11 +257,11 @@ void ZonePlayer::setDeviceDescriptionDetails(const QString &displayName, const Q
                                              const QString &softwareVersion, const QString &zoneType,
                                              const QStringList &features)
 {
-    m_displayName = displayName;
-    m_displayVersion = displayVersion;
+    m_displayName     = displayName;
+    m_displayVersion  = displayVersion;
     m_softwareVersion = softwareVersion;
-    m_zoneType = zoneType;
-    m_features = features;
+    m_zoneType        = zoneType;
+    m_features        = features;
 }
 
 void ZonePlayer::setDeviceServices(const QSet<QString> &services)
@@ -269,7 +270,7 @@ void ZonePlayer::setDeviceServices(const QSet<QString> &services)
         return;
 
     const bool oldSupportsLineInSource = supportsLineInSource();
-    m_deviceServices = services;
+    m_deviceServices                   = services;
     if (oldSupportsLineInSource != supportsLineInSource())
         emit supportsLineInSourceChanged();
 }
@@ -298,7 +299,8 @@ bool ZonePlayer::supportsLineInSource() const
 
 void ZonePlayer::setCoordinatorUdn(const QString &udn)
 {
-    if (m_coordinatorUdn != udn) {
+    if (m_coordinatorUdn != udn)
+    {
         m_coordinatorUdn = udn;
         emit coordinatorChanged();
     }
@@ -306,7 +308,8 @@ void ZonePlayer::setCoordinatorUdn(const QString &udn)
 
 void ZonePlayer::setInvisible(bool invisible)
 {
-    if (m_invisible != invisible) {
+    if (m_invisible != invisible)
+    {
         m_invisible = invisible;
         emit invisibleChanged();
     }
@@ -314,7 +317,8 @@ void ZonePlayer::setInvisible(bool invisible)
 
 void ZonePlayer::setReady(bool ready)
 {
-    if (m_ready != ready) {
+    if (m_ready != ready)
+    {
         m_ready = ready;
         emit readyChanged();
     }
@@ -322,7 +326,8 @@ void ZonePlayer::setReady(bool ready)
 
 void ZonePlayer::setPlayState(PlayState state)
 {
-    if (m_playState != state) {
+    if (m_playState != state)
+    {
         m_playState = state;
         emit playStateChanged();
     }
@@ -330,7 +335,8 @@ void ZonePlayer::setPlayState(PlayState state)
 
 QString ZonePlayer::playStateText() const
 {
-    switch (m_playState) {
+    switch (m_playState)
+    {
     case PlayState::Playing:
         return QStringLiteral("Playing");
     case PlayState::Paused:
@@ -363,9 +369,10 @@ void ZonePlayer::setPlayMode(const QString &playMode)
         return;
 
     const bool wasShuffleEnabled = shuffleEnabled();
-    const int oldRepeatMode = repeatMode();
-    m_playMode = playMode;
-    if (wasShuffleEnabled != shuffleEnabled() || oldRepeatMode != repeatMode()) {
+    const int  oldRepeatMode     = repeatMode();
+    m_playMode                   = playMode;
+    if (wasShuffleEnabled != shuffleEnabled() || oldRepeatMode != repeatMode())
+    {
         QLOG() << m_roomName << "play mode:" << m_playMode;
         emit playModeChanged();
     }
@@ -377,7 +384,7 @@ void ZonePlayer::setCrossfadeState(bool enabled, bool known)
         return;
 
     m_crossfadeEnabled = enabled;
-    m_crossfadeKnown = known;
+    m_crossfadeKnown   = known;
     QLOG() << m_roomName << "crossfade:" << m_crossfadeEnabled;
     emit crossfadeChanged();
 }
@@ -397,40 +404,50 @@ void ZonePlayer::setCurrentTrack(MediaItem *track)
 
 void ZonePlayer::checkCurrentTrackFavouriteStatus()
 {
-    if (!m_currentTrack || m_currentTrack->uri().isEmpty()) {
+    if (!m_currentTrack || m_currentTrack->uri().isEmpty())
+    {
         emit sonosFavouriteStatus(false, QString());
         return;
     }
 
-    const QString trackUri = m_currentTrack->uri();
-    const int q = trackUri.indexOf(QLatin1Char('?'));
+    const QString trackUri     = m_currentTrack->uri();
+    const int     q            = trackUri.indexOf(QLatin1Char('?'));
     const QString baseTrackUri = q >= 0 ? trackUri.left(q) : trackUri;
 
-    browse(QStringLiteral("FV:2"), [this, trackUri, baseTrackUri](bool ok, const QString &, const QList<DidlItem> &items) {
-        if (!m_currentTrack || m_currentTrack->uri() != trackUri)
-            return;
-        if (!ok) {
-            emit sonosFavouriteStatus(false, QString());
-            return;
-        }
-        for (const DidlItem &item : items) {
-            const int fq = item.res.indexOf(QLatin1Char('?'));
-            const QString baseFavUri = fq >= 0 ? item.res.left(fq) : item.res;
-            if (baseFavUri == baseTrackUri) {
-                emit sonosFavouriteStatus(true, item.id);
+    browse(
+        QStringLiteral("FV:2"),
+        [this, trackUri, baseTrackUri](bool ok, const QString &, const QList<DidlItem> &items)
+        {
+            if (!m_currentTrack || m_currentTrack->uri() != trackUri)
+                return;
+            if (!ok)
+            {
+                emit sonosFavouriteStatus(false, QString());
                 return;
             }
-        }
-        emit sonosFavouriteStatus(false, QString());
-    }, 0, 400);
+            for (const DidlItem &item : items)
+            {
+                const int     fq         = item.res.indexOf(QLatin1Char('?'));
+                const QString baseFavUri = fq >= 0 ? item.res.left(fq) : item.res;
+                if (baseFavUri == baseTrackUri)
+                {
+                    emit sonosFavouriteStatus(true, item.id);
+                    return;
+                }
+            }
+            emit sonosFavouriteStatus(false, QString());
+        },
+        0, 400);
 }
 
 void ZonePlayer::refreshAccentColor(const QString &imageUrl)
 {
     m_accentColorRequestUrl = imageUrl;
 
-    if (imageUrl.isEmpty()) {
-        if (m_accentColor.isValid()) {
+    if (imageUrl.isEmpty())
+    {
+        if (m_accentColor.isValid())
+        {
             m_accentColor = QColor();
             emit accentColorChanged();
         }
@@ -438,123 +455,147 @@ void ZonePlayer::refreshAccentColor(const QString &imageUrl)
     }
 
     QNetworkReply *reply = m_netMgr->get(QNetworkRequest(QUrl(imageUrl)));
-    connect(reply, &QNetworkReply::finished, this, [this, reply, imageUrl]() {
-        reply->deleteLater();
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, imageUrl]()
+            {
+                reply->deleteLater();
 
-        // The selected track (and thus its art) may have changed again
-        // while this request was in flight -- a stale reply landing after
-        // that shouldn't override the color for the new track.
-        if (m_accentColorRequestUrl != imageUrl)
-            return;
+                // The selected track (and thus its art) may have changed again
+                // while this request was in flight -- a stale reply landing after
+                // that shouldn't override the color for the new track.
+                if (m_accentColorRequestUrl != imageUrl)
+                    return;
 
-        if (reply->error() != QNetworkReply::NoError)
-            return;
+                if (reply->error() != QNetworkReply::NoError)
+                    return;
 
-        QImage image;
-        if (!image.loadFromData(reply->readAll()))
-            return;
+                QImage image;
+                if (!image.loadFromData(reply->readAll()))
+                    return;
 
-        const QColor color = AlbumColorAnalyzer::pickAccentColor(image);
-        if (color != m_accentColor) {
-            m_accentColor = color;
-            emit accentColorChanged();
-        }
-    });
+                const QColor color = AlbumColorAnalyzer::pickAccentColor(image);
+                if (color != m_accentColor)
+                {
+                    m_accentColor = color;
+                    emit accentColorChanged();
+                }
+            });
 }
 
 void ZonePlayer::play()
 {
-    m_control.play(this, [this](bool ok) {
-        if (ok)
-            setPlayState(PlayState::Playing);
-    });
+    m_control.play(this,
+                   [this](bool ok)
+                   {
+                       if (ok)
+                           setPlayState(PlayState::Playing);
+                   });
 }
 
 void ZonePlayer::pause()
 {
-    m_control.pause(this, [this](bool ok) {
-        if (ok)
-            setPlayState(PlayState::Paused);
-    });
+    m_control.pause(this,
+                    [this](bool ok)
+                    {
+                        if (ok)
+                            setPlayState(PlayState::Paused);
+                    });
 }
 
 void ZonePlayer::next()
 {
-    m_control.next(this, [this](bool ok) {
-        if (ok)
-            refreshTransportState();
-    });
+    m_control.next(this,
+                   [this](bool ok)
+                   {
+                       if (ok)
+                           refreshTransportState();
+                   });
 }
 
 void ZonePlayer::previous()
 {
-    m_control.previous(this, [this](bool ok) {
-        if (ok)
-            refreshTransportState();
-    });
+    m_control.previous(this,
+                       [this](bool ok)
+                       {
+                           if (ok)
+                               refreshTransportState();
+                       });
 }
 
 void ZonePlayer::setShuffleEnabled(bool enabled)
 {
     const QString requestedPlayMode = playModeFor(enabled, repeatMode());
-    const QString previousPlayMode = m_playMode;
+    const QString previousPlayMode  = m_playMode;
     setPlayMode(requestedPlayMode);
 
-    m_control.setPlayMode(this, requestedPlayMode, [this, previousPlayMode](bool ok) {
-        if (!ok) {
-            setPlayMode(previousPlayMode);
-            return;
-        }
+    m_control.setPlayMode(this, requestedPlayMode,
+                          [this, previousPlayMode](bool ok)
+                          {
+                              if (!ok)
+                              {
+                                  setPlayMode(previousPlayMode);
+                                  return;
+                              }
 
-        refreshTransportState();
-    });
+                              refreshTransportState();
+                          });
 }
 
 void ZonePlayer::cycleRepeatMode()
 {
-    const int requestedRepeatMode = (repeatMode() + 1) % 3;
-    const QString requestedPlayMode = playModeFor(shuffleEnabled(), requestedRepeatMode);
-    const QString previousPlayMode = m_playMode;
+    const int     requestedRepeatMode = (repeatMode() + 1) % 3;
+    const QString requestedPlayMode   = playModeFor(shuffleEnabled(), requestedRepeatMode);
+    const QString previousPlayMode    = m_playMode;
     setPlayMode(requestedPlayMode);
 
-    m_control.setPlayMode(this, requestedPlayMode, [this, previousPlayMode](bool ok) {
-        if (!ok) {
-            setPlayMode(previousPlayMode);
-            return;
-        }
+    m_control.setPlayMode(this, requestedPlayMode,
+                          [this, previousPlayMode](bool ok)
+                          {
+                              if (!ok)
+                              {
+                                  setPlayMode(previousPlayMode);
+                                  return;
+                              }
 
-        refreshTransportState();
-    });
+                              refreshTransportState();
+                          });
 }
 
 void ZonePlayer::setCrossfadeEnabled(bool enabled)
 {
     const bool previousEnabled = m_crossfadeEnabled;
-    const bool previousKnown = m_crossfadeKnown;
+    const bool previousKnown   = m_crossfadeKnown;
     setCrossfadeState(enabled);
 
-    m_control.setCrossfadeEnabled(this, enabled, [this, previousEnabled, previousKnown](bool ok) {
-        if (!ok) {
-            setCrossfadeState(previousEnabled, previousKnown);
-            return;
-        }
+    m_control.setCrossfadeEnabled(this, enabled,
+                                  [this, previousEnabled, previousKnown](bool ok)
+                                  {
+                                      if (!ok)
+                                      {
+                                          setCrossfadeState(previousEnabled, previousKnown);
+                                          return;
+                                      }
 
-        refreshTransportState();
-    });
+                                      refreshTransportState();
+                                  });
 }
 
 void ZonePlayer::joinGroup(ZonePlayer *targetCoordinator)
 {
-    if (!targetCoordinator) {
+    if (!targetCoordinator)
+    {
         QWARN() << m_roomName << "joinGroup: null target";
         return;
     }
 
     const QString uri = QStringLiteral("x-rincon:%1").arg(targetCoordinator->udn());
-    setAVTransportUri(uri, QString(), [this, targetCoordinatorRoomName = targetCoordinator->roomName()](bool ok) {
-        if (!ok)
-            QWARN() << m_roomName << "joinGroup: SetAVTransportURI to" << targetCoordinatorRoomName << "failed";
-    });
+    setAVTransportUri(uri, QString(),
+                      [this, targetCoordinatorRoomName = targetCoordinator->roomName()](bool ok)
+                      {
+                          if (!ok)
+                              QWARN() << m_roomName << "joinGroup: SetAVTransportURI to" << targetCoordinatorRoomName
+                                      << "failed";
+                      });
 }
 
 void ZonePlayer::leaveGroup()
@@ -567,50 +608,59 @@ void ZonePlayer::setAVTransportUri(const QString &uri, const QString &metaData, 
     m_control.setAVTransportUri(this, uri, metaData, std::move(callback));
 }
 
-void ZonePlayer::addUriToQueue(const QString &uri, const QString &metaData, int desiredFirstTrackNumberEnqueued, bool enqueueAsNext,
-                                std::function<void(bool ok, int firstTrackNumberEnqueued)> callback)
+void ZonePlayer::addUriToQueue(const QString &uri, const QString &metaData, int desiredFirstTrackNumberEnqueued,
+                               bool enqueueAsNext, std::function<void(bool ok, int firstTrackNumberEnqueued)> callback)
 {
     m_control.addUriToQueue(this, uri, metaData, desiredFirstTrackNumberEnqueued, enqueueAsNext,
-                            [this, callback](bool ok, int firstTrackNumberEnqueued) {
-        if (!ok) {
-            if (callback)
-                callback(false, 0);
-            return;
-        }
-        emit queueChanged();
-        if (callback)
-            callback(true, firstTrackNumberEnqueued);
-    });
+                            [this, callback](bool ok, int firstTrackNumberEnqueued)
+                            {
+                                if (!ok)
+                                {
+                                    if (callback)
+                                        callback(false, 0);
+                                    return;
+                                }
+                                emit queueChanged();
+                                if (callback)
+                                    callback(true, firstTrackNumberEnqueued);
+                            });
 }
 
 void ZonePlayer::removeAllTracksFromQueue(std::function<void(bool)> callback)
 {
-    m_control.removeAllTracksFromQueue(this, [this, callback](bool ok) {
-        if (ok)
-            emit queueChanged();
-        if (callback)
-            callback(ok);
-    });
+    m_control.removeAllTracksFromQueue(this,
+                                       [this, callback](bool ok)
+                                       {
+                                           if (ok)
+                                               emit queueChanged();
+                                           if (callback)
+                                               callback(ok);
+                                       });
 }
 
 void ZonePlayer::playItem(const QVariantMap &item)
 {
     const QString uri = item.value(QStringLiteral("uri")).toString();
-    if (uri.isEmpty()) {
+    if (uri.isEmpty())
+    {
         QWARN() << m_roomName << "playItem: no playable uri for" << item.value(QStringLiteral("title")).toString();
         return;
     }
 
     const QByteArray metaData = SonosPlaybackPayload::buildItemMetadata(item);
 
-    if (SonosPlaybackPayload::isStreamItem(item)) {
+    if (SonosPlaybackPayload::isStreamItem(item))
+    {
         // A stream isn't queueable -- swap the transport straight to it.
-        setAVTransportUri(uri, QString::fromUtf8(metaData), [this, item](bool ok) {
-            if (ok) {
-                emit playbackItemSelected(item);
-                play();
-            }
-        });
+        setAVTransportUri(uri, QString::fromUtf8(metaData),
+                          [this, item](bool ok)
+                          {
+                              if (ok)
+                              {
+                                  emit playbackItemSelected(item);
+                                  play();
+                              }
+                          });
         return;
     }
 
@@ -618,10 +668,11 @@ void ZonePlayer::playItem(const QVariantMap &item)
     // transport at this zone's own queue, seek to the newly-enqueued
     // position, then play -- roomtunes-bb10's play_track().
     addUriToQueue(uri, QString::fromUtf8(metaData), /*desiredFirstTrackNumberEnqueued=*/0, /*enqueueAsNext=*/true,
-                  [this, item](bool ok, int firstTrackNumberEnqueued) {
-        if (ok)
-            playQueueTrackInternal(firstTrackNumberEnqueued, item);
-    });
+                  [this, item](bool ok, int firstTrackNumberEnqueued)
+                  {
+                      if (ok)
+                          playQueueTrackInternal(firstTrackNumberEnqueued, item);
+                  });
 }
 
 void ZonePlayer::playItemNext(const QVariantMap &item)
@@ -649,18 +700,22 @@ void ZonePlayer::addItemToQueue(const QVariantMap &item)
 
 void ZonePlayer::replaceQueueWithItem(const QVariantMap &item)
 {
-    removeAllTracksFromQueue([this, item](bool ok) {
-        if (ok)
-            playItem(item);
-    });
+    removeAllTracksFromQueue(
+        [this, item](bool ok)
+        {
+            if (ok)
+                playItem(item);
+        });
 }
 
 void ZonePlayer::clearQueue()
 {
-    removeAllTracksFromQueue([this](bool ok) {
-        if (ok)
-            emit queueChanged();
-    });
+    removeAllTracksFromQueue(
+        [this](bool ok)
+        {
+            if (ok)
+                emit queueChanged();
+        });
 }
 
 void ZonePlayer::saveQueueAsSonosPlaylist(const QString &title)
@@ -669,7 +724,10 @@ void ZonePlayer::saveQueueAsSonosPlaylist(const QString &title)
     if (trimmedTitle.isEmpty())
         return;
 
-    m_control.saveQueueAsSonosPlaylist(this, trimmedTitle, [](bool) {});
+    m_control.saveQueueAsSonosPlaylist(this, trimmedTitle,
+                                       [](bool)
+                                       {
+                                       });
 }
 
 void ZonePlayer::addCurrentTrackToSonosFavourites()
@@ -678,50 +736,59 @@ void ZonePlayer::addCurrentTrackToSonosFavourites()
         return;
 
     DidlItem item;
-    item.id = m_currentTrack->id();
-    item.parentId = m_currentTrack->parentId();
-    item.didlId = item.id;
+    item.id           = m_currentTrack->id();
+    item.parentId     = m_currentTrack->parentId();
+    item.didlId       = item.id;
     item.didlParentId = item.parentId;
-    item.title = m_currentTrack->title();
-    item.artist = m_currentTrack->artist();
-    item.album = m_currentTrack->album();
-    item.upnpClass = m_currentTrack->upnpClass();
-    item.res = m_currentTrack->uri();
+    item.title        = m_currentTrack->title();
+    item.artist       = m_currentTrack->artist();
+    item.album        = m_currentTrack->album();
+    item.upnpClass    = m_currentTrack->upnpClass();
+    item.res          = m_currentTrack->uri();
     item.protocolInfo = m_currentTrack->protocolInfo();
-    item.desc = m_currentTrack->desc();
-    item.albumArtUri = m_currentTrack->imageUrl();
+    item.desc         = m_currentTrack->desc();
+    item.albumArtUri  = m_currentTrack->imageUrl();
 
-    m_control.addToSonosFavourites(this, item, [this](bool ok, const QString &objectId) {
-        if (ok)
-            emit sonosFavouriteAdded(objectId);
-    });
+    m_control.addToSonosFavourites(this, item,
+                                   [this](bool ok, const QString &objectId)
+                                   {
+                                       if (ok)
+                                           emit sonosFavouriteAdded(objectId);
+                                   });
 }
 
 void ZonePlayer::removeCurrentTrackFromSonosFavourites(const QString &objectId)
 {
     if (objectId.isEmpty())
         return;
-    m_control.removeFromSonosFavourites(this, objectId, [](bool) {});
+    m_control.removeFromSonosFavourites(this, objectId,
+                                        [](bool)
+                                        {
+                                        });
 }
 
 void ZonePlayer::removeQueueTrack(const QString &objectId)
 {
-    m_control.removeTrackFromQueue(this, objectId, [this](bool ok) {
-        if (ok)
-            emit queueChanged();
-    });
+    m_control.removeTrackFromQueue(this, objectId,
+                                   [this](bool ok)
+                                   {
+                                       if (ok)
+                                           emit queueChanged();
+                                   });
 }
 
 void ZonePlayer::reorderQueueTrack(int fromIndex, int toIndex, int updateId)
 {
-    m_control.reorderTrackInQueue(this, fromIndex, toIndex, updateId, [this](bool ok) {
-        // The QML queue editor moves rows locally while dragging for
-        // immediate feedback. Refetch after the SOAP command completes so
-        // the model reconciles with the real Sonos queue on success or
-        // rolls back cleanly if the reorder failed.
-        Q_UNUSED(ok)
-        emit queueChanged();
-    });
+    m_control.reorderTrackInQueue(this, fromIndex, toIndex, updateId,
+                                  [this](bool ok)
+                                  {
+                                      // The QML queue editor moves rows locally while dragging for
+                                      // immediate feedback. Refetch after the SOAP command completes so
+                                      // the model reconciles with the real Sonos queue on success or
+                                      // rolls back cleanly if the reorder failed.
+                                      Q_UNUSED(ok)
+                                      emit queueChanged();
+                                  });
 }
 
 void ZonePlayer::playQueueTrack(int trackNumber)
@@ -740,29 +807,36 @@ void ZonePlayer::playQueueTrackInternal(int trackNumber, const QVariantMap &sele
     // whether it's already there (roomtunes-bb10's skipto_track() checks
     // first, purely to skip a redundant round trip) -- simpler, and
     // re-selecting the same source a zone is already on doesn't restart it.
-    setAVTransportUri(queueUri(), QString(), [this, trackNumber, selectedItem](bool ok) {
-        if (!ok)
-            return;
+    setAVTransportUri(queueUri(), QString(),
+                      [this, trackNumber, selectedItem](bool ok)
+                      {
+                          if (!ok)
+                              return;
 
-        m_control.seek(this, QStringLiteral("TRACK_NR"), QString::number(trackNumber), [this, selectedItem](bool ok) {
-            if (!ok)
-                return;
-            if (!selectedItem.isEmpty())
-                emit playbackItemSelected(selectedItem);
-            play();
-        });
-    });
+                          m_control.seek(this, QStringLiteral("TRACK_NR"), QString::number(trackNumber),
+                                         [this, selectedItem](bool ok)
+                                         {
+                                             if (!ok)
+                                                 return;
+                                             if (!selectedItem.isEmpty())
+                                                 emit playbackItemSelected(selectedItem);
+                                             play();
+                                         });
+                      });
 }
 
 void ZonePlayer::setVolume(int level)
 {
-    m_control.setVolume(this, level, [this, level](bool ok) {
-        if (ok && (level != m_volume || !m_volumeKnown)) {
-            m_volume = level;
-            m_volumeKnown = true;
-            emit volumeChanged();
-        }
-    });
+    m_control.setVolume(this, level,
+                        [this, level](bool ok)
+                        {
+                            if (ok && (level != m_volume || !m_volumeKnown))
+                            {
+                                m_volume      = level;
+                                m_volumeKnown = true;
+                                emit volumeChanged();
+                            }
+                        });
 }
 
 void ZonePlayer::setMuted(bool muted)
@@ -773,8 +847,9 @@ void ZonePlayer::setMuted(bool muted)
     // the failure path below still logs (and leaves the optimistic state in
     // place rather than snapping back, which would be a worse experience
     // for the common case to guard against a rare one).
-    if (m_muted != muted || !m_muteKnown) {
-        m_muted = muted;
+    if (m_muted != muted || !m_muteKnown)
+    {
+        m_muted     = muted;
         m_muteKnown = true;
         emit mutedChanged();
     }
@@ -782,8 +857,9 @@ void ZonePlayer::setMuted(bool muted)
     m_control.setMuted(this, muted, {});
 }
 
-void ZonePlayer::browse(const QString &objectId, std::function<void(bool, const QString &, const QList<DidlItem> &)> callback,
-                         int startingIndex, int requestedCount, const QString &browseFlag)
+void ZonePlayer::browse(const QString                                                      &objectId,
+                        std::function<void(bool, const QString &, const QList<DidlItem> &)> callback, int startingIndex,
+                        int requestedCount, const QString &browseFlag)
 {
     m_control.browse(this, objectId, std::move(callback), startingIndex, requestedCount, browseFlag);
 }
@@ -791,38 +867,48 @@ void ZonePlayer::browse(const QString &objectId, std::function<void(bool, const 
 void ZonePlayer::browseQueue(std::function<void(bool, const QString &, const QList<DidlItem> &, int)> callback,
                              int startingIndex, int requestedCount)
 {
-    m_control.browseDetailed(this, QStringLiteral("Q:0"), [callback](bool ok, const SonosZoneControl::BrowseResult &result) {
-        if (callback)
-            callback(ok, result.errorMessage, result.items, result.updateIdKnown ? result.updateId : 0);
-    }, startingIndex, requestedCount, QStringLiteral("BrowseDirectChildren"));
+    m_control.browseDetailed(
+        this, QStringLiteral("Q:0"),
+        [callback](bool ok, const SonosZoneControl::BrowseResult &result)
+        {
+            if (callback)
+                callback(ok, result.errorMessage, result.items, result.updateIdKnown ? result.updateId : 0);
+        },
+        startingIndex, requestedCount, QStringLiteral("BrowseDirectChildren"));
 }
 
 void ZonePlayer::refreshVolume()
 {
-    m_control.getVolume(this, [this](bool ok, int level) {
-        if (!ok)
-            return;
-        if (level != m_volume || !m_volumeKnown) {
-            m_volume = level;
-            m_volumeKnown = true;
-            emit volumeChanged();
-        }
-        QLOG() << m_roomName << "GetVolume OK:" << level;
-    });
+    m_control.getVolume(this,
+                        [this](bool ok, int level)
+                        {
+                            if (!ok)
+                                return;
+                            if (level != m_volume || !m_volumeKnown)
+                            {
+                                m_volume      = level;
+                                m_volumeKnown = true;
+                                emit volumeChanged();
+                            }
+                            QLOG() << m_roomName << "GetVolume OK:" << level;
+                        });
 }
 
 void ZonePlayer::refreshMute()
 {
-    m_control.getMute(this, [this](bool ok, bool muted) {
-        if (!ok)
-            return;
-        if (muted != m_muted || !m_muteKnown) {
-            m_muted = muted;
-            m_muteKnown = true;
-            emit mutedChanged();
-        }
-        QLOG() << m_roomName << "GetMute OK:" << muted;
-    });
+    m_control.getMute(this,
+                      [this](bool ok, bool muted)
+                      {
+                          if (!ok)
+                              return;
+                          if (muted != m_muted || !m_muteKnown)
+                          {
+                              m_muted     = muted;
+                              m_muteKnown = true;
+                              emit mutedChanged();
+                          }
+                          QLOG() << m_roomName << "GetMute OK:" << muted;
+                      });
 }
 
 void ZonePlayer::handleRenderingControlEvent(const QByteArray &body)
@@ -832,24 +918,30 @@ void ZonePlayer::handleRenderingControlEvent(const QByteArray &body)
         return;
 
     QXmlStreamReader xml(lastChange);
-    while (!xml.atEnd()) {
+    while (!xml.atEnd())
+    {
         if (!xml.readNextStartElement())
             continue;
 
-        if (xml.name() == QLatin1String("Volume")
-            && xml.attributes().value(QStringLiteral("channel")) == QLatin1String("Master")) {
-            bool ok = false;
+        if (xml.name() == QLatin1String("Volume") &&
+            xml.attributes().value(QStringLiteral("channel")) == QLatin1String("Master"))
+        {
+            bool      ok    = false;
             const int level = xml.attributes().value(QStringLiteral("val")).toInt(&ok);
-            if (ok && (level != m_volume || !m_volumeKnown)) {
-                m_volume = level;
+            if (ok && (level != m_volume || !m_volumeKnown))
+            {
+                m_volume      = level;
                 m_volumeKnown = true;
                 emit volumeChanged();
             }
-        } else if (xml.name() == QLatin1String("Mute")
-                   && xml.attributes().value(QStringLiteral("channel")) == QLatin1String("Master")) {
+        }
+        else if (xml.name() == QLatin1String("Mute") &&
+                 xml.attributes().value(QStringLiteral("channel")) == QLatin1String("Master"))
+        {
             const bool muted = xml.attributes().value(QStringLiteral("val")) == QLatin1String("1");
-            if (muted != m_muted || !m_muteKnown) {
-                m_muted = muted;
+            if (muted != m_muted || !m_muteKnown)
+            {
+                m_muted     = muted;
                 m_muteKnown = true;
                 emit mutedChanged();
             }
@@ -873,11 +965,14 @@ void ZonePlayer::handleAVTransportEvent(const QByteArray &body)
     if (!snapshot.crossfadeMode.isEmpty())
         setCrossfadeState(snapshot.crossfadeMode == QStringLiteral("1"));
 
-    if (isTvStreamUri(snapshot.uri)) {
+    if (isTvStreamUri(snapshot.uri))
+    {
         const QString audioInfo = tvAudioInfoFromMetadata(snapshot.metadata, snapshot.uri);
         if (!audioInfo.isEmpty() && m_tvAudioInfo != audioInfo)
             m_tvAudioInfo = audioInfo;
-    } else if (!snapshot.uri.isEmpty() && !isTvStreamUri(snapshot.uri)) {
+    }
+    else if (!snapshot.uri.isEmpty() && !isTvStreamUri(snapshot.uri))
+    {
         m_tvAudioInfo.clear();
     }
 
@@ -895,96 +990,110 @@ void ZonePlayer::handleAudioInEvent(const QByteArray &)
 
 void ZonePlayer::refreshTransportState()
 {
-    m_control.getTransportInfo(this, [this](bool ok, const QString &state) {
-        if (!ok)
-            return;
+    m_control.getTransportInfo(this,
+                               [this](bool ok, const QString &state)
+                               {
+                                   if (!ok)
+                                       return;
 
-        if (state == QStringLiteral("PLAYING"))
-            setPlayState(PlayState::Playing);
-        else if (state == QStringLiteral("PAUSED_PLAYBACK"))
-            setPlayState(PlayState::Paused);
-        else if (state == QStringLiteral("TRANSITIONING"))
-            setPlayState(PlayState::Transitioning);
-        else
-            setPlayState(PlayState::Stopped);
-    });
+                                   if (state == QStringLiteral("PLAYING"))
+                                       setPlayState(PlayState::Playing);
+                                   else if (state == QStringLiteral("PAUSED_PLAYBACK"))
+                                       setPlayState(PlayState::Paused);
+                                   else if (state == QStringLiteral("TRANSITIONING"))
+                                       setPlayState(PlayState::Transitioning);
+                                   else
+                                       setPlayState(PlayState::Stopped);
+                               });
 
-    m_control.getTransportSettings(this, [this](bool ok, const QString &playMode) {
-        if (!ok)
-            return;
+    m_control.getTransportSettings(this,
+                                   [this](bool ok, const QString &playMode)
+                                   {
+                                       if (!ok)
+                                           return;
 
-        setPlayMode(playMode);
-    });
+                                       setPlayMode(playMode);
+                                   });
 
-    m_control.getCrossfadeMode(this, [this](bool ok, bool enabled) {
-        if (!ok)
-            return;
+    m_control.getCrossfadeMode(this,
+                               [this](bool ok, bool enabled)
+                               {
+                                   if (!ok)
+                                       return;
 
-        setCrossfadeState(enabled);
-    });
+                                   setCrossfadeState(enabled);
+                               });
 
     refreshPositionInfo();
 }
 
 void ZonePlayer::refreshPositionInfo()
 {
-    m_control.getPositionInfo(this, [this](bool ok, const SonosZoneControl::PositionInfo &info) {
-        if (!ok)
-            return;
+    m_control.getPositionInfo(
+        this,
+        [this](bool ok, const SonosZoneControl::PositionInfo &info)
+        {
+            if (!ok)
+                return;
 
-        if (info.trackNumberKnown)
-            m_currentTrackNumber = info.trackNumber;
+            if (info.trackNumberKnown)
+                m_currentTrackNumber = info.trackNumber;
 
-        QList<DidlItem> items = Didl::parseItems(info.trackMetaData.toUtf8());
-        DidlItem didl = items.isEmpty() ? DidlItem{} : items.first();
-        if (didl.res.isEmpty())
-            didl.res = info.trackUri;
+            QList<DidlItem> items = Didl::parseItems(info.trackMetaData.toUtf8());
+            DidlItem        didl  = items.isEmpty() ? DidlItem{} : items.first();
+            if (didl.res.isEmpty())
+                didl.res = info.trackUri;
 
-        // Local-library album art comes back as a path relative to the
-        // zone itself (e.g. "/getaa?..."); streaming-service art is
-        // already an absolute URL. Resolve the former against this zone's
-        // own address so QML's Image can just load it directly.
-        if (!didl.albumArtUri.isEmpty() && didl.albumArtUri.startsWith(QLatin1Char('/')))
-            didl.albumArtUri = baseUrl().chopped(1) + didl.albumArtUri;
+            // Local-library album art comes back as a path relative to the
+            // zone itself (e.g. "/getaa?..."); streaming-service art is
+            // already an absolute URL. Resolve the former against this zone's
+            // own address so QML's Image can just load it directly.
+            if (!didl.albumArtUri.isEmpty() && didl.albumArtUri.startsWith(QLatin1Char('/')))
+                didl.albumArtUri = baseUrl().chopped(1) + didl.albumArtUri;
 
-        const QString sourceUri = info.trackUri.isEmpty() ? didl.res : info.trackUri;
-        QString sourceTitle;
-        QString sourceArtist;
-        QString sourceImageUrl;
-        if (isTvStreamUri(sourceUri)) {
-            // BB10 detected Playbar/Beam TV input from AVTransportURI and
-            // displayed a synthetic "TV" track with the bundled TV icon. The
-            // Qt 6 app polls TrackURI here, which carries the same Sonos URI.
-            sourceTitle = tr("TV");
-            sourceArtist = m_tvAudioInfo.isEmpty() ? tvInputNameFromUri(sourceUri) : m_tvAudioInfo;
-            sourceImageUrl = QStringLiteral("qrc:/qt/qml/RoomTunes/resources/icons/tv.svg");
-        } else if (isLineInStreamUri(sourceUri)) {
-            sourceTitle = didl.title.isEmpty() ? tr("Line-In") : didl.title;
-            sourceImageUrl = QStringLiteral("qrc:/qt/qml/RoomTunes/resources/icons/line_in.svg");
-        }
-
-        if (!sourceTitle.isEmpty()) {
-            if (!m_currentTrack || m_currentTrack->id() != sourceUri || m_currentTrack->uri() != sourceUri
-                || m_currentTrack->title() != sourceTitle || m_currentTrack->artist() != sourceArtist
-                || m_currentTrack->imageUrl() != sourceImageUrl) {
-                setCurrentTrack(new MediaItem(sourceUri, QString(), sourceTitle, sourceArtist, QString(), QString(),
-                                              sourceUri, QStringLiteral("object.item.audioItem"), sourceImageUrl,
-                                              false, this));
+            const QString sourceUri = info.trackUri.isEmpty() ? didl.res : info.trackUri;
+            QString       sourceTitle;
+            QString       sourceArtist;
+            QString       sourceImageUrl;
+            if (isTvStreamUri(sourceUri))
+            {
+                // BB10 detected Playbar/Beam TV input from AVTransportURI and
+                // displayed a synthetic "TV" track with the bundled TV icon. The
+                // Qt 6 app polls TrackURI here, which carries the same Sonos URI.
+                sourceTitle    = tr("TV");
+                sourceArtist   = m_tvAudioInfo.isEmpty() ? tvInputNameFromUri(sourceUri) : m_tvAudioInfo;
+                sourceImageUrl = QStringLiteral("qrc:/qt/qml/RoomTunes/resources/icons/tv.svg");
             }
+            else if (isLineInStreamUri(sourceUri))
+            {
+                sourceTitle    = didl.title.isEmpty() ? tr("Line-In") : didl.title;
+                sourceImageUrl = QStringLiteral("qrc:/qt/qml/RoomTunes/resources/icons/line_in.svg");
+            }
+
+            if (!sourceTitle.isEmpty())
+            {
+                if (!m_currentTrack || m_currentTrack->id() != sourceUri || m_currentTrack->uri() != sourceUri ||
+                    m_currentTrack->title() != sourceTitle || m_currentTrack->artist() != sourceArtist ||
+                    m_currentTrack->imageUrl() != sourceImageUrl)
+                {
+                    setCurrentTrack(new MediaItem(sourceUri, QString(), sourceTitle, sourceArtist, QString(), QString(),
+                                                  sourceUri, QStringLiteral("object.item.audioItem"), sourceImageUrl,
+                                                  false, this));
+                }
+                setPosition(parseUpnpTime(info.relTime), parseUpnpTime(info.trackDuration));
+                return;
+            }
+
+            // GetPositionInfo is polled every second while playing (see
+            // NowPlayingPanel.qml) purely to track playback position --
+            // rebuilding/reassigning currentTrack (and re-fetching its accent
+            // color over the network) on every one of those ticks would be
+            // wasteful and pointless when it's still the same track.
+            if (!m_currentTrack || m_currentTrack->id() != didl.id || m_currentTrack->uri() != didl.res)
+                setCurrentTrack(MediaItem::fromDidl(didl, this));
+
             setPosition(parseUpnpTime(info.relTime), parseUpnpTime(info.trackDuration));
-            return;
-        }
-
-        // GetPositionInfo is polled every second while playing (see
-        // NowPlayingPanel.qml) purely to track playback position --
-        // rebuilding/reassigning currentTrack (and re-fetching its accent
-        // color over the network) on every one of those ticks would be
-        // wasteful and pointless when it's still the same track.
-        if (!m_currentTrack || m_currentTrack->id() != didl.id || m_currentTrack->uri() != didl.res)
-            setCurrentTrack(MediaItem::fromDidl(didl, this));
-
-        setPosition(parseUpnpTime(info.relTime), parseUpnpTime(info.trackDuration));
-    });
+        });
 }
 
 void ZonePlayer::advancePositionTick()
@@ -997,7 +1106,8 @@ void ZonePlayer::advancePositionTick()
 
 void ZonePlayer::setPosition(int positionSeconds, int durationSeconds)
 {
-    if (m_positionSeconds != positionSeconds || m_durationSeconds != durationSeconds) {
+    if (m_positionSeconds != positionSeconds || m_durationSeconds != durationSeconds)
+    {
         m_positionSeconds = positionSeconds;
         m_durationSeconds = durationSeconds;
         emit positionChanged();
@@ -1010,14 +1120,16 @@ void ZonePlayer::seek(qreal fraction)
         return;
 
     const int targetSeconds = qBound(0, int(fraction * m_durationSeconds), m_durationSeconds);
-    m_control.seek(this, QStringLiteral("REL_TIME"), formatUpnpTime(targetSeconds), [this, targetSeconds](bool ok) {
-        if (!ok)
-            return;
+    m_control.seek(this, QStringLiteral("REL_TIME"), formatUpnpTime(targetSeconds),
+                   [this, targetSeconds](bool ok)
+                   {
+                       if (!ok)
+                           return;
 
-        // Optimistic -- reflects the seek immediately rather than waiting
-        // for the next once-a-second GetPositionInfo poll to catch up.
-        setPosition(targetSeconds, m_durationSeconds);
-    });
+                       // Optimistic -- reflects the seek immediately rather than waiting
+                       // for the next once-a-second GetPositionInfo poll to catch up.
+                       setPosition(targetSeconds, m_durationSeconds);
+                   });
 }
 
-}
+} // namespace RoomTunes

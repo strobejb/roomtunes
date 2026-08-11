@@ -12,41 +12,50 @@
 #include <QXmlStreamWriter>
 
 #include "../Logging.h"
+#include "../control/SoapResponse.h"
 #include "../services/SmapiService.h"
 #include "../services/SonosLibraryService.h"
-#include "../control/SoapResponse.h"
 
 #define QLOG_CATEGORY logServices
 static const QString LOGSEPARATOR(80, QLatin1Char('-'));
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
+namespace
+{
 // The initial music-service catalog/icon fetches land right in the middle
 // of startup's SSDP discovery flood across a dozen zones -- network
 // contention makes an occasional timeout/failure here more likely than for
 // most other requests. Retrying (rather than the one-shot attempt this
 // used to be) is the difference between "Spotify etc. never show up for
 // the rest of the session" and "shows up a few seconds late".
-constexpr int kServiceFetchRetrySeconds = 5;
+constexpr int kServiceFetchRetrySeconds     = 5;
 constexpr int kServiceIconFetchRetrySeconds = 60;
 
 QString redactedFormattedXml(QString xml)
 {
-    xml.replace(QRegularExpression(QStringLiteral(R"(\b((?:Password|Password0|Token|Token0|Key|Key0|AuthToken|PrivateKey|SessionId)\d*)="[^"]*")"),
-                                   QRegularExpression::CaseInsensitiveOption),
-                QStringLiteral(R"(\1="<redacted>")"));
-    xml.replace(QRegularExpression(QStringLiteral("<((?:[A-Za-z_][\\w.-]*:)?(?:authToken|privateKey|sessionId|password|token|key))([^>]*)>.*?</\\1>"),
-                                   QRegularExpression::CaseInsensitiveOption),
-                QStringLiteral("<\\1\\2><redacted></\\1>"));
+    xml.replace(
+        QRegularExpression(
+            QStringLiteral(
+                R"(\b((?:Password|Password0|Token|Token0|Key|Key0|AuthToken|PrivateKey|SessionId)\d*)="[^"]*")"),
+            QRegularExpression::CaseInsensitiveOption),
+        QStringLiteral(R"(\1="<redacted>")"));
+    xml.replace(
+        QRegularExpression(
+            QStringLiteral(
+                "<((?:[A-Za-z_][\\w.-]*:)?(?:authToken|privateKey|sessionId|password|token|key))([^>]*)>.*?</\\1>"),
+            QRegularExpression::CaseInsensitiveOption),
+        QStringLiteral("<\\1\\2><redacted></\\1>"));
 
-    QString output;
+    QString          output;
     QXmlStreamReader reader(xml);
     QXmlStreamWriter writer(&output);
     writer.setAutoFormatting(true);
     writer.setAutoFormattingIndent(2);
 
-    while (!reader.atEnd()) {
+    while (!reader.atEnd())
+    {
         reader.readNext();
         if (reader.hasError())
             break;
@@ -56,11 +65,9 @@ QString redactedFormattedXml(QString xml)
 
     return output.isEmpty() ? xml : output;
 }
-}
+} // namespace
 
-Household::Household(QObject *parent)
-    : QObject(parent)
-    , m_discovery(&m_netMgr, this)
+Household::Household(QObject *parent) : QObject(parent), m_discovery(&m_netMgr, this)
 {
     connect(&m_discovery, &ZoneDiscovery::zoneReady, this, &Household::zoneReady);
     connect(&m_discovery, &ZoneDiscovery::zoneListChanged, this, &Household::zoneListChanged);
@@ -92,7 +99,8 @@ MusicService *Household::serviceById(int serviceId) const
     // carried both via its smapimap.xml). Accept either so a Spotify
     // favourite parsed from SA_RINCON9_ can still resolve the installed
     // Spotify service whose household id may be 2311/3079.
-    for (SmapiService *service : m_smapiServicesByKey) {
+    for (SmapiService *service : m_smapiServicesByKey)
+    {
         if (service && service->smapiId() == serviceId)
             return service;
     }
@@ -107,7 +115,8 @@ ZonePlayer *Household::browseCoordinator() const
     // ZonePlayer::isSelectable() further required visible/not-Bridge/
     // configured. We do not track configured yet, so use the same
     // observable constraints this port already has.
-    for (ZonePlayer *zone : m_discovery.zones()) {
+    for (ZonePlayer *zone : m_discovery.zones())
+    {
         if (!zone || !zone->ready() || zone->invisible())
             continue;
         if (!zone->isCoordinator())
@@ -118,7 +127,8 @@ ZonePlayer *Household::browseCoordinator() const
             continue;
         if (zone->modelName().contains(QStringLiteral("Sub"), Qt::CaseInsensitive))
             continue;
-        if (m_loggedContentDirectoryCoordinatorUdn != zone->udn()) {
+        if (m_loggedContentDirectoryCoordinatorUdn != zone->udn())
+        {
             m_loggedContentDirectoryCoordinatorUdn = zone->udn();
             QLOG() << "content-directory coordinator selected:"
                    << QStringLiteral("%1 (%2 %3)").arg(zone->roomName(), zone->deviceIp(), zone->udn());
@@ -139,11 +149,11 @@ void Household::onNetworkChanged()
     // be on the other end of a reconnect (different Wi-Fi network).
     m_discovery.restart();
 
-    m_musicServiceStartupStarted = false;
-    m_serviceCatalogReady = false;
-    m_serviceIconsReady = false;
-    m_serviceDeviceSerialReady = false;
-    m_installedServicesReady = false;
+    m_musicServiceStartupStarted         = false;
+    m_serviceCatalogReady                = false;
+    m_serviceIconsReady                  = false;
+    m_serviceDeviceSerialReady           = false;
+    m_installedServicesReady             = false;
     m_unavailableInstalledServicesLogged = false;
     updateMusicServicesReady();
     m_catalogFailedZoneUdns.clear();
@@ -165,12 +175,14 @@ void Household::onNetworkChanged()
     for (SmapiService *service : std::as_const(m_smapiServicesByKey))
         service->deleteLater();
     m_smapiServicesByKey.clear();
-    if (m_libraryService) {
+    if (m_libraryService)
+    {
         m_libraryService->deleteLater();
         m_libraryService = nullptr;
     }
 
-    if (!m_services.isEmpty()) {
+    if (!m_services.isEmpty())
+    {
         m_services.clear();
         emit musicServicesChanged();
     }
@@ -231,7 +243,7 @@ void Household::decodeInstalledServicesWhenReady()
     if (!m_discovery.topologyZone())
         return;
 
-    m_rawInstalledServices = ThirdPartyMediaServers::parse(m_discovery.householdId(), m_pendingTpmsxRaw);
+    m_rawInstalledServices   = ThirdPartyMediaServers::parse(m_discovery.householdId(), m_pendingTpmsxRaw);
     m_installedServicesReady = true;
     QLOG() << "installed services decoded:" << m_rawInstalledServices.size() << "raw installed service(s)";
     logUnavailableInstalledServices();
@@ -240,7 +252,8 @@ void Household::decodeInstalledServicesWhenReady()
 
 ZonePlayer *Household::pickCatalogFetchZone() const
 {
-    for (ZonePlayer *zone : m_discovery.zones()) {
+    for (ZonePlayer *zone : m_discovery.zones())
+    {
         if (!zone || !zone->ready() || zone->invisible())
             continue;
         if (!zone->isCoordinator())
@@ -251,8 +264,10 @@ ZonePlayer *Household::pickCatalogFetchZone() const
             continue;
         if (zone->modelName().contains(QStringLiteral("Sub"), Qt::CaseInsensitive))
             continue;
-        if (!m_catalogFailedZoneUdns.contains(zone->udn())) {
-            if (m_loggedCatalogFetchCoordinatorUdn != zone->udn()) {
+        if (!m_catalogFailedZoneUdns.contains(zone->udn()))
+        {
+            if (m_loggedCatalogFetchCoordinatorUdn != zone->udn())
+            {
                 m_loggedCatalogFetchCoordinatorUdn = zone->udn();
                 QLOG() << "catalog-fetch coordinator selected:"
                        << QStringLiteral("%1 (%2 %3)").arg(zone->roomName(), zone->deviceIp(), zone->udn());
@@ -279,7 +294,8 @@ void Household::startMusicServiceStartup(ZonePlayer *)
 void Household::fetchMusicServiceCatalog()
 {
     ZonePlayer *zone = pickCatalogFetchZone();
-    if (!zone) {
+    if (!zone)
+    {
         QLOG() << "ListAvailableServices: no ready coordinator yet -- retrying in" << kServiceFetchRetrySeconds << "s";
         QTimer::singleShot(kServiceFetchRetrySeconds * 1000, this, &Household::fetchMusicServiceCatalog);
         return;
@@ -287,33 +303,37 @@ void Household::fetchMusicServiceCatalog()
 
     QLOG() << "ListAvailableServices via coordinator" << zone->roomName();
     QNetworkReply *reply = zone->musicServices().ListAvailableServices();
-    connect(reply, &QNetworkReply::finished, this, [this, reply, zoneUdn = zone->udn(), roomName = zone->roomName()]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, zoneUdn = zone->udn(), roomName = zone->roomName()]()
+            {
+                SoapResponse response(reply);
+                reply->deleteLater();
 
-        if (response.error()) {
-            QWARN() << "ListAvailableServices failed against" << roomName << ":" << response.faultString()
-                    << "-- retrying (possibly against a different zone) in" << kServiceFetchRetrySeconds << "s";
-            // Some zones (Subs, and indistinguishably-by-model-name
-            // stereo-pair satellite slaves) never implement this action
-            // correctly, so blindly retrying the exact same zone forever
-            // would strand the whole household's catalog on one
-            // permanently-broken device -- see pickCatalogFetchZone().
-            m_catalogFailedZoneUdns.insert(zoneUdn);
-            QTimer::singleShot(kServiceFetchRetrySeconds * 1000, this, &Household::fetchMusicServiceCatalog);
-            return;
-        }
+                if (response.error())
+                {
+                    QWARN() << "ListAvailableServices failed against" << roomName << ":" << response.faultString()
+                            << "-- retrying (possibly against a different zone) in" << kServiceFetchRetrySeconds << "s";
+                    // Some zones (Subs, and indistinguishably-by-model-name
+                    // stereo-pair satellite slaves) never implement this action
+                    // correctly, so blindly retrying the exact same zone forever
+                    // would strand the whole household's catalog on one
+                    // permanently-broken device -- see pickCatalogFetchZone().
+                    m_catalogFailedZoneUdns.insert(zoneUdn);
+                    QTimer::singleShot(kServiceFetchRetrySeconds * 1000, this, &Household::fetchMusicServiceCatalog);
+                    return;
+                }
 
-        onServiceCatalogFetched(response.value(QStringLiteral("AvailableServiceDescriptorList")).toUtf8(),
-                                response.value(QStringLiteral("AvailableServiceTypeList")));
-    });
+                onServiceCatalogFetched(response.value(QStringLiteral("AvailableServiceDescriptorList")).toUtf8(),
+                                        response.value(QStringLiteral("AvailableServiceTypeList")));
+            });
 }
 
 void Household::onServiceCatalogFetched(const QByteArray &descriptorList, const QString &typeList)
 {
     m_catalogFailedZoneUdns.clear();
 
-    if (verboseLoggingEnabled()) {
+    if (verboseLoggingEnabled())
+    {
         QLOG() << "AvailableServiceTypeList:";
         QLOG() << typeList;
 
@@ -321,7 +341,7 @@ void Household::onServiceCatalogFetched(const QByteArray &descriptorList, const 
         QLOG() << redactedFormattedXml(QString::fromUtf8(descriptorList));
     }
 
-    m_smapiCatalog = MusicServiceCatalog::build(descriptorList, typeList);
+    m_smapiCatalog        = MusicServiceCatalog::build(descriptorList, typeList);
     m_serviceCatalogReady = true;
 
     logServiceMap();
@@ -338,46 +358,48 @@ void Household::logServiceMap() const
     QLOG() << "--------------------------------------------------------------------------------";
     QLOG() << "building service map:" << m_smapiCatalog.size() << "SMAPI service(s)";
     QLOG() << QStringLiteral("      id smapi  %1 %2 %3 %4 %5 %6 %7")
-                             .arg(QStringLiteral("title"), -32)
-                             .arg(QStringLiteral("auth"), -12)
-                             .arg(QStringLiteral("poll"), -6)
-                             .arg(QStringLiteral("caps"), -12)
-                             .arg(QStringLiteral("type"), -10)
-                             .arg(QStringLiteral("endpoint"), -42)
-                             .arg(QStringLiteral("manifest"));
-        ;
+                  .arg(QStringLiteral("title"), -32)
+                  .arg(QStringLiteral("auth"), -12)
+                  .arg(QStringLiteral("poll"), -6)
+                  .arg(QStringLiteral("caps"), -12)
+                  .arg(QStringLiteral("type"), -10)
+                  .arg(QStringLiteral("endpoint"), -42)
+                  .arg(QStringLiteral("manifest"));
+    ;
 
     QList<int> serviceIds = m_smapiCatalog.keys();
     std::sort(serviceIds.begin(), serviceIds.end());
-    for (int serviceId : std::as_const(serviceIds)) {
-        const SmapiCatalogEntry &entry = m_smapiCatalog.value(serviceId);
-        const QString endpoint = entry.secureUri.isEmpty() ? entry.uri : entry.secureUri;
-        QLOG() << QStringLiteral("  %1 %2  %3 %4 %5 %6 %7 %8")// %9")
-                                 .arg(serviceId, 6)
-                                 .arg(entry.smapiId, 5)
-                                 .arg(entry.title, -32)
-                                 .arg(entry.auth.isEmpty() ? QStringLiteral("-") : entry.auth, -12)
-                                 .arg(entry.pollInterval.isEmpty() ? QStringLiteral("-") : entry.pollInterval, -6)
-                                 .arg(entry.capabilities.isEmpty() ? QStringLiteral("-") : entry.capabilities, -12)
-                                 .arg(entry.containerType.isEmpty() ? QStringLiteral("-") : entry.containerType, -10)
-                                 .arg(endpoint.isEmpty() ? QStringLiteral("-") : endpoint, -42)
-                                 //.arg(entry.manifestUri.isEmpty() ? QStringLiteral("<none>") : entry.manifestUri);
-                                 ;
+    for (int serviceId : std::as_const(serviceIds))
+    {
+        const SmapiCatalogEntry &entry    = m_smapiCatalog.value(serviceId);
+        const QString            endpoint = entry.secureUri.isEmpty() ? entry.uri : entry.secureUri;
+        QLOG() << QStringLiteral("  %1 %2  %3 %4 %5 %6 %7 %8") // %9")
+                      .arg(serviceId, 6)
+                      .arg(entry.smapiId, 5)
+                      .arg(entry.title, -32)
+                      .arg(entry.auth.isEmpty() ? QStringLiteral("-") : entry.auth, -12)
+                      .arg(entry.pollInterval.isEmpty() ? QStringLiteral("-") : entry.pollInterval, -6)
+                      .arg(entry.capabilities.isEmpty() ? QStringLiteral("-") : entry.capabilities, -12)
+                      .arg(entry.containerType.isEmpty() ? QStringLiteral("-") : entry.containerType, -10)
+                      .arg(endpoint.isEmpty() ? QStringLiteral("-") : endpoint, -42)
+            //.arg(entry.manifestUri.isEmpty() ? QStringLiteral("<none>") : entry.manifestUri);
+            ;
     }
 
-    for (int legacyId : {1, 2, 3, 11, 13, 14}) {
+    for (int legacyId : {1, 2, 3, 11, 13, 14})
+    {
         const QString name = MusicServiceCatalog::legacyServiceName(legacyId);
         if (!name.isEmpty())
             QLOG() << QStringLiteral("  %1 %2  %3 %4 %5 %6 %7 %8 %9")
-                                     .arg(legacyId, 6)
-                                     .arg(QStringLiteral("-"), 5)
-                                     .arg(name, -32)
-                                     .arg(QStringLiteral("legacy"), -12)
-                                     .arg(QStringLiteral("-"), -6)
-                                     .arg(QStringLiteral("-"), -12)
-                                     .arg(QStringLiteral("-"), -10)
-                                     .arg(QStringLiteral("-"), -42)
-                                     .arg(QStringLiteral("no SMAPI endpoint"));
+                          .arg(legacyId, 6)
+                          .arg(QStringLiteral("-"), 5)
+                          .arg(name, -32)
+                          .arg(QStringLiteral("legacy"), -12)
+                          .arg(QStringLiteral("-"), -6)
+                          .arg(QStringLiteral("-"), -12)
+                          .arg(QStringLiteral("-"), -10)
+                          .arg(QStringLiteral("-"), -42)
+                          .arg(QStringLiteral("no SMAPI endpoint"));
     }
 
     QLOG() << "--------------------------------------------------------------------------------";
@@ -385,13 +407,15 @@ void Household::logServiceMap() const
 
 void Household::logUnavailableInstalledServices()
 {
-    if (m_unavailableInstalledServicesLogged || !m_installedServicesReady || !m_serviceCatalogReady
-        || m_rawInstalledServices.isEmpty()) {
+    if (m_unavailableInstalledServicesLogged || !m_installedServicesReady || !m_serviceCatalogReady ||
+        m_rawInstalledServices.isEmpty())
+    {
         return;
     }
 
     QStringList unavailable;
-    for (const InstalledService &service : m_rawInstalledServices) {
+    for (const InstalledService &service : m_rawInstalledServices)
+    {
         if (!m_smapiCatalog.contains(service.serviceId))
             unavailable.append(QString::number(service.serviceId));
     }
@@ -406,26 +430,29 @@ void Household::fetchServiceIcons()
     // Plain unauthenticated HTTP GET -- a static Sonos-hosted feed, not a
     // per-zone SOAP action.
     QNetworkRequest request{QUrl(QString::fromLatin1(ServiceLogoCatalog::kUrl))};
-    QNetworkReply *reply = m_netMgr.get(request);
+    QNetworkReply  *reply = m_netMgr.get(request);
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply]()
+            {
+                reply->deleteLater();
 
-        if (reply->error() != QNetworkReply::NoError) {
-            QWARN() << "mslogo.xml fetch failed:" << reply->errorString() << "-- retrying in background in"
-                    << kServiceIconFetchRetrySeconds << "s";
-            m_serviceIconsReady = true;
-            QTimer::singleShot(kServiceIconFetchRetrySeconds * 1000, this, &Household::fetchServiceIcons);
-            return;
-        }
+                if (reply->error() != QNetworkReply::NoError)
+                {
+                    QWARN() << "mslogo.xml fetch failed:" << reply->errorString() << "-- retrying in background in"
+                            << kServiceIconFetchRetrySeconds << "s";
+                    m_serviceIconsReady = true;
+                    QTimer::singleShot(kServiceIconFetchRetrySeconds * 1000, this, &Household::fetchServiceIcons);
+                    return;
+                }
 
-        onServiceIconsFetched(ServiceLogoCatalog::parse(reply->readAll()));
-    });
+                onServiceIconsFetched(ServiceLogoCatalog::parse(reply->readAll()));
+            });
 }
 
 void Household::onServiceIconsFetched(const QHash<int, QString> &icons)
 {
-    m_serviceIcons = icons;
+    m_serviceIcons      = icons;
     m_serviceIconsReady = true;
     QLOG() << "service icon catalog built," << m_serviceIcons.size() << "icons";
     rebuildMusicServices();
@@ -438,26 +465,29 @@ void Household::fetchServiceDeviceSerial()
         return;
 
     QNetworkReply *reply = topZone->systemProperties().GetString(QStringLiteral("R_TrialZPSerial"));
-    connect(reply, &QNetworkReply::finished, this, [this, reply, topZone]() {
-        SoapResponse response(reply);
-        reply->deleteLater();
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, topZone]()
+            {
+                SoapResponse response(reply);
+                reply->deleteLater();
 
-        // Falls back to the zone's own MAC-derived serial number, matching
-        // SonosApp::getSerialFinished() -- R_TrialZPSerial can come back
-        // empty on some systems.
-        QString serial = response.error() ? QString() : response.value(QStringLiteral("StringValue"));
-        if (serial.isEmpty())
-            serial = topZone->serialNumber();
+                // Falls back to the zone's own MAC-derived serial number, matching
+                // SonosApp::getSerialFinished() -- R_TrialZPSerial can come back
+                // empty on some systems.
+                QString serial = response.error() ? QString() : response.value(QStringLiteral("StringValue"));
+                if (serial.isEmpty())
+                    serial = topZone->serialNumber();
 
-        onServiceDeviceSerialFetched(serial);
-    });
+                onServiceDeviceSerialFetched(serial);
+            });
 }
 
 void Household::onServiceDeviceSerialFetched(const QString &serial)
 {
-    m_serviceDeviceSerial = serial;
+    m_serviceDeviceSerial      = serial;
     m_serviceDeviceSerialReady = !m_serviceDeviceSerial.isEmpty();
-    QLOG() << "service device serial:" << (m_serviceDeviceSerial.isEmpty() ? QStringLiteral("<empty>") : m_serviceDeviceSerial);
+    QLOG() << "service device serial:"
+           << (m_serviceDeviceSerial.isEmpty() ? QStringLiteral("<empty>") : m_serviceDeviceSerial);
     updateMusicServicesReady();
 }
 
@@ -471,7 +501,7 @@ void Household::rebuildMusicServices()
     if (!m_libraryService && browseCoordinator())
         m_libraryService = new SonosLibraryService(this, this);
 
-    QSet<QString> seenKeys;
+    QSet<QString>         seenKeys;
     QList<MusicService *> rebuilt;
     if (m_libraryService)
         rebuilt.append(m_libraryService);
@@ -483,7 +513,8 @@ void Household::rebuildMusicServices()
     // keeps the fields parsed out of it, not the raw string.
     QStringList installedServiceLines;
 
-    for (InstalledService service : std::as_const(m_rawInstalledServices)) {
+    for (InstalledService service : std::as_const(m_rawInstalledServices))
+    {
         // TPMSX is an account/config snapshot, not proof that a service is
         // still usable. Legacy registrations such as Pandora/Last.fm can
         // remain in TPMSX long after Sonos has removed them from the modern
@@ -495,10 +526,10 @@ void Household::rebuildMusicServices()
         if (catalogEntry == m_smapiCatalog.constEnd())
             continue;
 
-        service.title = catalogEntry->title;
+        service.title      = catalogEntry->title;
         service.serviceUri = catalogEntry->secureUri.isEmpty() ? catalogEntry->uri : catalogEntry->secureUri;
         service.authPolicy = catalogEntry->auth;
-        const int smapiId = catalogEntry->smapiId;
+        const int smapiId  = catalogEntry->smapiId;
         // Confirmed empirically against the live mslogo.xml feed: unlike
         // bb10-era Sonos (where the icon feed and the SMAPI descriptor list
         // used genuinely different id schemes, needing the smapiId
@@ -506,7 +537,7 @@ void Household::rebuildMusicServices()
         // catalog services alike -- by the household's own serviceId
         // directly. Looking icons up by smapiId (the old scheme) silently
         // found nothing for every catalog-resolved service.
-        service.iconUrl = m_serviceIcons.value(service.serviceId);
+        service.iconUrl    = m_serviceIcons.value(service.serviceId);
 
         // loginName mirrors the UDN suffix Sonos itself uses: a real
         // username for UserId-auth services, or the synthetic
@@ -515,8 +546,8 @@ void Household::rebuildMusicServices()
         // ThirdPartyMediaServers.h) -- matches roomtunes-bb10's own
         // "installed services:" dump, which repeats this same identifier
         // twice (once in the reconstructed UDN, once as its own column).
-        const QString loginName = service.username.isEmpty() ? QStringLiteral("X_#Svc%1-0-Token").arg(service.serviceId)
-                                                               : service.username;
+        const QString loginName =
+            service.username.isEmpty() ? QStringLiteral("X_#Svc%1-0-Token").arg(service.serviceId) : service.username;
         installedServiceLines << QStringLiteral("  SA_RINCON%1_%2 -> %3 %4")
                                      .arg(service.serviceId)
                                      .arg(loginName, -40)
@@ -531,44 +562,52 @@ void Household::rebuildMusicServices()
 
         SmapiService *smapiService = m_smapiServicesByKey.value(key);
         const quint32 capabilities = catalogEntry->capabilities.toUInt();
-        if (!smapiService) {
+        if (!smapiService)
+        {
             smapiService = new SmapiService(this, service.serviceId, smapiId, service.serviceUri, service.authPolicy,
-                                             service.username, service.token, service.key, service.title,
-                                             service.iconUrl, capabilities, catalogEntry->manifestUri, this);
+                                            service.username, service.token, service.key, service.title,
+                                            service.iconUrl, capabilities, catalogEntry->manifestUri, this);
             m_smapiServicesByKey.insert(key, smapiService);
-        } else {
+        }
+        else
+        {
             smapiService->updateResolved(smapiId, service.serviceUri, service.authPolicy, service.username,
-                                          service.token, service.key, service.title, service.iconUrl,
-                                          capabilities, catalogEntry->manifestUri);
+                                         service.token, service.key, service.title, service.iconUrl, capabilities,
+                                         catalogEntry->manifestUri);
         }
         rebuilt.append(smapiService);
     }
 
-    if (!installedServiceLines.isEmpty()) {
+    if (!installedServiceLines.isEmpty())
+    {
         QLOG() << "installed services:";
         for (const QString &line : std::as_const(installedServiceLines))
             QLOG() << line;
 
         QLOG() << LOGSEPARATOR;
-
     }
 
     // Drop instances for services that genuinely disappeared (e.g.
     // unlinked in the official Sonos app) rather than just failed to
     // resolve on this particular rebuild pass.
-    for (auto it = m_smapiServicesByKey.begin(); it != m_smapiServicesByKey.end();) {
-        if (!seenKeys.contains(it.key())) {
+    for (auto it = m_smapiServicesByKey.begin(); it != m_smapiServicesByKey.end();)
+    {
+        if (!seenKeys.contains(it.key()))
+        {
             it.value()->deleteLater();
             it = m_smapiServicesByKey.erase(it);
-        } else {
+        }
+        else
+        {
             ++it;
         }
     }
 
     m_services = rebuilt;
     updateMusicServicesReady();
-    QLOG() << "rebuildMusicServices:" << m_services.size() << "service(s) total (library=" << (m_libraryService != nullptr)
-           << ", smapi=" << m_smapiServicesByKey.size() << ", rawInstalled=" << m_rawInstalledServices.size() << ")";
+    QLOG() << "rebuildMusicServices:" << m_services.size()
+           << "service(s) total (library=" << (m_libraryService != nullptr) << ", smapi=" << m_smapiServicesByKey.size()
+           << ", rawInstalled=" << m_rawInstalledServices.size() << ")";
     emit musicServicesChanged();
 }
 
@@ -582,7 +621,8 @@ void Household::updateMusicServicesReady()
     // not block browsing.
     // Spotify is tolerant of a missing deviceId; BBC Sounds can return an
     // empty SOAP body, so this readiness gate must include the serial too.
-    const bool ready = m_libraryService && m_serviceCatalogReady && m_installedServicesReady && m_serviceDeviceSerialReady;
+    const bool ready =
+        m_libraryService && m_serviceCatalogReady && m_installedServicesReady && m_serviceDeviceSerialReady;
     if (m_musicServicesReady == ready)
         return;
 
@@ -590,4 +630,4 @@ void Household::updateMusicServicesReady()
     emit musicServicesReadyChanged();
 }
 
-}
+} // namespace RoomTunes

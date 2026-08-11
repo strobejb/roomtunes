@@ -3,7 +3,8 @@
 #include <QAbstractListModel>
 #include <QVariantList>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 class Household;
 class ZonePlayer;
@@ -25,8 +26,9 @@ class RecentlyPlayedModel : public QAbstractListModel
 {
     Q_OBJECT
 
-public:
-    enum Role {
+  public:
+    enum Role
+    {
         TitleRole = Qt::UserRole + 1,
         ArtistRole,
         ImageUrlRole,
@@ -39,18 +41,18 @@ public:
 
     explicit RecentlyPlayedModel(Household *household, QObject *parent = nullptr);
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    int                    rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    QVariant               data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
-private:
+  private:
     void watchZone(ZonePlayer *zone);
     void recordSelectedItem(const QVariantMap &item);
     void load();
     void save();
 
-    Household *m_household;
+    Household   *m_household;
     QVariantList m_entries; // most-recent-first
 };
 
-}
+} // namespace RoomTunes

@@ -3,14 +3,15 @@
 #include <QHash>
 #include <QString>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // One resolved entry from Sonos' global SMAPI service catalog
 // (MusicServices::ListAvailableServices()) -- the ported equivalent of
 // bb10's SmapiMetric, trimmed to what's needed to display/browse a service.
 struct SmapiCatalogEntry
 {
-    int smapiId = 0;
+    int     smapiId = 0;
     QString title;
     QString uri;
     QString secureUri;
@@ -32,17 +33,17 @@ struct SmapiCatalogEntry
 // whose ids do not follow the normal encoding.
 class MusicServiceCatalog
 {
-public:
+  public:
     // descriptorListXml is the <AvailableServiceDescriptorList> SOAP
     // response body (a <Services><Service .../>...</Services> document);
     // availableServiceTypeList is the raw comma-separated
     // <AvailableServiceTypeList> text (includes legacy ids < 16).
     static QHash<int, SmapiCatalogEntry> build(const QByteArray &descriptorListXml,
-                                                const QString &availableServiceTypeList);
+                                               const QString    &availableServiceTypeList);
 
     // Human name for a legacy (serviceId < 16) service that never appears
     // in the SMAPI catalog at all. Empty if serviceId isn't a known legacy id.
     static QString legacyServiceName(int serviceId);
 };
 
-}
+} // namespace RoomTunes

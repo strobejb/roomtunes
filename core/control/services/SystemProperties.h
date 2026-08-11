@@ -2,20 +2,19 @@
 
 #include "../UpnpServiceBase.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Ported from upnp/Sonos_SystemProperties.hpp, trimmed to just GetString --
 // the only action RoomTunes needs (to read R_TrialZPSerial, see
 // Household::fetchServiceDeviceSerial()).
 class SystemProperties : public UpnpServiceBase
 {
-public:
+  public:
     SystemProperties(QNetworkAccessManager *netMgr, const QString &device, int port = 1400)
-        : UpnpServiceBase(netMgr, device, port,
-                           QStringLiteral("/SystemProperties/Control"),
-                           QStringLiteral("/SystemProperties/Event"),
-                           QStringLiteral("urn:schemas-upnp-org:service:SystemProperties:1"),
-                           "SystemProperties")
+        : UpnpServiceBase(netMgr, device, port, QStringLiteral("/SystemProperties/Control"),
+                          QStringLiteral("/SystemProperties/Event"),
+                          QStringLiteral("urn:schemas-upnp-org:service:SystemProperties:1"), "SystemProperties")
     {
     }
 
@@ -31,4 +30,4 @@ public:
     }
 };
 
-}
+} // namespace RoomTunes

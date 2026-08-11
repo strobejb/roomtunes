@@ -1,7 +1,7 @@
 #pragma once
 
-#include <QMap>
 #include <QDateTime>
+#include <QMap>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QSslConfiguration>
@@ -11,59 +11,78 @@
 
 #include "../control/Soap.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Generic Sonos Music API (SMAPI) client. This is the protocol Spotify (and
 // most other Sonos music partners) use -- ported from services/smapi.h.
 class Smapi
 {
-public:
-    enum class CredentialType { None, Basic, LoginToken, SessionId };
+  public:
+    enum class CredentialType
+    {
+        None,
+        Basic,
+        LoginToken,
+        SessionId
+    };
 
-    Smapi(QNetworkAccessManager *netMgr, const QString &serviceUrl)
-        : m_netMgr(netMgr)
+    Smapi(QNetworkAccessManager *netMgr, const QString &serviceUrl) : m_netMgr(netMgr)
     {
         bindService(serviceUrl);
     }
 
-    QSslConfiguration &sslConfig() { return m_sslConfig; }
+    QSslConfiguration &sslConfig()
+    {
+        return m_sslConfig;
+    }
 
     void bindService(const QString &serviceUrl)
     {
-        m_soapUrl = serviceUrl;
+        m_soapUrl    = serviceUrl;
         m_soapAction = QStringLiteral("http://www.sonos.com/Services/1.1");
     }
 
-    void setLanguage(const QString &lang) { m_language = lang; }
-    void setContextEnabled(bool enabled) { m_contextEnabled = enabled; }
+    void setLanguage(const QString &lang)
+    {
+        m_language = lang;
+    }
+
+    void setContextEnabled(bool enabled)
+    {
+        m_contextEnabled = enabled;
+    }
 
     void setDeviceCredentials(const QString &deviceId, const QString &deviceProvider)
     {
-        m_credType = CredentialType::Basic;
-        m_cred[QStringLiteral("deviceId")] = deviceId;
+        m_credType                               = CredentialType::Basic;
+        m_cred[QStringLiteral("deviceId")]       = deviceId;
         m_cred[QStringLiteral("deviceProvider")] = deviceProvider;
     }
 
     void setSessionIdCredentials(const QString &deviceId, const QString &deviceProvider, const QString &sessionId)
     {
-        m_credType = CredentialType::SessionId;
-        m_cred[QStringLiteral("deviceId")] = deviceId;
+        m_credType                               = CredentialType::SessionId;
+        m_cred[QStringLiteral("deviceId")]       = deviceId;
         m_cred[QStringLiteral("deviceProvider")] = deviceProvider;
-        m_cred[QStringLiteral("sessionId")] = sessionId;
+        m_cred[QStringLiteral("sessionId")]      = sessionId;
     }
 
     void setLoginTokenCredentials(const QString &deviceId, const QString &deviceProvider, const QString &token,
-                                   const QString &key, const QString &householdId)
+                                  const QString &key, const QString &householdId)
     {
-        m_credType = CredentialType::LoginToken;
-        m_cred[QStringLiteral("deviceId")] = deviceId;
+        m_credType                               = CredentialType::LoginToken;
+        m_cred[QStringLiteral("deviceId")]       = deviceId;
         m_cred[QStringLiteral("deviceProvider")] = deviceProvider;
-        m_cred[QStringLiteral("token")] = token;
-        m_cred[QStringLiteral("key")] = key;
-        m_cred[QStringLiteral("householdId")] = householdId;
+        m_cred[QStringLiteral("token")]          = token;
+        m_cred[QStringLiteral("key")]            = key;
+        m_cred[QStringLiteral("householdId")]    = householdId;
     }
 
-    QString credential(const QString &name) const { return m_cred.value(name); }
+    QString credential(const QString &name) const
+    {
+        return m_cred.value(name);
+    }
 
     QNetworkReply *getSessionId(const QString &username, const QString &password)
     {
@@ -171,7 +190,8 @@ public:
         return request.send(m_soapUrl);
     }
 
-    QNetworkReply *getDeviceAuthToken(const QString &householdId, const QString &linkCode, const QString &linkDeviceId = QString())
+    QNetworkReply *getDeviceAuthToken(const QString &householdId, const QString &linkCode,
+                                      const QString &linkDeviceId = QString())
     {
         SoapRequest request(m_netMgr, m_soapAction, QStringLiteral("getDeviceAuthToken"), m_language, &m_sslConfig);
         configureSmapiRequest(request);
@@ -187,7 +207,7 @@ public:
         return request.send(m_soapUrl);
     }
 
-private:
+  private:
     static void configureBaseSmapiRequest(SoapRequest &request)
     {
         // SMAPI is an internet SOAP service, not a UPnP control endpoint.
@@ -206,7 +226,8 @@ private:
     {
         QXmlStreamWriter &xml = request.xmlWriter();
 
-        switch (m_credType) {
+        switch (m_credType)
+        {
         case CredentialType::Basic:
             xml.writeStartElement(QStringLiteral("s:Header"));
             xml.writeStartElement(QStringLiteral("credentials"));
@@ -239,7 +260,8 @@ private:
             xml.writeDefaultNamespace(QStringLiteral("http://www.sonos.com/Services/1.1"));
             writeCredential(xml, QStringLiteral("deviceId"));
             writeCredential(xml, QStringLiteral("deviceProvider"));
-            if (full) {
+            if (full)
+            {
                 xml.writeStartElement(QStringLiteral("loginToken"));
                 writeCredential(xml, QStringLiteral("token"));
                 writeCredential(xml, QStringLiteral("key"));
@@ -253,7 +275,8 @@ private:
             break;
 
         case CredentialType::None:
-            if (m_contextEnabled) {
+            if (m_contextEnabled)
+            {
                 xml.writeStartElement(QStringLiteral("s:Header"));
                 writeContext(xml);
                 xml.writeEndElement();
@@ -264,10 +287,10 @@ private:
 
     void writeContext(QXmlStreamWriter &xml)
     {
-        const int offsetSeconds = QDateTime::currentDateTime().offsetFromUtc();
-        const QChar sign = offsetSeconds < 0 ? QLatin1Char('-') : QLatin1Char('+');
-        const int offsetMinutes = std::abs(offsetSeconds) / 60;
-        const QString timeZone = QStringLiteral("%1%2:%3")
+        const int     offsetSeconds = QDateTime::currentDateTime().offsetFromUtc();
+        const QChar   sign          = offsetSeconds < 0 ? QLatin1Char('-') : QLatin1Char('+');
+        const int     offsetMinutes = std::abs(offsetSeconds) / 60;
+        const QString timeZone      = QStringLiteral("%1%2:%3")
                                      .arg(sign)
                                      .arg(offsetMinutes / 60, 2, 10, QLatin1Char('0'))
                                      .arg(offsetMinutes % 60, 2, 10, QLatin1Char('0'));
@@ -283,16 +306,16 @@ private:
         xml.writeTextElement(name, m_cred.value(name));
     }
 
-private:
+  private:
     QNetworkAccessManager *m_netMgr;
-    QString m_soapUrl;
-    QString m_soapAction;
-    QString m_language;
-    QSslConfiguration m_sslConfig = QSslConfiguration::defaultConfiguration();
+    QString                m_soapUrl;
+    QString                m_soapAction;
+    QString                m_language;
+    QSslConfiguration      m_sslConfig = QSslConfiguration::defaultConfiguration();
 
     QMap<QString, QString> m_cred;
-    CredentialType m_credType = CredentialType::None;
-    bool m_contextEnabled = false;
+    CredentialType         m_credType       = CredentialType::None;
+    bool                   m_contextEnabled = false;
 };
 
-}
+} // namespace RoomTunes

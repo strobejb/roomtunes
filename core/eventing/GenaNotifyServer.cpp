@@ -4,22 +4,22 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
+namespace
+{
 
 QString peerAddressForLog(const QTcpSocket *socket)
 {
-    bool ok = false;
+    bool          ok   = false;
     const quint32 ipv4 = socket->peerAddress().toIPv4Address(&ok);
     return ok ? QHostAddress(ipv4).toString() : socket->peerAddress().toString();
 }
 
-}
+} // namespace
 
-GenaNotifyServer::GenaNotifyServer(QObject *parent)
-    : QObject(parent)
-    , m_server(new QTcpServer(this))
+GenaNotifyServer::GenaNotifyServer(QObject *parent) : QObject(parent), m_server(new QTcpServer(this))
 {
     connect(m_server, &QTcpServer::newConnection, this, &GenaNotifyServer::onNewConnection);
 }
@@ -36,12 +36,19 @@ quint16 GenaNotifyServer::port() const
 
 void GenaNotifyServer::onNewConnection()
 {
-    while (QTcpSocket *socket = m_server->nextPendingConnection()) {
-        connect(socket, &QTcpSocket::readyRead, this, [this, socket]() { onReadyRead(socket); });
-        connect(socket, &QTcpSocket::disconnected, this, [this, socket]() {
-            m_buffers.remove(socket);
-            socket->deleteLater();
-        });
+    while (QTcpSocket *socket = m_server->nextPendingConnection())
+    {
+        connect(socket, &QTcpSocket::readyRead, this,
+                [this, socket]()
+                {
+                    onReadyRead(socket);
+                });
+        connect(socket, &QTcpSocket::disconnected, this,
+                [this, socket]()
+                {
+                    m_buffers.remove(socket);
+                    socket->deleteLater();
+                });
     }
 }
 
@@ -59,20 +66,21 @@ void GenaNotifyServer::tryParse(QTcpSocket *socket)
     if (headerEnd < 0)
         return; // headers not fully received yet
 
-    const QByteArray headerBlock = buffer.left(headerEnd);
-    const QList<QByteArray> lines = headerBlock.split('\n');
+    const QByteArray        headerBlock = buffer.left(headerEnd);
+    const QList<QByteArray> lines       = headerBlock.split('\n');
 
     QString sid;
-    int contentLength = 0;
+    int     contentLength = 0;
 
     // line 0 is the "NOTIFY <path> HTTP/1.1" request line
-    for (int i = 1; i < lines.size(); ++i) {
-        const QByteArray line = lines.at(i).trimmed();
-        const int colon = line.indexOf(':');
+    for (int i = 1; i < lines.size(); ++i)
+    {
+        const QByteArray line  = lines.at(i).trimmed();
+        const int        colon = line.indexOf(':');
         if (colon <= 0)
             continue;
 
-        const QByteArray name = line.left(colon).trimmed().toUpper();
+        const QByteArray name  = line.left(colon).trimmed().toUpper();
         const QByteArray value = line.mid(colon + 1).trimmed();
 
         if (name == "SID")
@@ -96,4 +104,4 @@ void GenaNotifyServer::tryParse(QTcpSocket *socket)
     emit notified(peerAddress, sid, body);
 }
 
-}
+} // namespace RoomTunes

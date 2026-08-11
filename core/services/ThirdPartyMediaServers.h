@@ -3,11 +3,12 @@
 #include <QList>
 #include <QString>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 struct InstalledService
 {
-    int serviceId = 0;
+    int     serviceId = 0;
     QString username;
     QString password; // meaning depends on the service's own auth policy -- see Smapi.h
 
@@ -57,7 +58,7 @@ struct InstalledService
 // calc_cipher_key) and ServiceDiscovery.cpp's detectInstalledServices().
 class ThirdPartyMediaServers
 {
-public:
+  public:
     // householdId is the Sonos household ID (e.g. "Sonos_XXXXXXXX...") used
     // to derive the decryption key; encoded is the raw GENA property value,
     // "2:<base64...>". Returns an empty list if decryption/parsing fails
@@ -65,4 +66,4 @@ public:
     static QList<InstalledService> parse(const QString &householdId, const QString &encoded);
 };
 
-}
+} // namespace RoomTunes

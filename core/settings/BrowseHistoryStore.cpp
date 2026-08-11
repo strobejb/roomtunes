@@ -1,25 +1,26 @@
 #include "BrowseHistoryStore.h"
 
+#include <QDir>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QDir>
 
 #include "Settings.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
+namespace
+{
 
 QString browseHistoryFilePath()
 {
     return QDir(configDirectoryPath()).filePath(QStringLiteral("browse-history.json"));
 }
 
-}
+} // namespace
 
-BrowseHistoryStore::BrowseHistoryStore(QObject *parent)
-    : QObject(parent)
+BrowseHistoryStore::BrowseHistoryStore(QObject *parent) : QObject(parent)
 {
     load();
 }
@@ -76,4 +77,4 @@ qint64 BrowseHistoryStore::now() const
     return QDateTime::currentMSecsSinceEpoch();
 }
 
-}
+} // namespace RoomTunes

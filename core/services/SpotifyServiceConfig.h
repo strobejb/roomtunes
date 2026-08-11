@@ -2,7 +2,8 @@
 
 #include <QString>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Spotify is delivered through Sonos' generic SMAPI protocol (confirmed
 // from the original BB10 source: SmapiService + DeviceLink auth, same as
@@ -18,9 +19,9 @@ namespace RoomTunes {
 // through, and is intentionally not implemented in this pass.
 struct SpotifyServiceConfig
 {
-    QString serviceUrl;     // SMAPI SOAP endpoint -- must be supplied, see note above
+    QString serviceUrl; // SMAPI SOAP endpoint -- must be supplied, see note above
     QString title = QStringLiteral("Spotify");
     QString imageSource;
 };
 
-}
+} // namespace RoomTunes

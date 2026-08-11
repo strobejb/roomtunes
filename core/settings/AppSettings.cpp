@@ -4,15 +4,16 @@
 
 #include "Settings.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
-constexpr auto kGroupZones = "Zones";
+namespace
+{
+constexpr auto kGroupZones          = "Zones";
 constexpr auto kLastSelectedZoneUdn = "lastSelectedZoneUdn";
-}
+} // namespace
 
-AppSettings::AppSettings(QObject *parent)
-    : QObject(parent)
+AppSettings::AppSettings(QObject *parent) : QObject(parent)
 {
 }
 
@@ -34,4 +35,4 @@ void AppSettings::setLastSelectedZoneUdn(const QString &udn)
     emit lastSelectedZoneUdnChanged();
 }
 
-}
+} // namespace RoomTunes

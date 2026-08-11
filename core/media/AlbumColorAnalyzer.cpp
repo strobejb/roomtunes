@@ -2,9 +2,11 @@
 
 #include <QHash>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
+namespace
+{
 
 // One pass over the (already downscaled) image, bucketing pixels that pass
 // the given saturation/value floors into a coarse RGB histogram, and
@@ -12,13 +14,15 @@ namespace {
 // invalid QColor if nothing passes the floors at all.
 QColor pickWithThresholds(const QImage &scaled, qreal minSaturation, qreal minValue)
 {
-    QHash<quint32, int> histogram;
+    QHash<quint32, int>    histogram;
     QHash<quint32, QColor> representative;
 
-    for (int y = 0; y < scaled.height(); ++y) {
-        for (int x = 0; x < scaled.width(); ++x) {
+    for (int y = 0; y < scaled.height(); ++y)
+    {
+        for (int x = 0; x < scaled.width(); ++x)
+        {
             const QColor c = scaled.pixelColor(x, y);
-            float h, s, v;
+            float        h, s, v;
             c.getHsvF(&h, &s, &v);
 
             if (v < minValue || s < minSaturation)
@@ -28,9 +32,9 @@ QColor pickWithThresholds(const QImage &scaled, qreal minSaturation, qreal minVa
             // antialiasing/JPEG noise around one dominant color) count as
             // the same color instead of splitting frequency across dozens
             // of 1-off RGB values.
-            const int r = (c.red() / 24) * 24;
-            const int g = (c.green() / 24) * 24;
-            const int b = (c.blue() / 24) * 24;
+            const int     r   = (c.red() / 24) * 24;
+            const int     g   = (c.green() / 24) * 24;
+            const int     b   = (c.blue() / 24) * 24;
             const quint32 key = (quint32(r) << 16) | (quint32(g) << 8) | quint32(b);
 
             histogram[key]++;
@@ -42,19 +46,21 @@ QColor pickWithThresholds(const QImage &scaled, qreal minSaturation, qreal minVa
     if (histogram.isEmpty())
         return {};
 
-    quint32 bestKey = 0;
-    int bestCount = -1;
-    for (auto it = histogram.constBegin(); it != histogram.constEnd(); ++it) {
-        if (it.value() > bestCount) {
+    quint32 bestKey   = 0;
+    int     bestCount = -1;
+    for (auto it = histogram.constBegin(); it != histogram.constEnd(); ++it)
+    {
+        if (it.value() > bestCount)
+        {
             bestCount = it.value();
-            bestKey = it.key();
+            bestKey   = it.key();
         }
     }
 
     return representative.value(bestKey);
 }
 
-}
+} // namespace
 
 QColor AlbumColorAnalyzer::pickAccentColor(const QImage &image)
 {
@@ -84,4 +90,4 @@ QColor AlbumColorAnalyzer::pickAccentColor(const QImage &image)
     return QColor(0x5B, 0x3A, 0x8E);
 }
 
-}
+} // namespace RoomTunes

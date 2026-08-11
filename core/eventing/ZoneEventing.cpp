@@ -10,9 +10,11 @@
 
 #define QLOG_CATEGORY logEventing
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
+namespace
+{
 
 constexpr int kSubscriptionTimeoutSeconds = 3600;
 
@@ -30,7 +32,8 @@ QString extractGenaProperty(const QByteArray &body, const QString &propertyName)
 {
     QXmlStreamReader xml(body);
 
-    while (!xml.atEnd()) {
+    while (!xml.atEnd())
+    {
         if (!xml.readNextStartElement())
             continue;
 
@@ -39,7 +42,8 @@ QString extractGenaProperty(const QByteArray &body, const QString &propertyName)
         if (xml.name() != QLatin1String("property"))
             continue;
 
-        if (xml.readNextStartElement()) {
+        if (xml.readNextStartElement())
+        {
             if (xml.name() == propertyName)
                 return xml.readElementText(QXmlStreamReader::SkipChildElements);
             xml.skipCurrentElement();
@@ -54,10 +58,9 @@ QString zoneEventSubscriptionKey(const QString &udn, const char *serviceName)
     return udn + QLatin1Char('|') + QLatin1String(serviceName);
 }
 
-}
+} // namespace
 
-ZoneEventing::ZoneEventing(QObject *parent)
-    : QObject(parent)
+ZoneEventing::ZoneEventing(QObject *parent) : QObject(parent)
 {
     connect(&m_notifyServer, &GenaNotifyServer::notified, this, &ZoneEventing::onGenaNotify);
 
@@ -94,26 +97,29 @@ void ZoneEventing::subscribeTopology(ZonePlayer *zone)
            << m_notifyServer.port();
 
     QPointer<ZonePlayer> topologyZone = zone;
-    QNetworkReply *reply = zone->zoneGroupTopology().subscribe(localAddress, m_notifyServer.port(),
-                                                               kSubscriptionTimeoutSeconds);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, topologyZone]() {
-        reply->deleteLater();
-        if (!topologyZone)
-            return;
+    QNetworkReply       *reply =
+        zone->zoneGroupTopology().subscribe(localAddress, m_notifyServer.port(), kSubscriptionTimeoutSeconds);
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, topologyZone]()
+            {
+                reply->deleteLater();
+                if (!topologyZone)
+                    return;
 
-        const ScopedLogEndpoint logEndpoint(topologyZone->deviceIp(), LogDirection::Outbound);
-        if (reply->error() != QNetworkReply::NoError) {
-            QWARN() << "ZoneGroupTopology subscribe failed:" << reply->errorString()
-                    << "-- continuing with one-shot GetZoneGroupState refreshes";
-            return;
-        }
+                const ScopedLogEndpoint logEndpoint(topologyZone->deviceIp(), LogDirection::Outbound);
+                if (reply->error() != QNetworkReply::NoError)
+                {
+                    QWARN() << "ZoneGroupTopology subscribe failed:" << reply->errorString()
+                            << "-- continuing with one-shot GetZoneGroupState refreshes";
+                    return;
+                }
 
-        const QString sid = QString::fromUtf8(reply->rawHeader("SID"));
-        m_topologySubscriptionSid = sid;
-        topologyZone->zoneGroupTopology().setSid(sid);
-        QLOG() << "subscribed to ZoneGroupTopology, SID=" << sid;
-        m_topologyRenewTimer.start();
-    });
+                const QString sid         = QString::fromUtf8(reply->rawHeader("SID"));
+                m_topologySubscriptionSid = sid;
+                topologyZone->zoneGroupTopology().setSid(sid);
+                QLOG() << "subscribed to ZoneGroupTopology, SID=" << sid;
+                m_topologyRenewTimer.start();
+            });
 }
 
 void ZoneEventing::renewTopologySubscription()
@@ -122,25 +128,28 @@ void ZoneEventing::renewTopologySubscription()
     if (!zone || !zone->zoneGroupTopology().subscribed())
         return;
 
-    const QString localAddress = localAddressForPeer(zone->deviceIp());
+    const QString        localAddress = localAddressForPeer(zone->deviceIp());
     QPointer<ZonePlayer> topologyZone = zone;
-    QNetworkReply *reply = zone->zoneGroupTopology().subscribe(localAddress, m_notifyServer.port(),
-                                                               kSubscriptionTimeoutSeconds);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, topologyZone]() {
-        reply->deleteLater();
-        if (!topologyZone)
-            return;
+    QNetworkReply       *reply =
+        zone->zoneGroupTopology().subscribe(localAddress, m_notifyServer.port(), kSubscriptionTimeoutSeconds);
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, topologyZone]()
+            {
+                reply->deleteLater();
+                if (!topologyZone)
+                    return;
 
-        const ScopedLogEndpoint logEndpoint(topologyZone->deviceIp(), LogDirection::Outbound);
-        if (reply->error() != QNetworkReply::NoError) {
-            QWARN() << "ZoneGroupTopology resubscribe failed:" << reply->errorString();
-            return;
-        }
+                const ScopedLogEndpoint logEndpoint(topologyZone->deviceIp(), LogDirection::Outbound);
+                if (reply->error() != QNetworkReply::NoError)
+                {
+                    QWARN() << "ZoneGroupTopology resubscribe failed:" << reply->errorString();
+                    return;
+                }
 
-        const QString sid = QString::fromUtf8(reply->rawHeader("SID"));
-        m_topologySubscriptionSid = sid;
-        topologyZone->zoneGroupTopology().setSid(sid);
-    });
+                const QString sid         = QString::fromUtf8(reply->rawHeader("SID"));
+                m_topologySubscriptionSid = sid;
+                topologyZone->zoneGroupTopology().setSid(sid);
+            });
 }
 
 void ZoneEventing::subscribeZoneEvents(ZonePlayer *zone)
@@ -165,61 +174,66 @@ void ZoneEventing::subscribeZoneEvent(ZonePlayer *zone, UpnpService &service, Zo
         return;
 
     const QString localAddress = localAddressForPeer(zone->deviceIp());
-    const QString oldSid = service.sid();
+    const QString oldSid       = service.sid();
     m_pendingZoneEventSubscriptions.insert(pendingKey);
 
     QPointer<ZonePlayer> targetZone = zone;
-    QNetworkReply *reply = service.subscribe(localAddress, m_notifyServer.port(), kSubscriptionTimeoutSeconds);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, targetZone, oldSid, serviceType,
-                                                    serviceName = service.serviceName(), pendingKey]() {
-        reply->deleteLater();
-        m_pendingZoneEventSubscriptions.remove(pendingKey);
-        if (!targetZone)
-            return;
+    QNetworkReply       *reply = service.subscribe(localAddress, m_notifyServer.port(), kSubscriptionTimeoutSeconds);
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, targetZone, oldSid, serviceType, serviceName = service.serviceName(), pendingKey]()
+            {
+                reply->deleteLater();
+                m_pendingZoneEventSubscriptions.remove(pendingKey);
+                if (!targetZone)
+                    return;
 
-        const ScopedLogEndpoint logEndpoint(targetZone->deviceIp(), LogDirection::Outbound);
+                const ScopedLogEndpoint logEndpoint(targetZone->deviceIp(), LogDirection::Outbound);
 
-        UpnpService *service = nullptr;
-        switch (serviceType) {
-        case ZoneEventService::AVTransport:
-            service = &targetZone->avTransport();
-            break;
-        case ZoneEventService::RenderingControl:
-            service = &targetZone->renderingControl();
-            break;
-        case ZoneEventService::ContentDirectory:
-            service = &targetZone->contentDirectory();
-            break;
-        case ZoneEventService::AudioIn:
-            service = &targetZone->audioIn();
-            break;
-        }
+                UpnpService *service = nullptr;
+                switch (serviceType)
+                {
+                case ZoneEventService::AVTransport:
+                    service = &targetZone->avTransport();
+                    break;
+                case ZoneEventService::RenderingControl:
+                    service = &targetZone->renderingControl();
+                    break;
+                case ZoneEventService::ContentDirectory:
+                    service = &targetZone->contentDirectory();
+                    break;
+                case ZoneEventService::AudioIn:
+                    service = &targetZone->audioIn();
+                    break;
+                }
 
-        if (reply->error() != QNetworkReply::NoError) {
-            QWARN() << targetZone->roomName() << serviceName << "subscribe failed:" << reply->errorString();
-            return;
-        }
+                if (reply->error() != QNetworkReply::NoError)
+                {
+                    QWARN() << targetZone->roomName() << serviceName << "subscribe failed:" << reply->errorString();
+                    return;
+                }
 
-        const QString sid = QString::fromUtf8(reply->rawHeader("SID"));
-        if (sid.isEmpty()) {
-            QWARN() << targetZone->roomName() << serviceName << "subscribe returned no SID";
-            return;
-        }
+                const QString sid = QString::fromUtf8(reply->rawHeader("SID"));
+                if (sid.isEmpty())
+                {
+                    QWARN() << targetZone->roomName() << serviceName << "subscribe returned no SID";
+                    return;
+                }
 
-        if (!oldSid.isEmpty() && oldSid != sid)
-            m_zoneEventSubscriptions.remove(oldSid);
+                if (!oldSid.isEmpty() && oldSid != sid)
+                    m_zoneEventSubscriptions.remove(oldSid);
 
-        service->setSid(sid);
-        m_zoneEventSubscriptions.insert(sid, ZoneEventSubscription{targetZone, serviceType, serviceName});
-        m_zoneEventRenewTimer.start();
-        QLOG() << "SUBSCRIBED:" << sid << serviceName;
-    });
+                service->setSid(sid);
+                m_zoneEventSubscriptions.insert(sid, ZoneEventSubscription{targetZone, serviceType, serviceName});
+                m_zoneEventRenewTimer.start();
+                QLOG() << "SUBSCRIBED:" << sid << serviceName;
+            });
 }
 
 void ZoneEventing::renewZoneEventSubscriptions()
 {
     QSet<ZonePlayer *> zones;
-    for (const ZoneEventSubscription &subscription : std::as_const(m_zoneEventSubscriptions)) {
+    for (const ZoneEventSubscription &subscription : std::as_const(m_zoneEventSubscriptions))
+    {
         if (subscription.zone)
             zones.insert(subscription.zone.data());
     }
@@ -237,12 +251,14 @@ void ZoneEventing::unsubscribeAll()
         m_topologyZone->zoneGroupTopology().unsubscribe();
 
     QSet<ZonePlayer *> zones;
-    for (const ZoneEventSubscription &subscription : std::as_const(m_zoneEventSubscriptions)) {
+    for (const ZoneEventSubscription &subscription : std::as_const(m_zoneEventSubscriptions))
+    {
         if (subscription.zone)
             zones.insert(subscription.zone.data());
     }
 
-    for (ZonePlayer *zone : zones) {
+    for (ZonePlayer *zone : zones)
+    {
         if (zone->avTransport().subscribed())
             zone->avTransport().unsubscribe();
         if (zone->renderingControl().subscribed())
@@ -265,7 +281,8 @@ void ZoneEventing::routeZoneEvent(const ZoneEventSubscription &subscription, con
     if (!zone)
         return;
 
-    switch (subscription.service) {
+    switch (subscription.service)
+    {
     case ZoneEventService::AVTransport:
         zone->handleAVTransportEvent(body);
         break;
@@ -284,18 +301,19 @@ void ZoneEventing::routeZoneEvent(const ZoneEventSubscription &subscription, con
 void ZoneEventing::onGenaNotify(const QString &peerAddress, const QString &sid, const QByteArray &body)
 {
     const ScopedLogEndpoint logEndpoint(peerAddress, LogDirection::Inbound);
-    const auto zoneEvent = m_zoneEventSubscriptions.constFind(sid);
-    if (zoneEvent != m_zoneEventSubscriptions.constEnd()) {
+    const auto              zoneEvent = m_zoneEventSubscriptions.constFind(sid);
+    if (zoneEvent != m_zoneEventSubscriptions.constEnd())
+    {
         const ZoneEventSubscription subscription = zoneEvent.value();
-        QLOG() << "GENA NOTIFY " << subscription.serviceName
-               << sid
-               << (subscription.zone ? subscription.zone->roomName() : QStringLiteral("<deleted>"))
-               << "(" << body.size() << "bytes)";
+        QLOG() << "GENA NOTIFY " << subscription.serviceName << sid
+               << (subscription.zone ? subscription.zone->roomName() : QStringLiteral("<deleted>")) << "("
+               << body.size() << "bytes)";
         routeZoneEvent(subscription, body);
         return;
     }
 
-    if (sid != m_topologySubscriptionSid) {
+    if (sid != m_topologySubscriptionSid)
+    {
         QLOG() << "GENA UNKNOWN " << sid << "(" << body.size() << "bytes)";
         return;
     }

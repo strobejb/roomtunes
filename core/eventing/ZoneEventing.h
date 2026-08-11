@@ -9,7 +9,8 @@
 
 #include "GenaNotifyServer.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 class UpnpService;
 class ZonePlayer;
@@ -21,7 +22,7 @@ class ZoneEventing : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit ZoneEventing(QObject *parent = nullptr);
     ~ZoneEventing() override;
 
@@ -30,41 +31,43 @@ public:
     void subscribeZoneEvents(ZonePlayer *zone);
     void unsubscribeAll();
 
-signals:
+  signals:
     void topologySubscriptionZonePicked(ZonePlayer *zone);
     void topologyStateReceived(const QByteArray &zoneGroupState);
     void thirdPartyMediaServersXReceived(const QString &encoded);
 
-private slots:
+  private slots:
     void onGenaNotify(const QString &peerAddress, const QString &sid, const QByteArray &body);
     void renewTopologySubscription();
     void renewZoneEventSubscriptions();
 
-private:
-    enum class ZoneEventService {
+  private:
+    enum class ZoneEventService
+    {
         AVTransport,
         RenderingControl,
         ContentDirectory,
         AudioIn
     };
 
-    struct ZoneEventSubscription {
+    struct ZoneEventSubscription
+    {
         QPointer<ZonePlayer> zone;
-        ZoneEventService service;
-        QString serviceName;
+        ZoneEventService     service;
+        QString              serviceName;
     };
 
     void subscribeZoneEvent(ZonePlayer *zone, UpnpService &service, ZoneEventService serviceType);
     void routeZoneEvent(const ZoneEventSubscription &subscription, const QByteArray &body);
 
-private:
-    GenaNotifyServer m_notifyServer;
-    QPointer<ZonePlayer> m_topologyZone;
-    QString m_topologySubscriptionSid;
+  private:
+    GenaNotifyServer                     m_notifyServer;
+    QPointer<ZonePlayer>                 m_topologyZone;
+    QString                              m_topologySubscriptionSid;
     QMap<QString, ZoneEventSubscription> m_zoneEventSubscriptions;
-    QSet<QString> m_pendingZoneEventSubscriptions;
-    QTimer m_topologyRenewTimer;
-    QTimer m_zoneEventRenewTimer;
+    QSet<QString>                        m_pendingZoneEventSubscriptions;
+    QTimer                               m_topologyRenewTimer;
+    QTimer                               m_zoneEventRenewTimer;
 };
 
-}
+} // namespace RoomTunes

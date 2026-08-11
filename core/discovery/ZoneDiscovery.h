@@ -5,11 +5,12 @@
 #include <QObject>
 #include <QString>
 
-#include "Ssdp.h"
 #include "../eventing/ZoneEventing.h"
 #include "../zone/ZonePlayer.h"
+#include "Ssdp.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Owns the ordered zone-discovery process for one Sonos household. Used to
 // live muddled together with music-service catalog concerns inside
@@ -58,7 +59,7 @@ class ZoneDiscovery : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit ZoneDiscovery(QNetworkAccessManager *netMgr, QObject *parent = nullptr);
     ~ZoneDiscovery() override;
 
@@ -79,16 +80,30 @@ public:
     // never recovered and the UI stayed empty.
     void restart();
 
-    const QString &householdId() const { return m_householdId; }
+    const QString &householdId() const
+    {
+        return m_householdId;
+    }
 
-    QList<ZonePlayer *> zones() const { return m_zones.values(); }
-    ZonePlayer *zone(const QString &udn) const { return m_zones.value(udn); }
+    QList<ZonePlayer *> zones() const
+    {
+        return m_zones.values();
+    }
+
+    ZonePlayer *zone(const QString &udn) const
+    {
+        return m_zones.value(udn);
+    }
+
     ZonePlayer *zoneByRoomName(const QString &roomName) const;
 
     // The zone holding the ZoneGroupTopology subscription -- also the zone
     // SmapiService issues MusicServices:1 GetSessionId calls against
     // (any zone would do; this one's already known-reachable).
-    ZonePlayer *topologyZone() const { return m_zones.value(m_topologyZoneUdn); }
+    ZonePlayer *topologyZone() const
+    {
+        return m_zones.value(m_topologyZoneUdn);
+    }
 
     // One-shot GetZoneGroupState poll of the topology zone. Startup uses
     // this immediately after choosing a topology zone so readiness is not
@@ -96,7 +111,7 @@ public:
     // ZoneGroupState shape and flow through the same parser.
     void refreshTopology();
 
-signals:
+  signals:
     void zoneReady(ZonePlayer *zone);
     void zoneListChanged();
     void discoveryTimedOut();
@@ -128,41 +143,41 @@ signals:
     // one, so it's just handed off rather than processed here.
     void thirdPartyMediaServersXReceived(const QString &encoded);
 
-private slots:
+  private slots:
     void onSsdpDiscovered(const QString &fromAddr, const QMap<QString, QString> &headers);
     void onSsdpTimeout();
 
-private:
+  private:
     ZonePlayer *allocateZone(const QString &deviceIp, const QString &udn);
-    void fetchDeviceDescription(ZonePlayer *zone);
-    void fetchHouseholdId(ZonePlayer *zone);
+    void        fetchDeviceDescription(ZonePlayer *zone);
+    void        fetchHouseholdId(ZonePlayer *zone);
     ZonePlayer *findTopologySubscriptionCandidate() const;
-    void selectTopologySubscriptionZone(ZonePlayer *zone);
-    void updateTopologySubscriptionSelection();
-    void parseZoneGroupState(const QByteArray &xml);
-    void checkZoneReady(ZonePlayer *zone);
-    void ensureVisibleZoneEventsAndRenderingState();
+    void        selectTopologySubscriptionZone(ZonePlayer *zone);
+    void        updateTopologySubscriptionSelection();
+    void        parseZoneGroupState(const QByteArray &xml);
+    void        checkZoneReady(ZonePlayer *zone);
+    void        ensureVisibleZoneEventsAndRenderingState();
     ZonePlayer *findReadyCoordinator() const;
-    void publishReadyCoordinator(ZonePlayer *zone);
-    void updateReadyCoordinatorSelection();
-    bool zoneCapabilitySummaryAvailable() const;
-    void logZoneCapabilitySummary();
-    void logZoneCapabilitySummaryWhenComplete();
+    void        publishReadyCoordinator(ZonePlayer *zone);
+    void        updateReadyCoordinatorSelection();
+    bool        zoneCapabilitySummaryAvailable() const;
+    void        logZoneCapabilitySummary();
+    void        logZoneCapabilitySummaryWhenComplete();
 
-private:
+  private:
     QNetworkAccessManager *m_netMgr;
-    Ssdp m_ssdp;
-    ZoneEventing m_eventing;
+    Ssdp                   m_ssdp;
+    ZoneEventing           m_eventing;
 
     quint16 m_localPort = Ssdp::kDefaultRecvPort; // captured in start(), reused by restart() to rebind Ssdp
 
-    QString m_householdId;
-    QMap<QString, ZonePlayer *> m_zones; // keyed by UDN
-    QMap<QString, qint64> m_lastSsdpResponseLogTimeMs; // wall-clock msecs since epoch, keyed by UDN
-    bool m_zoneCapabilitySummaryLogged = false;
-    bool m_parsingZoneGroupState = false;
-    QString m_topologyZoneUdn;
-    QString m_readyCoordinatorUdn;
+    QString                     m_householdId;
+    QMap<QString, ZonePlayer *> m_zones;                     // keyed by UDN
+    QMap<QString, qint64>       m_lastSsdpResponseLogTimeMs; // wall-clock msecs since epoch, keyed by UDN
+    bool                        m_zoneCapabilitySummaryLogged = false;
+    bool                        m_parsingZoneGroupState       = false;
+    QString                     m_topologyZoneUdn;
+    QString                     m_readyCoordinatorUdn;
 };
 
-}
+} // namespace RoomTunes

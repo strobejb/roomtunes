@@ -7,11 +7,11 @@
 #include "../zone/Household.h"
 #include "../zone/ZonePlayer.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 GroupedZoneModel::GroupedZoneModel(Household *household, QObject *parent)
-    : QAbstractListModel(parent)
-    , m_household(household)
+    : QAbstractListModel(parent), m_household(household)
 {
     connect(household, &Household::zoneListChanged, this, &GroupedZoneModel::scheduleRebuild);
     rebuild();
@@ -29,10 +29,12 @@ QVariant GroupedZoneModel::data(const QModelIndex &index, int role) const
 
     const Group &group = m_groups.at(index.row());
 
-    switch (role) {
+    switch (role)
+    {
     case CoordinatorRole:
         return QVariant::fromValue(group.coordinator);
-    case MembersRole: {
+    case MembersRole:
+    {
         QVariantList list;
         for (ZonePlayer *zone : group.members)
             list.append(QVariant::fromValue(zone));
@@ -46,8 +48,8 @@ QVariant GroupedZoneModel::data(const QModelIndex &index, int role) const
 QHash<int, QByteArray> GroupedZoneModel::roleNames() const
 {
     return {
-        { CoordinatorRole, "coordinator" },
-        { MembersRole, "members" },
+        {CoordinatorRole, "coordinator"},
+        {MembersRole, "members"},
     };
 }
 
@@ -55,10 +57,11 @@ void GroupedZoneModel::rebuild()
 {
     beginResetModel();
 
-    QMap<QString, Group> byCoordinator;
+    QMap<QString, Group>      byCoordinator;
     const QList<ZonePlayer *> zones = m_household->zones();
 
-    for (ZonePlayer *zone : zones) {
+    for (ZonePlayer *zone : zones)
+    {
         if (zone->invisible() || !zone->hasValidTopology())
             continue;
 
@@ -69,30 +72,37 @@ void GroupedZoneModel::rebuild()
     }
 
     m_groups.clear();
-    for (const Group &group : byCoordinator) {
+    for (const Group &group : byCoordinator)
+    {
         if (group.coordinator)
             m_groups.append(group);
     }
 
-    for (Group &group : m_groups) {
-        std::sort(group.members.begin(), group.members.end(), [&group](ZonePlayer *a, ZonePlayer *b) {
-            if (a == group.coordinator)
-                return b != group.coordinator;
-            if (b == group.coordinator)
-                return false;
-            return a->roomName() < b->roomName();
-        });
+    for (Group &group : m_groups)
+    {
+        std::sort(group.members.begin(), group.members.end(),
+                  [&group](ZonePlayer *a, ZonePlayer *b)
+                  {
+                      if (a == group.coordinator)
+                          return b != group.coordinator;
+                      if (b == group.coordinator)
+                          return false;
+                      return a->roomName() < b->roomName();
+                  });
     }
 
-    std::sort(m_groups.begin(), m_groups.end(), [](const Group &a, const Group &b) {
-        const QString nameA = a.coordinator ? a.coordinator->roomName() : QString();
-        const QString nameB = b.coordinator ? b.coordinator->roomName() : QString();
-        return nameA < nameB;
-    });
+    std::sort(m_groups.begin(), m_groups.end(),
+              [](const Group &a, const Group &b)
+              {
+                  const QString nameA = a.coordinator ? a.coordinator->roomName() : QString();
+                  const QString nameB = b.coordinator ? b.coordinator->roomName() : QString();
+                  return nameA < nameB;
+              });
 
     endResetModel();
 
-    for (ZonePlayer *zone : zones) {
+    for (ZonePlayer *zone : zones)
+    {
         if (m_connected.contains(zone))
             continue;
         m_connected.insert(zone);
@@ -110,10 +120,12 @@ void GroupedZoneModel::scheduleRebuild()
         return;
 
     m_rebuildScheduled = true;
-    QTimer::singleShot(0, this, [this]() {
-        m_rebuildScheduled = false;
-        rebuild();
-    });
+    QTimer::singleShot(0, this,
+                       [this]()
+                       {
+                           m_rebuildScheduled = false;
+                           rebuild();
+                       });
 }
 
 ZonePlayer *GroupedZoneModel::firstCoordinator() const
@@ -126,7 +138,8 @@ ZonePlayer *GroupedZoneModel::coordinatorByUdn(const QString &udn) const
     if (udn.isEmpty())
         return nullptr;
 
-    for (const Group &group : m_groups) {
+    for (const Group &group : m_groups)
+    {
         if (group.coordinator && group.coordinator->udn() == udn)
             return group.coordinator;
     }
@@ -139,7 +152,8 @@ int GroupedZoneModel::coordinatorIndex(const QString &udn) const
     if (udn.isEmpty())
         return -1;
 
-    for (int i = 0; i < m_groups.size(); ++i) {
+    for (int i = 0; i < m_groups.size(); ++i)
+    {
         ZonePlayer *coordinator = m_groups.at(i).coordinator;
         if (coordinator && coordinator->udn() == udn)
             return i;
@@ -153,7 +167,8 @@ ZonePlayer *GroupedZoneModel::canonicalCoordinator(ZonePlayer *zone) const
     if (!zone)
         return firstCoordinator();
 
-    for (const Group &group : m_groups) {
+    for (const Group &group : m_groups)
+    {
         if (group.coordinator == zone)
             return zone;
         if (group.members.contains(zone))
@@ -163,4 +178,4 @@ ZonePlayer *GroupedZoneModel::canonicalCoordinator(ZonePlayer *zone) const
     return firstCoordinator();
 }
 
-}
+} // namespace RoomTunes

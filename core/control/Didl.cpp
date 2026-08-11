@@ -4,12 +4,14 @@
 #include <QUrl>
 #include <QXmlStreamWriter>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
-constexpr char kDidlNsDc[] = "http://purl.org/dc/elements/1.1/";
-constexpr char kDidlNsUpnp[] = "urn:schemas-upnp-org:metadata-1-0/upnp/";
-constexpr char kDidlNsR[] = "urn:schemas-rinconnetworks-com:metadata-1-0/";
+namespace
+{
+constexpr char kDidlNsDc[]      = "http://purl.org/dc/elements/1.1/";
+constexpr char kDidlNsUpnp[]    = "urn:schemas-upnp-org:metadata-1-0/upnp/";
+constexpr char kDidlNsR[]       = "urn:schemas-rinconnetworks-com:metadata-1-0/";
 constexpr char kDidlNsDefault[] = "urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/";
 
 QString decodeFavoriteMetadataId(QString id)
@@ -33,31 +35,32 @@ void applyResourceMetadata(DidlItem *item, const QString &resourceMetadata)
         return;
 
     const DidlItem &nested = nestedItems.first();
-    item->didlId = decodeFavoriteMetadataId(nested.id);
-    item->didlParentId = QUrl::fromPercentEncoding(nested.parentId.toUtf8());
-    item->desc = nested.desc;
+    item->didlId           = decodeFavoriteMetadataId(nested.id);
+    item->didlParentId     = QUrl::fromPercentEncoding(nested.parentId.toUtf8());
+    item->desc             = nested.desc;
 
     // BB10 used this same desc value to discover the owning SMAPI service
     // for a favourite. That matters for Spotify playlist favourites: their
     // children are browsed with getMetadata() on the Spotify service, not
     // with ContentDirectory::Browse on the Sonos Library.
     static const QRegularExpression serviceIdPattern(QStringLiteral("^SA_RINCON([0-9]+)_"));
-    const QRegularExpressionMatch match = serviceIdPattern.match(item->desc);
+    const QRegularExpressionMatch   match = serviceIdPattern.match(item->desc);
     if (match.hasMatch())
         item->serviceId = match.captured(1).toInt();
 
-    if (!nested.upnpClass.isEmpty()) {
+    if (!nested.upnpClass.isEmpty())
+    {
         item->upnpClass = nested.upnpClass;
         item->container = nested.upnpClass.contains(QStringLiteral(".container"));
     }
 }
-}
+} // namespace
 
 QByteArray Didl::buildItem(const QString &itemId, const QString &parentId, const QString &title,
-                            const QString &upnpClass, const QString &desc,
-                            const QString &res, const QString &albumArtUri, const QString &protocolInfo)
+                           const QString &upnpClass, const QString &desc, const QString &res,
+                           const QString &albumArtUri, const QString &protocolInfo)
 {
-    QByteArray out;
+    QByteArray       out;
     QXmlStreamWriter xml(&out);
 
     xml.writeStartElement(QStringLiteral("DIDL-Lite"));
@@ -75,7 +78,8 @@ QByteArray Didl::buildItem(const QString &itemId, const QString &parentId, const
     xml.writeTextElement(QLatin1String(kDidlNsUpnp), QStringLiteral("class"), upnpClass);
     if (!albumArtUri.isEmpty())
         xml.writeTextElement(QLatin1String(kDidlNsUpnp), QStringLiteral("albumArtURI"), albumArtUri);
-    if (!res.isEmpty()) {
+    if (!res.isEmpty())
+    {
         xml.writeStartElement(QStringLiteral("res"));
         if (!protocolInfo.isEmpty())
             xml.writeAttribute(QStringLiteral("protocolInfo"), protocolInfo);
@@ -97,16 +101,12 @@ QByteArray Didl::buildItem(const QString &itemId, const QString &parentId, const
 
 QByteArray Didl::buildFavoriteItem(const DidlItem &item)
 {
-    const QByteArray innerItem = buildItem(item.didlId.isEmpty() ? item.id : item.didlId,
-                                          item.didlParentId.isEmpty() ? item.parentId : item.didlParentId,
-                                          item.title,
-                                          item.upnpClass,
-                                          item.desc.isEmpty() ? QStringLiteral("RINCON_AssociatedZPUDN") : item.desc,
-                                          item.res,
-                                          item.albumArtUri,
-                                          item.protocolInfo);
+    const QByteArray innerItem = buildItem(
+        item.didlId.isEmpty() ? item.id : item.didlId, item.didlParentId.isEmpty() ? item.parentId : item.didlParentId,
+        item.title, item.upnpClass, item.desc.isEmpty() ? QStringLiteral("RINCON_AssociatedZPUDN") : item.desc,
+        item.res, item.albumArtUri, item.protocolInfo);
 
-    QByteArray out;
+    QByteArray       out;
     QXmlStreamWriter xml(&out);
     xml.writeStartElement(QStringLiteral("DIDL-Lite"));
     xml.writeDefaultNamespace(QLatin1String(kDidlNsDefault));
@@ -119,7 +119,8 @@ QByteArray Didl::buildFavoriteItem(const DidlItem &item)
     xml.writeTextElement(QLatin1String(kDidlNsR), QStringLiteral("type"), QStringLiteral("instantPlay"));
     if (!item.albumArtUri.isEmpty())
         xml.writeTextElement(QLatin1String(kDidlNsUpnp), QStringLiteral("albumArtURI"), item.albumArtUri);
-    if (!item.res.isEmpty()) {
+    if (!item.res.isEmpty())
+    {
         xml.writeStartElement(QStringLiteral("res"));
         if (!item.protocolInfo.isEmpty())
             xml.writeAttribute(QStringLiteral("protocolInfo"), item.protocolInfo);
@@ -136,10 +137,11 @@ QByteArray Didl::buildFavoriteItem(const DidlItem &item)
 
 QList<DidlItem> Didl::parseItems(const QByteArray &didlXml)
 {
-    QList<DidlItem> items;
+    QList<DidlItem>  items;
     QXmlStreamReader xml(didlXml);
 
-    while (!xml.atEnd()) {
+    while (!xml.atEnd())
+    {
         if (!xml.readNextStartElement())
             continue;
 
@@ -157,14 +159,15 @@ QList<DidlItem> Didl::parseItems(const QByteArray &didlXml)
 DidlItem Didl::parseOneItem(QXmlStreamReader &xml, bool isContainer)
 {
     DidlItem item;
-    item.container = isContainer;
-    item.id = xml.attributes().value(QStringLiteral("id")).toString();
-    item.parentId = xml.attributes().value(QStringLiteral("parentID")).toString();
-    item.didlId = item.id;
+    item.container    = isContainer;
+    item.id           = xml.attributes().value(QStringLiteral("id")).toString();
+    item.parentId     = xml.attributes().value(QStringLiteral("parentID")).toString();
+    item.didlId       = item.id;
     item.didlParentId = item.parentId;
     QString resourceMetadata;
 
-    while (xml.readNextStartElement()) {
+    while (xml.readNextStartElement())
+    {
         const QString name = xml.name().toString();
 
         if (name == QStringLiteral("title"))
@@ -181,9 +184,10 @@ DidlItem Didl::parseOneItem(QXmlStreamReader &xml, bool isContainer)
             item.streamInfo = xml.readElementText(QXmlStreamReader::SkipChildElements);
         else if (name == QStringLiteral("originalTrackNumber"))
             item.trackNumber = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("res")) {
+        else if (name == QStringLiteral("res"))
+        {
             item.protocolInfo = xml.attributes().value(QStringLiteral("protocolInfo")).toString();
-            item.res = xml.readElementText(QXmlStreamReader::SkipChildElements);
+            item.res          = xml.readElementText(QXmlStreamReader::SkipChildElements);
         }
         else if (name == QStringLiteral("desc"))
             item.desc = xml.readElementText(QXmlStreamReader::SkipChildElements);
@@ -202,4 +206,4 @@ DidlItem Didl::parseOneItem(QXmlStreamReader &xml, bool isContainer)
     return item;
 }
 
-}
+} // namespace RoomTunes

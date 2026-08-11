@@ -2,20 +2,19 @@
 
 #include "../UpnpServiceBase.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Ported from upnp/Sonos_AVTransport.hpp, trimmed to the play/pause/queue
 // actions this pass needs (alarms, sleep timer, and group-coordination
 // actions are out of scope for now -- see the project plan).
 class AVTransport : public UpnpServiceBase
 {
-public:
+  public:
     AVTransport(QNetworkAccessManager *netMgr, const QString &device, int port = 1400)
-        : UpnpServiceBase(netMgr, device, port,
-                           QStringLiteral("/MediaRenderer/AVTransport/Control"),
-                           QStringLiteral("/MediaRenderer/AVTransport/Event"),
-                           QStringLiteral("urn:schemas-upnp-org:service:AVTransport:1"),
-                           "AVTransport")
+        : UpnpServiceBase(netMgr, device, port, QStringLiteral("/MediaRenderer/AVTransport/Control"),
+                          QStringLiteral("/MediaRenderer/AVTransport/Event"),
+                          QStringLiteral("urn:schemas-upnp-org:service:AVTransport:1"), "AVTransport")
     {
     }
 
@@ -46,7 +45,7 @@ public:
     }
 
     QNetworkReply *AddURIToQueue(int instanceId, const QString &enqueuedUri, const QString &enqueuedUriMetaData,
-                                  int desiredFirstTrackNumberEnqueued, bool enqueueAsNext)
+                                 int desiredFirstTrackNumberEnqueued, bool enqueueAsNext)
     {
         SoapRequest request(m_netMgr, m_action, QStringLiteral("AddURIToQueue"));
         request.openEnvelope();
@@ -55,7 +54,8 @@ public:
         request.writeStrParameter(QStringLiteral("EnqueuedURI"), enqueuedUri);
         request.writeStrParameter(QStringLiteral("EnqueuedURIMetaData"), enqueuedUriMetaData);
         request.writeIntParameter(QStringLiteral("DesiredFirstTrackNumberEnqueued"), desiredFirstTrackNumberEnqueued);
-        request.writeStrParameter(QStringLiteral("EnqueueAsNext"), enqueueAsNext ? QStringLiteral("1") : QStringLiteral("0"));
+        request.writeStrParameter(QStringLiteral("EnqueueAsNext"),
+                                  enqueueAsNext ? QStringLiteral("1") : QStringLiteral("0"));
         request.closeCommand();
         request.closeEnvelope();
         return request.send(m_soapUrl);
@@ -89,8 +89,7 @@ public:
     }
 
     QNetworkReply *ReorderTracksInQueue(int instanceId, const QString &startingIndex, int numberOfTracks,
-                                        const QString &insertBefore,
-                                        int updateId)
+                                        const QString &insertBefore, int updateId)
     {
         SoapRequest request(m_netMgr, m_action, QStringLiteral("ReorderTracksInQueue"));
         request.openEnvelope();
@@ -271,7 +270,8 @@ public:
         request.openEnvelope();
         request.openCommand(QStringLiteral("u"));
         request.writeIntParameter(QStringLiteral("InstanceID"), instanceId);
-        request.writeStrParameter(QStringLiteral("CrossfadeMode"), crossfadeMode ? QStringLiteral("1") : QStringLiteral("0"));
+        request.writeStrParameter(QStringLiteral("CrossfadeMode"),
+                                  crossfadeMode ? QStringLiteral("1") : QStringLiteral("0"));
         request.closeCommand();
         request.closeEnvelope();
         return request.send(m_soapUrl);
@@ -304,4 +304,4 @@ public:
     }
 };
 
-}
+} // namespace RoomTunes

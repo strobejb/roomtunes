@@ -4,7 +4,8 @@
 #include <QNetworkReply>
 #include <QString>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 Q_DECLARE_LOGGING_CATEGORY(logDiscovery)
 Q_DECLARE_LOGGING_CATEGORY(logZone)
@@ -13,23 +14,25 @@ Q_DECLARE_LOGGING_CATEGORY(logSoap)
 Q_DECLARE_LOGGING_CATEGORY(logSmapi)
 Q_DECLARE_LOGGING_CATEGORY(logEventing)
 
-enum class LogDirection {
+enum class LogDirection
+{
     Inbound,
     Outbound
 };
 
-enum class LogVerbosity {
+enum class LogVerbosity
+{
     Normal,
     Verbose
 };
 
-void setLogVerbosity(LogVerbosity verbosity);
+void         setLogVerbosity(LogVerbosity verbosity);
 LogVerbosity logVerbosity();
-bool verboseLoggingEnabled();
-QString redactedNetworkBodyForLog(QString body, qsizetype maxLength = 4000);
-QString networkReplyDiagnosticText(const QNetworkReply *reply);
-void logNetworkReplyError(const QLoggingCategory &category, const QString &context, const QNetworkReply *reply,
-                          const QByteArray &body = {});
+bool         verboseLoggingEnabled();
+QString      redactedNetworkBodyForLog(QString body, qsizetype maxLength = 4000);
+QString      networkReplyDiagnosticText(const QNetworkReply *reply);
+void         logNetworkReplyError(const QLoggingCategory &category, const QString &context, const QNetworkReply *reply,
+                                  const QByteArray &body = {});
 
 // Temporarily attaches a network peer to all QLOG()/QWARN() calls made on
 // this thread. This is the Qt-category equivalent of bb10's ZLOG(host):
@@ -37,14 +40,14 @@ void logNetworkReplyError(const QLoggingCategory &category, const QString &conte
 // message handler prints "< peer" or "> peer" after the standard prefix.
 class ScopedLogEndpoint
 {
-public:
+  public:
     ScopedLogEndpoint(QString address, LogDirection direction);
     ~ScopedLogEndpoint();
 
-    ScopedLogEndpoint(const ScopedLogEndpoint &) = delete;
+    ScopedLogEndpoint(const ScopedLogEndpoint &)            = delete;
     ScopedLogEndpoint &operator=(const ScopedLogEndpoint &) = delete;
 
-private:
+  private:
     QString m_previousEndpoint;
 };
 
@@ -70,7 +73,7 @@ void installLogMessagePattern();
 // interface Windows actually offered to bind against.
 void logStartupBanner(const QString &appName);
 
-}
+} // namespace RoomTunes
 
 // QLOG()/QWARN() read like the original bb10 app's ZLOG() -- each .cpp
 // picks its own category once, right after including this header, instead

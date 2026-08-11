@@ -3,7 +3,8 @@
 #include <QColor>
 #include <QImage>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Picks one prominent, saturated color from an image's histogram -- biased
 // toward whichever distinct hue appears most often, excluding near-white/
@@ -12,8 +13,8 @@ namespace RoomTunes {
 // per-track background in "color" render mode.
 class AlbumColorAnalyzer
 {
-public:
+  public:
     static QColor pickAccentColor(const QImage &image);
 };
 
-}
+} // namespace RoomTunes

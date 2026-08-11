@@ -3,10 +3,10 @@
 #include "../Logging.h"
 #include "../media/MediaItem.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-QueueModel::QueueModel(QObject *parent)
-    : QAbstractListModel(parent)
+QueueModel::QueueModel(QObject *parent) : QAbstractListModel(parent)
 {
 }
 
@@ -37,28 +37,31 @@ void QueueModel::refresh()
         return;
 
     ZonePlayer *zone = m_zone;
-    zone->browseQueue([this, zone](bool ok, const QString &, const QList<DidlItem> &items, int updateId) {
-        // The selected zone may have changed again while this request was
-        // in flight -- a stale reply landing after that shouldn't clobber
-        // the (already-requested-fresh) model for the new selection.
-        if (!ok || m_zone != zone)
-            return;
+    zone->browseQueue(
+        [this, zone](bool ok, const QString &, const QList<DidlItem> &items, int updateId)
+        {
+            // The selected zone may have changed again while this request was
+            // in flight -- a stale reply landing after that shouldn't clobber
+            // the (already-requested-fresh) model for the new selection.
+            if (!ok || m_zone != zone)
+                return;
 
-        beginResetModel();
-        qDeleteAll(m_items);
-        m_items.clear();
-        for (const DidlItem &item : items) {
-            DidlItem resolved = item;
-            // Local-library album art comes back as a path relative to the
-            // zone itself -- same resolution ZonePlayer::refreshTransportState
-            // does for the current track's art.
-            if (!resolved.albumArtUri.isEmpty() && resolved.albumArtUri.startsWith(QLatin1Char('/')))
-                resolved.albumArtUri = zone->baseUrl().chopped(1) + resolved.albumArtUri;
-            m_items.append(MediaItem::fromDidl(resolved, this));
-        }
-        m_updateId = updateId;
-        endResetModel();
-    });
+            beginResetModel();
+            qDeleteAll(m_items);
+            m_items.clear();
+            for (const DidlItem &item : items)
+            {
+                DidlItem resolved = item;
+                // Local-library album art comes back as a path relative to the
+                // zone itself -- same resolution ZonePlayer::refreshTransportState
+                // does for the current track's art.
+                if (!resolved.albumArtUri.isEmpty() && resolved.albumArtUri.startsWith(QLatin1Char('/')))
+                    resolved.albumArtUri = zone->baseUrl().chopped(1) + resolved.albumArtUri;
+                m_items.append(MediaItem::fromDidl(resolved, this));
+            }
+            m_updateId = updateId;
+            endResetModel();
+        });
 }
 
 int QueueModel::rowCount(const QModelIndex &parent) const
@@ -74,7 +77,8 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const
         return {};
 
     const MediaItem *item = m_items.at(index.row());
-    switch (role) {
+    switch (role)
+    {
     case TitleRole:
         return item->title();
     case ArtistRole:
@@ -97,13 +101,8 @@ QVariant QueueModel::data(const QModelIndex &index, int role) const
 QHash<int, QByteArray> QueueModel::roleNames() const
 {
     return {
-        { TitleRole, "title" },
-        { ArtistRole, "artist" },
-        { ImageUrlRole, "imageUrl" },
-        { IdRole, "id" },
-        { ParentIdRole, "parentId" },
-        { UriRole, "uri" },
-        { ItemRole, "item" },
+        {TitleRole, "title"},       {ArtistRole, "artist"}, {ImageUrlRole, "imageUrl"}, {IdRole, "id"},
+        {ParentIdRole, "parentId"}, {UriRole, "uri"},       {ItemRole, "item"},
     };
 }
 
@@ -131,4 +130,4 @@ void QueueModel::commitTrackMove(int fromIndex, int toIndex)
     m_zone->reorderQueueTrack(fromIndex, toIndex, m_updateId);
 }
 
-}
+} // namespace RoomTunes

@@ -2,7 +2,8 @@
 
 #include "MusicService.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 class Household;
 
@@ -30,22 +31,30 @@ class SonosLibraryService : public MusicService
 {
     Q_OBJECT
 
-public:
+  public:
     explicit SonosLibraryService(Household *household, QObject *parent = nullptr);
 
-    bool canSearch() const override { return true; }
-    QVariantList searchCategories() const override;
-    QString activeSearchCategory() const override { return m_activeSearchCategoryId; }
+    bool canSearch() const override
+    {
+        return true;
+    }
 
-protected:
+    QVariantList searchCategories() const override;
+
+    QString activeSearchCategory() const override
+    {
+        return m_activeSearchCategoryId;
+    }
+
+  protected:
     void doBrowse(const QString &objectId, ResultCallback callback) override;
     void doBrowseItem(const QVariantMap &item, ResultCallback callback) override;
     void doSearch(const QString &category, const QString &term, ResultCallback callback) override;
     void doSearchPreview(const QString &term, int limit, ResultCallback callback) override;
 
-private:
+  private:
     Household *m_household;
-    QString m_activeSearchCategoryId;
+    QString    m_activeSearchCategoryId;
 };
 
-}
+} // namespace RoomTunes

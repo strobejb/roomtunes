@@ -17,17 +17,24 @@ class PlatformChrome : public QObject
     Q_PROPERTY(QStringList leftButtons READ leftButtons CONSTANT)
     Q_PROPERTY(QStringList rightButtons READ rightButtons CONSTANT)
 
-public:
+  public:
     explicit PlatformChrome(QObject *parent = nullptr);
 
     bool isWindows() const;
     bool isKde() const;
     bool isGnome() const;
 
-    QStringList leftButtons() const { return m_leftButtons; }
-    QStringList rightButtons() const { return m_rightButtons; }
+    QStringList leftButtons() const
+    {
+        return m_leftButtons;
+    }
 
-private:
+    QStringList rightButtons() const
+    {
+        return m_rightButtons;
+    }
+
+  private:
     QStringList m_leftButtons;
     QStringList m_rightButtons;
 };

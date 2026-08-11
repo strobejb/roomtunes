@@ -2,11 +2,12 @@
 
 #include <QString>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-void configureApplicationSettings();
+void    configureApplicationSettings();
 QString configDirectoryPath();
 QString applicationSettingsFilePath();
 QString smapiSettingsFilePath();
 
-}
+} // namespace RoomTunes

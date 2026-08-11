@@ -3,19 +3,20 @@
 #include <QHostAddress>
 #include <QNetworkInterface>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
+namespace
+{
 // A physical unplug, a Wi-Fi handover, or a full reconnect all settle
 // within a second or two -- polling every 5s (matching this codebase's
 // other retry/poll cadences, e.g. Household's kServiceFetchRetrySeconds)
 // reacts quickly enough to feel immediate for a background discovery
 // service without burning CPU checking constantly.
 constexpr int kPollIntervalMs = 5000;
-}
+} // namespace
 
-NetworkWatcher::NetworkWatcher(QObject *parent)
-    : QObject(parent)
+NetworkWatcher::NetworkWatcher(QObject *parent) : QObject(parent)
 {
     m_lastAddresses = currentAddresses();
 
@@ -28,7 +29,8 @@ QSet<QString> NetworkWatcher::currentAddresses()
 {
     QSet<QString> addresses;
 
-    for (const QHostAddress &addr : QNetworkInterface::allAddresses()) {
+    for (const QHostAddress &addr : QNetworkInterface::allAddresses())
+    {
         // IPv4 only, and not loopback -- link-local (169.254.x.x, DHCP
         // failure/APIPA) addresses are deliberately still counted, since a
         // real interface dropping into that range instead of cleanly
@@ -53,4 +55,4 @@ void NetworkWatcher::poll()
     emit networkChanged();
 }
 
-}
+} // namespace RoomTunes

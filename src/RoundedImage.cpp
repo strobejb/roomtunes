@@ -9,10 +9,10 @@
 #include <QQmlFile>
 #include <QSvgRenderer>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-RoundedImage::RoundedImage(QQuickItem *parent)
-    : QQuickPaintedItem(parent)
+RoundedImage::RoundedImage(QQuickItem *parent) : QQuickPaintedItem(parent)
 {
     setAntialiasing(true);
     setMipmap(true);
@@ -58,7 +58,8 @@ void RoundedImage::paint(QPainter *painter)
     clipPath.addRoundedRect(target, m_radius, m_radius);
     painter->setClipPath(clipPath);
 
-    if (m_svg) {
+    if (m_svg)
+    {
         m_svg->render(painter, target);
         return;
     }
@@ -66,17 +67,20 @@ void RoundedImage::paint(QPainter *painter)
     if (m_image.isNull())
         return;
 
-    const QSize imageSize = m_image.size();
-    const qreal imageRatio = qreal(imageSize.width()) / qreal(imageSize.height());
+    const QSize imageSize   = m_image.size();
+    const qreal imageRatio  = qreal(imageSize.width()) / qreal(imageSize.height());
     const qreal targetRatio = target.width() / target.height();
 
     QRectF sourceRect;
-    if (imageRatio > targetRatio) {
+    if (imageRatio > targetRatio)
+    {
         const qreal sourceWidth = imageSize.height() * targetRatio;
-        sourceRect = QRectF((imageSize.width() - sourceWidth) / 2, 0, sourceWidth, imageSize.height());
-    } else {
+        sourceRect              = QRectF((imageSize.width() - sourceWidth) / 2, 0, sourceWidth, imageSize.height());
+    }
+    else
+    {
         const qreal sourceHeight = imageSize.width() / targetRatio;
-        sourceRect = QRectF(0, (imageSize.height() - sourceHeight) / 2, imageSize.width(), sourceHeight);
+        sourceRect               = QRectF(0, (imageSize.height() - sourceHeight) / 2, imageSize.width(), sourceHeight);
     }
 
     painter->drawImage(target, m_image, sourceRect);
@@ -90,25 +94,32 @@ void RoundedImage::load()
     m_svg.reset();
     update();
 
-    if (m_source.isEmpty()) {
+    if (m_source.isEmpty())
+    {
         setStatus(Null);
         return;
     }
 
-    if (m_source.isLocalFile() || m_source.scheme() == QLatin1String("qrc")) {
+    if (m_source.isLocalFile() || m_source.scheme() == QLatin1String("qrc"))
+    {
         const QString path = QQmlFile::urlToLocalFileOrQrc(m_source);
-        if (path.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive)) {
-            if (loadSvgFile(path)) {
+        if (path.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive))
+        {
+            if (loadSvgFile(path))
+            {
                 setStatus(Ready);
                 update();
-            } else {
+            }
+            else
+            {
                 setStatus(Error);
             }
             return;
         }
 
         QImage image(path);
-        if (image.isNull()) {
+        if (image.isNull())
+        {
             setStatus(Error);
             return;
         }
@@ -120,28 +131,34 @@ void RoundedImage::load()
 
     setStatus(Loading);
     QNetworkReply *reply = m_network.get(QNetworkRequest(m_source));
-    m_reply = reply;
-    connect(reply, &QObject::destroyed, this, [this, reply]() {
-        if (m_reply == reply)
-            m_reply.clear();
-    });
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        if (m_reply != reply) {
-            reply->deleteLater();
-            return;
-        }
+    m_reply              = reply;
+    connect(reply, &QObject::destroyed, this,
+            [this, reply]()
+            {
+                if (m_reply == reply)
+                    m_reply.clear();
+            });
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply]()
+            {
+                if (m_reply != reply)
+                {
+                    reply->deleteLater();
+                    return;
+                }
 
-        m_reply.clear();
-        const QByteArray data = reply->readAll();
-        const bool ok = reply->error() == QNetworkReply::NoError;
-        reply->deleteLater();
+                m_reply.clear();
+                const QByteArray data = reply->readAll();
+                const bool       ok   = reply->error() == QNetworkReply::NoError;
+                reply->deleteLater();
 
-        if (!ok) {
-            setStatus(Error);
-            return;
-        }
-        finishLoad(data);
-    });
+                if (!ok)
+                {
+                    setStatus(Error);
+                    return;
+                }
+                finishLoad(data);
+            });
 }
 
 void RoundedImage::cancelPendingReply()
@@ -164,7 +181,7 @@ bool RoundedImage::loadSvg(const QByteArray &data)
     if (!renderer->isValid())
         return false;
 
-    m_svg = std::move(renderer);
+    m_svg   = std::move(renderer);
     m_image = {};
     return true;
 }
@@ -175,7 +192,7 @@ bool RoundedImage::loadSvgFile(const QString &path)
     if (!renderer->isValid())
         return false;
 
-    m_svg = std::move(renderer);
+    m_svg   = std::move(renderer);
     m_image = {};
     return true;
 }
@@ -191,14 +208,16 @@ void RoundedImage::setStatus(Status status)
 
 void RoundedImage::finishLoad(const QByteArray &data)
 {
-    if (loadSvg(data)) {
+    if (loadSvg(data))
+    {
         setStatus(Ready);
         update();
         return;
     }
 
     QImage image;
-    if (!image.loadFromData(data)) {
+    if (!image.loadFromData(data))
+    {
         setStatus(Error);
         return;
     }

@@ -6,7 +6,8 @@
 
 #include "../zone/ZonePlayer.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 class MediaItem;
 
@@ -22,8 +23,9 @@ class QueueModel : public QAbstractListModel
 
     Q_PROPERTY(RoomTunes::ZonePlayer *zone READ zone WRITE setZone NOTIFY zoneChanged)
 
-public:
-    enum Role {
+  public:
+    enum Role
+    {
         TitleRole = Qt::UserRole + 1,
         ArtistRole,
         ImageUrlRole,
@@ -35,26 +37,30 @@ public:
 
     explicit QueueModel(QObject *parent = nullptr);
 
-    ZonePlayer *zone() const { return m_zone; }
+    ZonePlayer *zone() const
+    {
+        return m_zone;
+    }
+
     void setZone(ZonePlayer *zone);
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    int                    rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    QVariant               data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
-    Q_INVOKABLE void moveTrack(int fromIndex, int toIndex);
-    Q_INVOKABLE void commitTrackMove(int fromIndex, int toIndex);
+    Q_INVOKABLE void       moveTrack(int fromIndex, int toIndex);
+    Q_INVOKABLE void       commitTrackMove(int fromIndex, int toIndex);
 
-signals:
+  signals:
     void zoneChanged();
 
-private:
+  private:
     void refresh();
 
-private:
-    ZonePlayer *m_zone = nullptr;
-    QList<MediaItem *> m_items; // owned
-    int m_updateId = 0;
+  private:
+    ZonePlayer             *m_zone = nullptr;
+    QList<MediaItem *>      m_items; // owned
+    int                     m_updateId = 0;
     QMetaObject::Connection m_queueChangedConnection;
 };
 
-}
+} // namespace RoomTunes

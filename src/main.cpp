@@ -2,22 +2,22 @@
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
-#include <qqml.h>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <qqml.h>
 
 #include "Logging.h"
 #include "RoundedImage.h"
-#include "settings/AppSettings.h"
-#include "settings/Settings.h"
-#include "version.h"
 #include "chrome/PlatformChrome.h"
 #include "chrome/WindowsChrome.h"
 #include "models/GroupedZoneModel.h"
 #include "models/MusicServiceListModel.h"
 #include "models/QueueModel.h"
 #include "models/RecentlyPlayedModel.h"
+#include "settings/AppSettings.h"
 #include "settings/BrowseHistoryStore.h"
+#include "settings/Settings.h"
+#include "version.h"
 #include "zone/Household.h"
 
 using namespace RoomTunes;
@@ -49,16 +49,16 @@ int main(int argc, char *argv[])
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     qmlRegisterType<RoundedImage>("RoomTunes", 1, 0, "RoundedImage");
 
-    Household household;
-    AppSettings appSettings;
-    BrowseHistoryStore browseHistory;
-    GroupedZoneModel groupsModel(&household);
+    Household             household;
+    AppSettings           appSettings;
+    BrowseHistoryStore    browseHistory;
+    GroupedZoneModel      groupsModel(&household);
     MusicServiceListModel musicServiceModel(&household, &browseHistory);
-    RecentlyPlayedModel recentlyPlayedModel(&household);
+    RecentlyPlayedModel   recentlyPlayedModel(&household);
     household.startDiscovery();
 
     PlatformChrome platformChrome;
-    QueueModel queueModel;
+    QueueModel     queueModel;
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("appSettings"), &appSettings);
@@ -69,12 +69,15 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("recentlyPlayedModel"), &recentlyPlayedModel);
     engine.rootContext()->setContextProperty(QStringLiteral("PlatformChrome"), &platformChrome);
     engine.rootContext()->setContextProperty(QStringLiteral("queueModel"), &queueModel);
-    engine.rootContext()->setContextProperty(QStringLiteral("appVersion"),
-                                             QStringLiteral(PRODUCT_VERSION_STRING));
+    engine.rootContext()->setContextProperty(QStringLiteral("appVersion"), QStringLiteral(PRODUCT_VERSION_STRING));
 
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed, &app,
-        []() { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
+        []()
+        {
+            QCoreApplication::exit(-1);
+        },
+        Qt::QueuedConnection);
 
     engine.loadFromModule("RoomTunes", "Main");
 
@@ -82,8 +85,10 @@ int main(int argc, char *argv[])
     // attached before the window's first paint -- otherwise the native
     // title bar flashes on screen for one frame before collapsing.
     const auto rootObjects = engine.rootObjects();
-    if (!rootObjects.isEmpty()) {
-        if (auto *window = qobject_cast<QQuickWindow *>(rootObjects.first())) {
+    if (!rootObjects.isEmpty())
+    {
+        if (auto *window = qobject_cast<QQuickWindow *>(rootObjects.first()))
+        {
 #ifdef Q_OS_WIN
             installWindowsChrome(window);
 #endif

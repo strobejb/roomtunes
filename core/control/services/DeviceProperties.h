@@ -2,25 +2,24 @@
 
 #include "../UpnpServiceBase.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Ported from upnp/Sonos_DeviceProperties.hpp, trimmed to zone
 // naming/household/model info (LED, bonded-zone/stereo-pair/HT-satellite,
 // and autoplay settings are out of scope for now -- see project plan).
 class DeviceProperties : public UpnpServiceBase
 {
-public:
+  public:
     DeviceProperties(QNetworkAccessManager *netMgr, const QString &device, int port = 1400)
-        : UpnpServiceBase(netMgr, device, port,
-                           QStringLiteral("/DeviceProperties/Control"),
-                           QStringLiteral("/DeviceProperties/Event"),
-                           QStringLiteral("urn:schemas-upnp-org:service:DeviceProperties:1"),
-                           "DeviceProperties")
+        : UpnpServiceBase(netMgr, device, port, QStringLiteral("/DeviceProperties/Control"),
+                          QStringLiteral("/DeviceProperties/Event"),
+                          QStringLiteral("urn:schemas-upnp-org:service:DeviceProperties:1"), "DeviceProperties")
     {
     }
 
     QNetworkReply *SetZoneAttributes(const QString &desiredZoneName, const QString &desiredIcon,
-                                      const QString &desiredConfiguration = QString())
+                                     const QString &desiredConfiguration = QString())
     {
         SoapRequest request(m_netMgr, m_action, QStringLiteral("SetZoneAttributes"));
         request.openEnvelope();
@@ -64,4 +63,4 @@ public:
     }
 };
 
-}
+} // namespace RoomTunes

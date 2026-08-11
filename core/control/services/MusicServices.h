@@ -2,18 +2,17 @@
 
 #include "../UpnpServiceBase.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Ported from upnp/Sonos_MusicServices.hpp near-verbatim.
 class MusicServices : public UpnpServiceBase
 {
-public:
+  public:
     MusicServices(QNetworkAccessManager *netMgr, const QString &device, int port = 1400)
-        : UpnpServiceBase(netMgr, device, port,
-                           QStringLiteral("/MusicServices/Control"),
-                           QStringLiteral("/MusicServices/Event"),
-                           QStringLiteral("urn:schemas-upnp-org:service:MusicServices:1"),
-                           "MusicServices")
+        : UpnpServiceBase(netMgr, device, port, QStringLiteral("/MusicServices/Control"),
+                          QStringLiteral("/MusicServices/Event"),
+                          QStringLiteral("urn:schemas-upnp-org:service:MusicServices:1"), "MusicServices")
     {
     }
 
@@ -40,4 +39,4 @@ public:
     }
 };
 
-}
+} // namespace RoomTunes

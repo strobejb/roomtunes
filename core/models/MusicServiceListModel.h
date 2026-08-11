@@ -4,7 +4,8 @@
 #include <QList>
 #include <QVariantList>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 class Household;
 class BrowseHistoryStore;
@@ -20,8 +21,9 @@ class MusicServiceListModel : public QAbstractListModel
 {
     Q_OBJECT
 
-public:
-    enum Role {
+  public:
+    enum Role
+    {
         ServiceRole = Qt::UserRole + 1,
         TitleRole,
         ImageUrlRole,
@@ -30,25 +32,26 @@ public:
         ItemRole,
     };
 
-    explicit MusicServiceListModel(Household *household, BrowseHistoryStore *browseHistoryStore, QObject *parent = nullptr);
+    explicit MusicServiceListModel(Household *household, BrowseHistoryStore *browseHistoryStore,
+                                   QObject *parent = nullptr);
 
-    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    int                    rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    QVariant               data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
 
     Q_INVOKABLE QVariantList searchServiceItems() const;
 
-private slots:
+  private slots:
     void rebuild();
 
-private:
-    MusicService *serviceAt(int row) const;
+  private:
+    MusicService         *serviceAt(int row) const;
     QList<MusicService *> orderedServices() const;
-    qint64 browseHistoryScore(MusicService *service) const;
+    qint64                browseHistoryScore(MusicService *service) const;
 
-    Household *m_household;
-    BrowseHistoryStore *m_browseHistoryStore;
+    Household            *m_household;
+    BrowseHistoryStore   *m_browseHistoryStore;
     QList<MusicService *> m_services;
 };
 
-}
+} // namespace RoomTunes

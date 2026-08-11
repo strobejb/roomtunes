@@ -7,17 +7,19 @@
 
 #define QLOG_CATEGORY logServices
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
+namespace
+{
 QVariantMap categoryItem(const QString &id, const QString &title)
 {
     QVariantMap item;
-    item[QStringLiteral("id")] = id;
-    item[QStringLiteral("title")] = title;
-    item[QStringLiteral("artist")] = QString();
-    item[QStringLiteral("album")] = QString();
-    item[QStringLiteral("imageUrl")] = QString();
+    item[QStringLiteral("id")]        = id;
+    item[QStringLiteral("title")]     = title;
+    item[QStringLiteral("artist")]    = QString();
+    item[QStringLiteral("album")]     = QString();
+    item[QStringLiteral("imageUrl")]  = QString();
     item[QStringLiteral("container")] = true;
     return item;
 }
@@ -39,38 +41,38 @@ QVariantMap didlItemToVariant(const DidlItem &item, const QString &baseUrl)
         artUrl = baseUrl + (artUrl.startsWith(QLatin1Char('/')) ? artUrl.mid(1) : artUrl);
 
     QVariantMap variant;
-    variant[QStringLiteral("id")] = item.id;
-    variant[QStringLiteral("title")] = item.title;
-    variant[QStringLiteral("artist")] = item.artist;
-    variant[QStringLiteral("album")] = item.album;
-    variant[QStringLiteral("imageUrl")] = artUrl;
+    variant[QStringLiteral("id")]        = item.id;
+    variant[QStringLiteral("title")]     = item.title;
+    variant[QStringLiteral("artist")]    = item.artist;
+    variant[QStringLiteral("album")]     = item.album;
+    variant[QStringLiteral("imageUrl")]  = artUrl;
     variant[QStringLiteral("container")] = item.container;
     // For FV:* wrappers, keep the parsed inner DIDL id alongside the visible
     // outer favourite id. This is only a browse target hint; the actual
     // SMAPI-vs-ContentDirectory dispatch is driven by serviceId in
     // doBrowseItem(), matching BB10's "item carries service identity" model
     // without trying to infer API routing from URI string shapes.
-    variant[QStringLiteral("browseId")] = browseObjectIdForItem(item);
+    variant[QStringLiteral("browseId")]  = browseObjectIdForItem(item);
     variant[QStringLiteral("serviceId")] = item.serviceId;
     // Playable fields for ZonePlayer::playItem() -- the DIDL <res> URI is
     // reused as-is. For ordinary library items didlId/didlParentId match
     // id/parentId; for Sonos Favourites, Didl::parseItems() has already
     // pulled these from the favourite's r:resMD inner playable item, which
     // is exactly what roomtunes-bb10's ParseDIDL() did before enqueueing.
-    variant[QStringLiteral("uri")] = item.res;
+    variant[QStringLiteral("uri")]       = item.res;
     variant[QStringLiteral("upnpClass")] = item.upnpClass;
-    variant[QStringLiteral("didlId")] = item.didlId.isEmpty() ? item.id : item.didlId;
-    variant[QStringLiteral("parentId")] = item.didlParentId.isEmpty() ? item.parentId : item.didlParentId;
-    variant[QStringLiteral("desc")] = item.desc;
+    variant[QStringLiteral("didlId")]    = item.didlId.isEmpty() ? item.id : item.didlId;
+    variant[QStringLiteral("parentId")]  = item.didlParentId.isEmpty() ? item.parentId : item.didlParentId;
+    variant[QStringLiteral("desc")]      = item.desc;
     return variant;
 }
 
-}
+} // namespace
 
 SonosLibraryService::SonosLibraryService(Household *household, QObject *parent)
     : MusicService(QStringLiteral("sonos-library"), tr("Music Library"),
-                    QStringLiteral("qrc:/qt/qml/RoomTunes/resources/icons/library.svg"), parent)
-    , m_household(household)
+                   QStringLiteral("qrc:/qt/qml/RoomTunes/resources/icons/library.svg"), parent),
+      m_household(household)
 {
 }
 
@@ -98,10 +100,11 @@ void SonosLibraryService::doSearch(const QString &category, const QString &term,
 
 void SonosLibraryService::doSearchPreview(const QString &term, int limit, ResultCallback callback)
 {
-    doSearch(QStringLiteral("A:TRACKS"), term, [limit, callback = std::move(callback)](bool ok, const QString &errorMessage,
-                                                                                       const QVariantList &items) {
-        callback(ok, errorMessage, limit > 0 ? items.mid(0, limit) : items);
-    });
+    doSearch(QStringLiteral("A:TRACKS"), term,
+             [limit, callback = std::move(callback)](bool ok, const QString &errorMessage, const QVariantList &items)
+             {
+                 callback(ok, errorMessage, limit > 0 ? items.mid(0, limit) : items);
+             });
 }
 
 void SonosLibraryService::doBrowseItem(const QVariantMap &item, ResultCallback callback)
@@ -111,9 +114,11 @@ void SonosLibraryService::doBrowseItem(const QVariantMap &item, ResultCallback c
     // Sonos-library ContentDirectory object or actually belongs to a SMAPI
     // service discovered through a Sonos Favourite wrapper.
     const int itemServiceId = item.value(QStringLiteral("serviceId"), -1).toInt();
-    if (itemServiceId > 0) {
+    if (itemServiceId > 0)
+    {
         MusicService *service = m_household->serviceById(itemServiceId);
-        if (!service) {
+        if (!service)
+        {
             QWARN() << "browse item" << item.value(QStringLiteral("title")).toString()
                     << "failed: SMAPI serviceId=" << itemServiceId << "not resolved";
             callback(false, tr("Music service is not available."), {});
@@ -126,8 +131,8 @@ void SonosLibraryService::doBrowseItem(const QVariantMap &item, ResultCallback c
         if (smapiObjectId.isEmpty())
             smapiObjectId = item.value(QStringLiteral("id")).toString();
 
-        QLOG() << "browse item" << item.value(QStringLiteral("title")).toString()
-               << "redirecting to service" << service->title() << "objectId" << smapiObjectId;
+        QLOG() << "browse item" << item.value(QStringLiteral("title")).toString() << "redirecting to service"
+               << service->title() << "objectId" << smapiObjectId;
         service->browseDirect(smapiObjectId, std::move(callback));
         return;
     }
@@ -137,7 +142,8 @@ void SonosLibraryService::doBrowseItem(const QVariantMap &item, ResultCallback c
 
 void SonosLibraryService::doBrowse(const QString &objectId, ResultCallback callback)
 {
-    if (objectId == QStringLiteral("root")) {
+    if (objectId == QStringLiteral("root"))
+    {
         QLOG() << "browse root -- returning synthetic category list";
         callback(true, QString(),
                  {
@@ -156,7 +162,8 @@ void SonosLibraryService::doBrowse(const QString &objectId, ResultCallback callb
     }
 
     ZonePlayer *zone = m_household->browseCoordinator();
-    if (!zone) {
+    if (!zone)
+    {
         QWARN() << "browse" << objectId << "failed: no ready coordinator available";
         callback(false, tr("No ready Sonos coordinator available to browse with."), {});
         return;
@@ -165,27 +172,30 @@ void SonosLibraryService::doBrowse(const QString &objectId, ResultCallback callb
     QLOG() << "browse" << objectId << "via coordinator" << zone->roomName();
 
     const QString baseUrl = zone->baseUrl();
-    zone->browse(objectId, [callback, objectId, baseUrl](bool ok, const QString &errorMessage, const QList<DidlItem> &items) {
-        if (!ok) {
-            // ZonePlayer::browse() already logged the full detail (room,
-            // httpStatus, UPnP error code/description) against this exact
-            // objectId -- errorMessage here is that same detail, passed
-            // through to the QML-facing error text too instead of a canned
-            // string.
-            QWARN() << "browse" << objectId << "failed:" << errorMessage;
-            callback(false, errorMessage, {});
-            return;
-        }
+    zone->browse(objectId,
+                 [callback, objectId, baseUrl](bool ok, const QString &errorMessage, const QList<DidlItem> &items)
+                 {
+                     if (!ok)
+                     {
+                         // ZonePlayer::browse() already logged the full detail (room,
+                         // httpStatus, UPnP error code/description) against this exact
+                         // objectId -- errorMessage here is that same detail, passed
+                         // through to the QML-facing error text too instead of a canned
+                         // string.
+                         QWARN() << "browse" << objectId << "failed:" << errorMessage;
+                         callback(false, errorMessage, {});
+                         return;
+                     }
 
-        QLOG() << "browse" << objectId << "OK," << items.size() << "item(s)";
+                     QLOG() << "browse" << objectId << "OK," << items.size() << "item(s)";
 
-        QVariantList result;
-        result.reserve(items.size());
-        for (const DidlItem &item : items)
-            result.append(didlItemToVariant(item, baseUrl));
+                     QVariantList result;
+                     result.reserve(items.size());
+                     for (const DidlItem &item : items)
+                         result.append(didlItemToVariant(item, baseUrl));
 
-        callback(true, QString(), result);
-    });
+                     callback(true, QString(), result);
+                 });
 }
 
-}
+} // namespace RoomTunes

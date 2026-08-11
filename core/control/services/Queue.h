@@ -2,17 +2,16 @@
 
 #include "../UpnpServiceBase.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 class Queue : public UpnpServiceBase
 {
-public:
+  public:
     Queue(QNetworkAccessManager *netMgr, const QString &device, int port = 1400)
-        : UpnpServiceBase(netMgr, device, port,
-                          QStringLiteral("/MediaRenderer/Queue/Control"),
+        : UpnpServiceBase(netMgr, device, port, QStringLiteral("/MediaRenderer/Queue/Control"),
                           QStringLiteral("/MediaRenderer/Queue/Event"),
-                          QStringLiteral("urn:schemas-upnp-org:service:Queue:1"),
-                          "Queue")
+                          QStringLiteral("urn:schemas-upnp-org:service:Queue:1"), "Queue")
     {
     }
 
@@ -46,4 +45,4 @@ public:
     }
 };
 
-}
+} // namespace RoomTunes

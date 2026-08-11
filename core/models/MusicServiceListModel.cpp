@@ -6,32 +6,33 @@
 #include "../settings/BrowseHistoryStore.h"
 #include "../zone/Household.h"
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
-namespace {
+namespace
+{
 
 QVariantMap serviceItem(MusicService *service)
 {
     QVariantMap item;
-    item[QStringLiteral("id")] = service->serviceKey();
-    item[QStringLiteral("objectId")] = QStringLiteral("root");
-    item[QStringLiteral("root")] = QStringLiteral("root");
-    item[QStringLiteral("title")] = service->title();
-    item[QStringLiteral("imageUrl")] = service->iconSource();
-    item[QStringLiteral("serviceId")] = service->serviceId();
-    item[QStringLiteral("serviceKey")] = service->serviceKey();
+    item[QStringLiteral("id")]            = service->serviceKey();
+    item[QStringLiteral("objectId")]      = QStringLiteral("root");
+    item[QStringLiteral("root")]          = QStringLiteral("root");
+    item[QStringLiteral("title")]         = service->title();
+    item[QStringLiteral("imageUrl")]      = service->iconSource();
+    item[QStringLiteral("serviceId")]     = service->serviceId();
+    item[QStringLiteral("serviceKey")]    = service->serviceKey();
     item[QStringLiteral("serviceObject")] = QVariant::fromValue<QObject *>(service);
-    item[QStringLiteral("container")] = true;
-    item[QStringLiteral("kind")] = QStringLiteral("service");
+    item[QStringLiteral("container")]     = true;
+    item[QStringLiteral("kind")]          = QStringLiteral("service");
     return item;
 }
 
-}
+} // namespace
 
-MusicServiceListModel::MusicServiceListModel(Household *household, BrowseHistoryStore *browseHistoryStore, QObject *parent)
-    : QAbstractListModel(parent)
-    , m_household(household)
-    , m_browseHistoryStore(browseHistoryStore)
+MusicServiceListModel::MusicServiceListModel(Household *household, BrowseHistoryStore *browseHistoryStore,
+                                             QObject *parent)
+    : QAbstractListModel(parent), m_household(household), m_browseHistoryStore(browseHistoryStore)
 {
     m_services = orderedServices();
     connect(household, &Household::musicServicesChanged, this, &MusicServiceListModel::rebuild);
@@ -65,7 +66,8 @@ QVariant MusicServiceListModel::data(const QModelIndex &index, int role) const
     if (!service)
         return {};
 
-    switch (role) {
+    switch (role)
+    {
     case ServiceRole:
         return QVariant::fromValue<QObject *>(service);
     case TitleRole:
@@ -86,12 +88,8 @@ QVariant MusicServiceListModel::data(const QModelIndex &index, int role) const
 QHash<int, QByteArray> MusicServiceListModel::roleNames() const
 {
     return {
-        { ServiceRole, "serviceObject" },
-        { TitleRole, "title" },
-        { ImageUrlRole, "imageUrl" },
-        { ServiceKeyRole, "serviceKey" },
-        { ServiceIdRole, "serviceId" },
-        { ItemRole, "item" },
+        {ServiceRole, "serviceObject"}, {TitleRole, "title"},         {ImageUrlRole, "imageUrl"},
+        {ServiceKeyRole, "serviceKey"}, {ServiceIdRole, "serviceId"}, {ItemRole, "item"},
     };
 }
 
@@ -109,20 +107,23 @@ QVariantList MusicServiceListModel::searchServiceItems() const
     if (MusicService *library = m_household->libraryService())
         ordered.append(library);
 
-    for (MusicService *service : m_household->services()) {
+    for (MusicService *service : m_household->services())
+    {
         if (!service || service->serviceKey() == QStringLiteral("sonos-library"))
             continue;
         if (service->canSearch())
             ordered.append(service);
     }
 
-    std::sort(ordered.begin(), ordered.end(), [this](MusicService *a, MusicService *b) {
-        const qint64 aScore = browseHistoryScore(a);
-        const qint64 bScore = browseHistoryScore(b);
-        if (aScore != bScore)
-            return aScore > bScore;
-        return a->title().localeAwareCompare(b->title()) < 0;
-    });
+    std::sort(ordered.begin(), ordered.end(),
+              [this](MusicService *a, MusicService *b)
+              {
+                  const qint64 aScore = browseHistoryScore(a);
+                  const qint64 bScore = browseHistoryScore(b);
+                  if (aScore != bScore)
+                      return aScore > bScore;
+                  return a->title().localeAwareCompare(b->title()) < 0;
+              });
 
     QVariantList result;
     result.reserve(ordered.size());
@@ -134,19 +135,22 @@ QVariantList MusicServiceListModel::searchServiceItems() const
 QList<MusicService *> MusicServiceListModel::orderedServices() const
 {
     QList<MusicService *> ordered;
-    for (MusicService *service : m_household->services()) {
+    for (MusicService *service : m_household->services())
+    {
         if (service->serviceKey() == QStringLiteral("sonos-library"))
             continue;
         ordered.append(service);
     }
 
-    std::sort(ordered.begin(), ordered.end(), [this](MusicService *a, MusicService *b) {
-        const qint64 aScore = m_browseHistoryStore->score(a->serviceKey());
-        const qint64 bScore = m_browseHistoryStore->score(b->serviceKey());
-        if (aScore != bScore)
-            return aScore > bScore;
-        return a->title().localeAwareCompare(b->title()) < 0;
-    });
+    std::sort(ordered.begin(), ordered.end(),
+              [this](MusicService *a, MusicService *b)
+              {
+                  const qint64 aScore = m_browseHistoryStore->score(a->serviceKey());
+                  const qint64 bScore = m_browseHistoryStore->score(b->serviceKey());
+                  if (aScore != bScore)
+                      return aScore > bScore;
+                  return a->title().localeAwareCompare(b->title()) < 0;
+              });
 
     return ordered;
 }
@@ -157,7 +161,8 @@ qint64 MusicServiceListModel::browseHistoryScore(MusicService *service) const
         return 0;
 
     qint64 score = m_browseHistoryStore->score(service->serviceKey());
-    if (service->serviceKey() == QStringLiteral("sonos-library")) {
+    if (service->serviceKey() == QStringLiteral("sonos-library"))
+    {
         // BrowseHome records the visible "Music Library" tile with the same
         // key scheme as Line-In/TV sources, while the service itself is
         // identified as sonos-library everywhere else. Treat either as a
@@ -168,4 +173,4 @@ qint64 MusicServiceListModel::browseHistoryScore(MusicService *service) const
     return score;
 }
 
-}
+} // namespace RoomTunes

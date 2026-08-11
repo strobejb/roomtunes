@@ -5,7 +5,8 @@
 #include <QString>
 #include <QTimer>
 
-namespace RoomTunes {
+namespace RoomTunes
+{
 
 // Detects local network changes that Sonos discovery needs to react to --
 // not just full disconnect/reconnect, but also silently switching from one
@@ -29,21 +30,21 @@ class NetworkWatcher : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     explicit NetworkWatcher(QObject *parent = nullptr);
 
-signals:
+  signals:
     // Fired whenever the local machine's set of usable IPv4 addresses
     // changes from what it was at the last poll.
     void networkChanged();
 
-private:
-    void poll();
+  private:
+    void                 poll();
     static QSet<QString> currentAddresses();
 
-private:
-    QTimer m_pollTimer;
+  private:
+    QTimer        m_pollTimer;
     QSet<QString> m_lastAddresses;
 };
 
-}
+} // namespace RoomTunes
