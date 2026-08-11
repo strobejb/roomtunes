@@ -108,31 +108,27 @@ int main(int argc, char *argv[])
         auto *musicServices = new MusicServices(netMgr, parser.value(listServicesAtOption));
 
         QNetworkReply *reply = musicServices->ListAvailableServices();
-        QObject::connect(reply, &QNetworkReply::finished, &app,
-                         [reply]()
-                         {
-                             SoapResponse response(reply);
-                             reply->deleteLater();
+        QObject::connect(reply, &QNetworkReply::finished, &app, [reply]() {
+            SoapResponse response(reply);
+            reply->deleteLater();
 
-                             QTextStream out(stdout);
-                             out << "HTTP status: " << response.httpStatusCode() << Qt::endl;
-                             out << "error(): " << (response.error() ? "true" : "false") << Qt::endl;
-                             if (response.hasFault())
-                             {
-                                 out << "SOAP fault: code=" << response.faultCode()
-                                     << " string=" << response.faultString()
-                                     << " upnpErrorCode=" << response.upnpErrorCode()
-                                     << " upnpErrorDescription=" << response.upnpErrorDescription() << Qt::endl;
-                             }
-                             else
-                             {
-                                 out << "faultString(): " << response.faultString() << Qt::endl;
-                             }
-                             out << "raw body (first 2000 bytes):" << Qt::endl
-                                 << response.rawBody().left(2000) << Qt::endl;
+            QTextStream out(stdout);
+            out << "HTTP status: " << response.httpStatusCode() << Qt::endl;
+            out << "error(): " << (response.error() ? "true" : "false") << Qt::endl;
+            if (response.hasFault())
+            {
+                out << "SOAP fault: code=" << response.faultCode() << " string=" << response.faultString()
+                    << " upnpErrorCode=" << response.upnpErrorCode()
+                    << " upnpErrorDescription=" << response.upnpErrorDescription() << Qt::endl;
+            }
+            else
+            {
+                out << "faultString(): " << response.faultString() << Qt::endl;
+            }
+            out << "raw body (first 2000 bytes):" << Qt::endl << response.rawBody().left(2000) << Qt::endl;
 
-                             QCoreApplication::quit();
-                         });
+            QCoreApplication::quit();
+        });
 
         return app.exec();
     }
@@ -141,29 +137,24 @@ int main(int argc, char *argv[])
 
     Household household;
 
-    QObject::connect(&household, &Household::zoneReady, &app,
-                     [](ZonePlayer *zone)
-                     {
-                         QTextStream out(stdout);
-                         out << "zone ready:" << Qt::endl;
-                         printZone(zone);
-                     });
+    QObject::connect(&household, &Household::zoneReady, &app, [](ZonePlayer *zone) {
+        QTextStream out(stdout);
+        out << "zone ready:" << Qt::endl;
+        printZone(zone);
+    });
 
-    QObject::connect(
-        &household, &Household::discoveryTimedOut, &app,
-        [&household]()
-        {
-            QTextStream               out(stdout);
-            const QList<ZonePlayer *> zones = household.zones();
-            out << Qt::endl << "discovery finished, " << zones.size() << " zone(s) found:" << Qt::endl;
-            for (ZonePlayer *zone : zones)
-                printZone(zone);
+    QObject::connect(&household, &Household::discoveryTimedOut, &app, [&household]() {
+        QTextStream               out(stdout);
+        const QList<ZonePlayer *> zones = household.zones();
+        out << Qt::endl << "discovery finished, " << zones.size() << " zone(s) found:" << Qt::endl;
+        for (ZonePlayer *zone : zones)
+            printZone(zone);
 
-            if (zones.isEmpty())
-                out << "(no Sonos zones responded -- make sure this machine is on the same network as your Sonos "
-                       "system)"
-                    << Qt::endl;
-        });
+        if (zones.isEmpty())
+            out << "(no Sonos zones responded -- make sure this machine is on the same network as your Sonos "
+                   "system)"
+                << Qt::endl;
+    });
 
     if (!household.startDiscovery())
     {
@@ -187,8 +178,7 @@ int main(int argc, char *argv[])
 
         QObject::connect(
             spotify, &SmapiService::deviceLinkCodeReady, &app,
-            [](const QString &linkCode, const QString &regUrl, bool showLinkCode)
-            {
+            [](const QString &linkCode, const QString &regUrl, bool showLinkCode) {
                 QTextStream out(stdout);
                 out << "Visit " << regUrl;
                 if (showLinkCode)
@@ -201,16 +191,14 @@ int main(int argc, char *argv[])
 
         // DeviceLink needs a household id, which only becomes available once
         // at least one zone has responded -- wait for the first ready zone.
-        QObject::connect(&household, &Household::zoneReady, &app,
-                         [spotify](ZonePlayer *)
-                         {
-                             static bool started = false;
-                             if (started)
-                                 return;
-                             started = true;
+        QObject::connect(&household, &Household::zoneReady, &app, [spotify](ZonePlayer *) {
+            static bool started = false;
+            if (started)
+                return;
+            started = true;
 
-                             spotify->beginSignIn();
-                         });
+            spotify->beginSignIn();
+        });
     }
 
     if (parser.isSet(browseOption))
@@ -221,81 +209,29 @@ int main(int argc, char *argv[])
         // have already had a browse listener attached rather than
         // latching onto just the first (likely incomplete) emission.
         auto *browsedKeys = new QSet<QString>();
-        QObject::connect(
-            &household, &Household::musicServicesChanged, &app,
-            [&household, &app, browsedKeys]()
+        QObject::connect(&household, &Household::musicServicesChanged, &app, [&household, &app, browsedKeys]() {
+            QTextStream out(stdout);
+            for (MusicService *service : household.services())
             {
-                QTextStream out(stdout);
-                for (MusicService *service : household.services())
-                {
-                    if (browsedKeys->contains(service->serviceKey()))
-                        continue;
-                    browsedKeys->insert(service->serviceKey());
-
-                    QObject::connect(
-                        service, &MusicService::browseFinished, &app,
-                        [service](const QString &, bool ok, const QString &errorMessage, const QVariantList &items)
-                        {
-                            QTextStream out(stdout);
-                            out << "[" << service->title() << "] ";
-                            if (!ok)
-                            {
-                                out << "browse FAILED: " << errorMessage << Qt::endl;
-                                return;
-                            }
-                            out << "browse OK, " << items.size() << " item(s):" << Qt::endl;
-                            for (const QVariant &v : items)
-                            {
-                                const QVariantMap m = v.toMap();
-                                out << "    "
-                                    << (m.value(QStringLiteral("container")).toBool() ? "[folder] " : "[track]  ")
-                                    << m.value(QStringLiteral("title")).toString();
-                                const QString artist = m.value(QStringLiteral("artist")).toString();
-                                if (!artist.isEmpty())
-                                    out << "  --  " << artist;
-                                out << Qt::endl;
-                            }
-                        });
-
-                    out << "Browsing \"" << service->title() << "\" (key=" << service->serviceKey()
-                        << ", needsSignIn=" << (service->needsSignIn() ? "true" : "false") << ")..." << Qt::endl;
-                    service->browse(service->serviceKey(), QStringLiteral("root"));
-                }
-            });
-    }
-
-    if (parser.isSet(browseIdOption))
-    {
-        const QString objectId = parser.value(browseIdOption);
-        auto         *probed   = new bool(false);
-        QObject::connect(
-            &household, &Household::musicServicesChanged, &app,
-            [&household, &app, objectId, probed]()
-            {
-                if (*probed)
-                    return;
-                MusicService *library = household.libraryService();
-                if (!library)
-                    return;
-                *probed = true;
+                if (browsedKeys->contains(service->serviceKey()))
+                    continue;
+                browsedKeys->insert(service->serviceKey());
 
                 QObject::connect(
-                    library, &MusicService::browseFinished, &app,
-                    [objectId](const QString &, bool ok, const QString &errorMessage, const QVariantList &items)
-                    {
+                    service, &MusicService::browseFinished, &app,
+                    [service](const QString &, bool ok, const QString &errorMessage, const QVariantList &items) {
                         QTextStream out(stdout);
-                        out << "browse-id \"" << objectId << "\": ";
+                        out << "[" << service->title() << "] ";
                         if (!ok)
                         {
-                            out << "FAILED: " << errorMessage << Qt::endl;
+                            out << "browse FAILED: " << errorMessage << Qt::endl;
                             return;
                         }
-                        out << "OK, " << items.size() << " item(s):" << Qt::endl;
+                        out << "browse OK, " << items.size() << " item(s):" << Qt::endl;
                         for (const QVariant &v : items)
                         {
                             const QVariantMap m = v.toMap();
-                            out << "    id=" << m.value(QStringLiteral("id")).toString()
-                                << (m.value(QStringLiteral("container")).toBool() ? " [folder] " : " [track]  ")
+                            out << "    " << (m.value(QStringLiteral("container")).toBool() ? "[folder] " : "[track]  ")
                                 << m.value(QStringLiteral("title")).toString();
                             const QString artist = m.value(QStringLiteral("artist")).toString();
                             if (!artist.isEmpty())
@@ -304,10 +240,53 @@ int main(int argc, char *argv[])
                         }
                     });
 
-                QTextStream out(stdout);
-                out << "Browsing library objectId \"" << objectId << "\"..." << Qt::endl;
-                library->browse(QStringLiteral("browse-id"), objectId);
-            });
+                out << "Browsing \"" << service->title() << "\" (key=" << service->serviceKey()
+                    << ", needsSignIn=" << (service->needsSignIn() ? "true" : "false") << ")..." << Qt::endl;
+                service->browse(service->serviceKey(), QStringLiteral("root"));
+            }
+        });
+    }
+
+    if (parser.isSet(browseIdOption))
+    {
+        const QString objectId = parser.value(browseIdOption);
+        auto         *probed   = new bool(false);
+        QObject::connect(&household, &Household::musicServicesChanged, &app, [&household, &app, objectId, probed]() {
+            if (*probed)
+                return;
+            MusicService *library = household.libraryService();
+            if (!library)
+                return;
+            *probed = true;
+
+            QObject::connect(
+                library, &MusicService::browseFinished, &app,
+                [objectId](const QString &, bool ok, const QString &errorMessage, const QVariantList &items) {
+                    QTextStream out(stdout);
+                    out << "browse-id \"" << objectId << "\": ";
+                    if (!ok)
+                    {
+                        out << "FAILED: " << errorMessage << Qt::endl;
+                        return;
+                    }
+                    out << "OK, " << items.size() << " item(s):" << Qt::endl;
+                    for (const QVariant &v : items)
+                    {
+                        const QVariantMap m = v.toMap();
+                        out << "    id=" << m.value(QStringLiteral("id")).toString()
+                            << (m.value(QStringLiteral("container")).toBool() ? " [folder] " : " [track]  ")
+                            << m.value(QStringLiteral("title")).toString();
+                        const QString artist = m.value(QStringLiteral("artist")).toString();
+                        if (!artist.isEmpty())
+                            out << "  --  " << artist;
+                        out << Qt::endl;
+                    }
+                });
+
+            QTextStream out(stdout);
+            out << "Browsing library objectId \"" << objectId << "\"..." << Qt::endl;
+            library->browse(QStringLiteral("browse-id"), objectId);
+        });
     }
 
     // Give discovery + topology a reasonable window, then exit for

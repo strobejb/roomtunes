@@ -188,11 +188,9 @@ ZoneDiscovery::ZoneDiscovery(QNetworkAccessManager *netMgr, QObject *parent) : Q
 {
     connect(&m_ssdp, &Ssdp::discovered, this, &ZoneDiscovery::onSsdpDiscovered);
     connect(&m_ssdp, &Ssdp::timeout, this, &ZoneDiscovery::onSsdpTimeout);
-    connect(&m_ssdp, &Ssdp::socketErrorOccurred, this,
-            [](QAbstractSocket::SocketError, const QString &errorString)
-            {
-                QWARN() << "SSDP socket warning (non-fatal):" << errorString;
-            });
+    connect(&m_ssdp, &Ssdp::socketErrorOccurred, this, [](QAbstractSocket::SocketError, const QString &errorString) {
+        QWARN() << "SSDP socket warning (non-fatal):" << errorString;
+    });
 
     m_eventing.listen();
     connect(&m_eventing, &ZoneEventing::topologySubscriptionZonePicked, this,
@@ -340,40 +338,37 @@ void ZoneDiscovery::fetchDeviceDescription(ZonePlayer *zone)
     QNetworkRequest request{QUrl(zone->baseUrl() + QStringLiteral("xml/device_description.xml"))};
     QNetworkReply  *reply = m_netMgr->get(request);
 
-    connect(reply, &QNetworkReply::finished, this,
-            [this, udn, deviceIp, reply]()
-            {
-                reply->deleteLater();
+    connect(reply, &QNetworkReply::finished, this, [this, udn, deviceIp, reply]() {
+        reply->deleteLater();
 
-                if (reply->error() != QNetworkReply::NoError)
-                {
-                    QWARN() << "device_description fetch failed for" << deviceIp << reply->errorString();
-                    return;
-                }
+        if (reply->error() != QNetworkReply::NoError)
+        {
+            QWARN() << "device_description fetch failed for" << deviceIp << reply->errorString();
+            return;
+        }
 
-                ZonePlayer *zone = m_zones.value(udn);
-                if (!zone)
-                    return;
+        ZonePlayer *zone = m_zones.value(udn);
+        if (!zone)
+            return;
 
-                const DeviceDescription description = parseDeviceDescription(reply->readAll());
-                zone->setRoomName(description.roomName);
-                zone->setModelName(description.modelName);
-                zone->setSerialNumber(description.serialNumber);
-                zone->setDeviceDescriptionDetails(description.displayName, description.displayVersion,
-                                                  description.softwareVersion, description.zoneType,
-                                                  description.features);
-                zone->setDeviceServices(description.services);
+        const DeviceDescription description = parseDeviceDescription(reply->readAll());
+        zone->setRoomName(description.roomName);
+        zone->setModelName(description.modelName);
+        zone->setSerialNumber(description.serialNumber);
+        zone->setDeviceDescriptionDetails(description.displayName, description.displayVersion,
+                                          description.softwareVersion, description.zoneType, description.features);
+        zone->setDeviceServices(description.services);
 
-                logDeviceDescription(deviceIp, description);
-                logZoneCapabilitySummaryWhenComplete();
+        logDeviceDescription(deviceIp, description);
+        logZoneCapabilitySummaryWhenComplete();
 
-                // deviceDescriptionUpdated, conceptually: HHID + device_description
-                // are the two of three ready-conditions this resolves. The HHID
-                // step is skipped entirely if this zone's SSDP X-RINCON-HOUSEHOLD
-                // header (or an already-known household-wide ID from an earlier
-                // zone) already supplied one -- see fetchHouseholdId's fast path.
-                fetchHouseholdId(zone);
-            });
+        // deviceDescriptionUpdated, conceptually: HHID + device_description
+        // are the two of three ready-conditions this resolves. The HHID
+        // step is skipped entirely if this zone's SSDP X-RINCON-HOUSEHOLD
+        // header (or an already-known household-wide ID from an earlier
+        // zone) already supplied one -- see fetchHouseholdId's fast path.
+        fetchHouseholdId(zone);
+    });
 }
 
 void ZoneDiscovery::fetchHouseholdId(ZonePlayer *zone)
@@ -400,39 +395,35 @@ void ZoneDiscovery::fetchHouseholdId(ZonePlayer *zone)
     }
 
     QNetworkReply *reply = zone->deviceProperties().GetHouseholdID();
-    connect(reply, &QNetworkReply::finished, this,
-            [this, udn = zone->udn(), roomName = zone->roomName(), reply]()
-            {
-                SoapResponse response(reply);
-                reply->deleteLater();
+    connect(reply, &QNetworkReply::finished, this, [this, udn = zone->udn(), roomName = zone->roomName(), reply]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                // Re-looked-up by UDN rather than closing over the ZonePlayer*
-                // directly -- defensive against a future where zones can be torn
-                // down mid-flight; currently they never are, but this is the same
-                // capture-by-value-then-relookup pattern already used for the
-                // catalog-fetch retry below.
-                ZonePlayer *zone = m_zones.value(udn);
-                if (!zone)
-                    return;
+        // Re-looked-up by UDN rather than closing over the ZonePlayer*
+        // directly -- defensive against a future where zones can be torn
+        // down mid-flight; currently they never are, but this is the same
+        // capture-by-value-then-relookup pattern already used for the
+        // catalog-fetch retry below.
+        ZonePlayer *zone = m_zones.value(udn);
+        if (!zone)
+            return;
 
-                if (response.error())
-                {
-                    QWARN() << "GetHouseholdID failed for" << roomName << ":" << response.faultString()
-                            << "-- retrying in" << kHouseholdIdRetrySeconds << "s";
-                    QTimer::singleShot(kHouseholdIdRetrySeconds * 1000, this,
-                                       [this, udn]()
-                                       {
-                                           if (ZonePlayer *retryZone = m_zones.value(udn))
-                                               fetchHouseholdId(retryZone);
-                                       });
-                    return;
-                }
-
-                m_householdId = response.value(QStringLiteral("CurrentHouseholdID"));
-                zone->setHouseholdId(m_householdId);
-                checkZoneReady(zone);
-                updateTopologySubscriptionSelection();
+        if (response.error())
+        {
+            QWARN() << "GetHouseholdID failed for" << roomName << ":" << response.faultString() << "-- retrying in"
+                    << kHouseholdIdRetrySeconds << "s";
+            QTimer::singleShot(kHouseholdIdRetrySeconds * 1000, this, [this, udn]() {
+                if (ZonePlayer *retryZone = m_zones.value(udn))
+                    fetchHouseholdId(retryZone);
             });
+            return;
+        }
+
+        m_householdId = response.value(QStringLiteral("CurrentHouseholdID"));
+        zone->setHouseholdId(m_householdId);
+        checkZoneReady(zone);
+        updateTopologySubscriptionSelection();
+    });
 }
 
 void ZoneDiscovery::checkZoneReady(ZonePlayer *zone)
@@ -581,20 +572,18 @@ void ZoneDiscovery::refreshTopology()
         return;
 
     QNetworkReply *reply = topologyZoneVal->zoneGroupTopology().GetZoneGroupState();
-    connect(reply, &QNetworkReply::finished, this,
-            [this, reply]()
-            {
-                SoapResponse response(reply);
-                reply->deleteLater();
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                if (response.error())
-                {
-                    QWARN() << "GetZoneGroupState failed:" << response.faultString();
-                    return;
-                }
+        if (response.error())
+        {
+            QWARN() << "GetZoneGroupState failed:" << response.faultString();
+            return;
+        }
 
-                parseZoneGroupState(response.value(QStringLiteral("ZoneGroupState")).toUtf8());
-            });
+        parseZoneGroupState(response.value(QStringLiteral("ZoneGroupState")).toUtf8());
+    });
 }
 
 void ZoneDiscovery::parseZoneGroupState(const QByteArray &xmlBody)
@@ -695,11 +684,9 @@ void ZoneDiscovery::parseZoneGroupState(const QByteArray &xmlBody)
     // its device_description fetched yet, so roomName/modelName can be
     // blank the very first time this logs for it.
     QList<ZonePlayer *> zones = m_zones.values();
-    std::sort(zones.begin(), zones.end(),
-              [](ZonePlayer *a, ZonePlayer *b)
-              {
-                  return a->roomName().compare(b->roomName(), Qt::CaseInsensitive) < 0;
-              });
+    std::sort(zones.begin(), zones.end(), [](ZonePlayer *a, ZonePlayer *b) {
+        return a->roomName().compare(b->roomName(), Qt::CaseInsensitive) < 0;
+    });
 
     QLOG() << LOGSEPARATOR;
     QLOG() << "processZone:" << zones.size() << "zone(s)";
@@ -736,11 +723,9 @@ void ZoneDiscovery::logZoneCapabilitySummary()
     Q_ASSERT(zoneCapabilitySummaryAvailable());
 
     QList<ZonePlayer *> zones = m_zones.values();
-    std::sort(zones.begin(), zones.end(),
-              [](ZonePlayer *a, ZonePlayer *b)
-              {
-                  return a->roomName().compare(b->roomName(), Qt::CaseInsensitive) < 0;
-              });
+    std::sort(zones.begin(), zones.end(), [](ZonePlayer *a, ZonePlayer *b) {
+        return a->roomName().compare(b->roomName(), Qt::CaseInsensitive) < 0;
+    });
 
     QLOG() << LOGSEPARATOR;
     QLOG() << "zone capability summary:" << zones.size() << "zone(s)";

@@ -33,8 +33,7 @@ QVariant GroupedZoneModel::data(const QModelIndex &index, int role) const
     {
     case CoordinatorRole:
         return QVariant::fromValue(group.coordinator);
-    case MembersRole:
-    {
+    case MembersRole: {
         QVariantList list;
         for (ZonePlayer *zone : group.members)
             list.append(QVariant::fromValue(zone));
@@ -80,24 +79,20 @@ void GroupedZoneModel::rebuild()
 
     for (Group &group : m_groups)
     {
-        std::sort(group.members.begin(), group.members.end(),
-                  [&group](ZonePlayer *a, ZonePlayer *b)
-                  {
-                      if (a == group.coordinator)
-                          return b != group.coordinator;
-                      if (b == group.coordinator)
-                          return false;
-                      return a->roomName() < b->roomName();
-                  });
+        std::sort(group.members.begin(), group.members.end(), [&group](ZonePlayer *a, ZonePlayer *b) {
+            if (a == group.coordinator)
+                return b != group.coordinator;
+            if (b == group.coordinator)
+                return false;
+            return a->roomName() < b->roomName();
+        });
     }
 
-    std::sort(m_groups.begin(), m_groups.end(),
-              [](const Group &a, const Group &b)
-              {
-                  const QString nameA = a.coordinator ? a.coordinator->roomName() : QString();
-                  const QString nameB = b.coordinator ? b.coordinator->roomName() : QString();
-                  return nameA < nameB;
-              });
+    std::sort(m_groups.begin(), m_groups.end(), [](const Group &a, const Group &b) {
+        const QString nameA = a.coordinator ? a.coordinator->roomName() : QString();
+        const QString nameB = b.coordinator ? b.coordinator->roomName() : QString();
+        return nameA < nameB;
+    });
 
     endResetModel();
 
@@ -120,12 +115,10 @@ void GroupedZoneModel::scheduleRebuild()
         return;
 
     m_rebuildScheduled = true;
-    QTimer::singleShot(0, this,
-                       [this]()
-                       {
-                           m_rebuildScheduled = false;
-                           rebuild();
-                       });
+    QTimer::singleShot(0, this, [this]() {
+        m_rebuildScheduled = false;
+        rebuild();
+    });
 }
 
 ZonePlayer *GroupedZoneModel::firstCoordinator() const

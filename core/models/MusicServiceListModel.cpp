@@ -115,15 +115,13 @@ QVariantList MusicServiceListModel::searchServiceItems() const
             ordered.append(service);
     }
 
-    std::sort(ordered.begin(), ordered.end(),
-              [this](MusicService *a, MusicService *b)
-              {
-                  const qint64 aScore = browseHistoryScore(a);
-                  const qint64 bScore = browseHistoryScore(b);
-                  if (aScore != bScore)
-                      return aScore > bScore;
-                  return a->title().localeAwareCompare(b->title()) < 0;
-              });
+    std::sort(ordered.begin(), ordered.end(), [this](MusicService *a, MusicService *b) {
+        const qint64 aScore = browseHistoryScore(a);
+        const qint64 bScore = browseHistoryScore(b);
+        if (aScore != bScore)
+            return aScore > bScore;
+        return a->title().localeAwareCompare(b->title()) < 0;
+    });
 
     QVariantList result;
     result.reserve(ordered.size());
@@ -142,15 +140,13 @@ QList<MusicService *> MusicServiceListModel::orderedServices() const
         ordered.append(service);
     }
 
-    std::sort(ordered.begin(), ordered.end(),
-              [this](MusicService *a, MusicService *b)
-              {
-                  const qint64 aScore = m_browseHistoryStore->score(a->serviceKey());
-                  const qint64 bScore = m_browseHistoryStore->score(b->serviceKey());
-                  if (aScore != bScore)
-                      return aScore > bScore;
-                  return a->title().localeAwareCompare(b->title()) < 0;
-              });
+    std::sort(ordered.begin(), ordered.end(), [this](MusicService *a, MusicService *b) {
+        const qint64 aScore = m_browseHistoryStore->score(a->serviceKey());
+        const qint64 bScore = m_browseHistoryStore->score(b->serviceKey());
+        if (aScore != bScore)
+            return aScore > bScore;
+        return a->title().localeAwareCompare(b->title()) < 0;
+    });
 
     return ordered;
 }

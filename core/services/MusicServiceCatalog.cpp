@@ -120,11 +120,9 @@ QHash<int, SmapiCatalogEntry> MusicServiceCatalog::build(const QByteArray &descr
         if (serviceId >= 16 && !result.contains(serviceId))
             available.append(QString::number(serviceId));
     }
-    std::sort(available.begin(), available.end(),
-              [](const QString &a, const QString &b)
-              {
-                  return a.toInt() < b.toInt();
-              });
+    std::sort(available.begin(), available.end(), [](const QString &a, const QString &b) {
+        return a.toInt() < b.toInt();
+    });
 
     auto smapiIt = bySmapiId.constBegin();
     for (const QString &idText : std::as_const(available))
@@ -147,13 +145,20 @@ QString MusicServiceCatalog::legacyServiceName(int serviceId)
 {
     switch (serviceId)
     {
-    case kRhapsodyTrialId:      return QStringLiteral("Rhapsody Trial");
-    case kRhapsodyServiceId:    return QStringLiteral("Rhapsody");
-    case kNapsterTrialId:       return QStringLiteral("Napster Trial");
-    case kNapsterServiceId:     return QStringLiteral("Napster");
-    case kPandoraServiceId:     return QStringLiteral("Pandora");
-    case kLastFmServiceId:      return QStringLiteral("Last.fm");
-    default:                    return {};
+    case kRhapsodyTrialId:
+        return QStringLiteral("Rhapsody Trial");
+    case kRhapsodyServiceId:
+        return QStringLiteral("Rhapsody");
+    case kNapsterTrialId:
+        return QStringLiteral("Napster Trial");
+    case kNapsterServiceId:
+        return QStringLiteral("Napster");
+    case kPandoraServiceId:
+        return QStringLiteral("Pandora");
+    case kLastFmServiceId:
+        return QStringLiteral("Last.fm");
+    default:
+        return {};
     }
 }
 

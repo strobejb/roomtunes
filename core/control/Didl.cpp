@@ -176,8 +176,7 @@ QList<DidlItem> Didl::parseItems(const QByteArray &didlXml)
     const XmlDoc    doc  = XmlDoc::parse(didlXml);
     const XmlNode   root = doc.root();
 
-    auto appendItem = [&items](const XmlNode &node)
-    {
+    auto appendItem = [&items](const XmlNode &node) {
         if (node.nameIs("item"))
             items.append(parseOneItem(node, false));
         else if (node.nameIs("container"))

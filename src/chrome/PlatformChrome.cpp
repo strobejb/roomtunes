@@ -36,8 +36,7 @@ QString platformButtonLayout()
 
 void parseButtonLayout(const QString &layout, QStringList &left, QStringList &right)
 {
-    auto split = [](const QString &s)
-    {
+    auto split = [](const QString &s) {
         return s.split(QLatin1Char(','), Qt::SkipEmptyParts);
     };
     const int colon = layout.indexOf(QLatin1Char(':'));
@@ -88,8 +87,7 @@ bool PlatformChrome::isGnome() const
 #ifdef Q_OS_WIN
     return false;
 #else
-    static const bool gnome = []
-    {
+    static const bool gnome = [] {
         const QByteArray desktop = qgetenv("XDG_CURRENT_DESKTOP").toUpper();
         return desktop.contains("GNOME") || desktop.contains("UNITY");
     }();

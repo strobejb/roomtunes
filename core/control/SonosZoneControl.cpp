@@ -44,139 +44,122 @@ QString SonosZoneControl::roomName() const
 void SonosZoneControl::play(QObject *context, std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_avTransport.Play(0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "Play failed:" << response.faultString();
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "Play failed:" << response.faultString();
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::pause(QObject *context, std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_avTransport.Pause(0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "Pause failed:" << response.faultString();
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "Pause failed:" << response.faultString();
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::next(QObject *context, std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_avTransport.Next(0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "Next failed:" << response.faultString();
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "Next failed:" << response.faultString();
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::previous(QObject *context, std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_avTransport.Previous(0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "Previous failed:" << response.faultString();
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "Previous failed:" << response.faultString();
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::becomeCoordinatorOfStandaloneGroup(QObject *context, std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_avTransport.BecomeCoordinatorOfStandaloneGroup(0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName()
-                                     << "BecomeCoordinatorOfStandaloneGroup failed:" << response.faultString();
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "BecomeCoordinatorOfStandaloneGroup failed:" << response.faultString();
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::setPlayMode(QObject *context, const QString &playMode, std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_avTransport.SetPlayMode(0, playMode);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "SetPlayMode failed:" << soapErrorDetail(response);
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "SetPlayMode failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::setCrossfadeEnabled(QObject *context, bool enabled, std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_avTransport.SetCrossfadeMode(0, enabled);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "SetCrossfadeMode failed:" << soapErrorDetail(response);
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "SetCrossfadeMode failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::setAVTransportUri(QObject *context, const QString &uri, const QString &metaData,
                                          std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_avTransport.SetAVTransportURI(0, uri, metaData);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "SetAVTransportURI failed:" << soapErrorDetail(response);
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "SetAVTransportURI failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::addUriToQueue(QObject *context, const QString &uri, const QString &metaData,
@@ -185,40 +168,36 @@ void SonosZoneControl::addUriToQueue(QObject *context, const QString &uri, const
 {
     QNetworkReply *reply =
         m_avTransport.AddURIToQueue(0, uri, metaData, desiredFirstTrackNumberEnqueued, enqueueAsNext);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         if (response.error())
-                         {
-                             QWARN() << roomName() << "AddURIToQueue failed:" << soapErrorDetail(response);
-                             if (callback)
-                                 callback(false, 0);
-                             return;
-                         }
+        if (response.error())
+        {
+            QWARN() << roomName() << "AddURIToQueue failed:" << soapErrorDetail(response);
+            if (callback)
+                callback(false, 0);
+            return;
+        }
 
-                         if (callback)
-                             callback(true, response.value(QStringLiteral("FirstTrackNumberEnqueued")).toInt());
-                     });
+        if (callback)
+            callback(true, response.value(QStringLiteral("FirstTrackNumberEnqueued")).toInt());
+    });
 }
 
 void SonosZoneControl::removeAllTracksFromQueue(QObject *context, std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_avTransport.RemoveAllTracksFromQueue(0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "RemoveAllTracksFromQueue failed:" << soapErrorDetail(response);
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "RemoveAllTracksFromQueue failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::saveQueueAsSonosPlaylist(QObject *context, const QString &title,
@@ -228,55 +207,48 @@ void SonosZoneControl::saveQueueAsSonosPlaylist(QObject *context, const QString 
     // existing saved-queue object id would overwrite it, which this UI
     // deliberately does not expose.
     QNetworkReply *reply = m_queue.SaveAsSonosPlaylist(/*queueId=*/0, title, QString());
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "Queue.SaveAsSonosPlaylist failed:" << soapErrorDetail(response);
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "Queue.SaveAsSonosPlaylist failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::addToSonosFavourites(QObject *context, const DidlItem &item,
                                             std::function<void(bool, QString)> callback)
 {
     QNetworkReply *reply = m_contentDirectory.CreateObject(QStringLiteral("FV:2"), Didl::buildFavoriteItem(item));
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "CreateObject(FV:2) failed:" << soapErrorDetail(response);
-                         if (callback)
-                             callback(ok, ok ? response.value(QStringLiteral("ObjectID")) : QString());
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "CreateObject(FV:2) failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok, ok ? response.value(QStringLiteral("ObjectID")) : QString());
+    });
 }
 
 void SonosZoneControl::removeFromSonosFavourites(QObject *context, const QString &objectId,
                                                  std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_contentDirectory.DestroyObject(objectId);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback, objectId]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback, objectId]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "DestroyObject(" << objectId
-                                     << ") failed:" << soapErrorDetail(response);
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "DestroyObject(" << objectId << ") failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::removeTrackFromQueue(QObject *context, const QString &objectId,
@@ -284,18 +256,16 @@ void SonosZoneControl::removeTrackFromQueue(QObject *context, const QString &obj
 {
     // UpdateID 0 -- Sonos treats it as "don't care", matching roomtunes-bb10.
     QNetworkReply *reply = m_avTransport.RemoveTrackFromQueue(0, objectId, 0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "RemoveTrackFromQueue failed:" << soapErrorDetail(response);
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "RemoveTrackFromQueue failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::reorderTrackInQueue(QObject *context, int fromIndex, int toIndex, int updateId,
@@ -316,119 +286,107 @@ void SonosZoneControl::reorderTrackInQueue(QObject *context, int fromIndex, int 
     const int      insertBefore  = fromIndex < toIndex ? toIndex + 2 : toIndex + 1;
     QNetworkReply *reply = m_queue.ReorderTracks(/*queueId=*/0, QString::number(startingIndex), /*numberOfTracks=*/1,
                                                  QString::number(insertBefore), updateId);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "Queue.ReorderTracks failed:" << soapErrorDetail(response);
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "Queue.ReorderTracks failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::seek(QObject *context, const QString &unit, const QString &target,
                             std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_avTransport.Seek(0, unit, target);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "Seek failed:" << soapErrorDetail(response);
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "Seek failed:" << soapErrorDetail(response);
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::setVolume(QObject *context, int level, std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_renderingControl.SetVolume(0, QStringLiteral("Master"), level);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
-                         if (callback)
-                             callback(!response.error());
-                     });
+    QObject::connect(reply, &QNetworkReply::finished, context, [reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
+        if (callback)
+            callback(!response.error());
+    });
 }
 
 void SonosZoneControl::setMuted(QObject *context, bool muted, std::function<void(bool)> callback)
 {
     QNetworkReply *reply = m_renderingControl.SetMute(0, QStringLiteral("Master"), muted);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         const bool ok = !response.error();
-                         if (!ok)
-                             QWARN() << roomName() << "SetMute failed:" << response.faultString();
-                         if (callback)
-                             callback(ok);
-                     });
+        const bool ok = !response.error();
+        if (!ok)
+            QWARN() << roomName() << "SetMute failed:" << response.faultString();
+        if (callback)
+            callback(ok);
+    });
 }
 
 void SonosZoneControl::getVolume(QObject *context, std::function<void(bool, int)> callback)
 {
     QNetworkReply *reply = m_renderingControl.GetVolume(0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         if (response.error())
-                         {
-                             QWARN() << roomName() << "GetVolume failed:" << response.faultString();
-                             if (callback)
-                                 callback(false, 0);
-                             return;
-                         }
+        if (response.error())
+        {
+            QWARN() << roomName() << "GetVolume failed:" << response.faultString();
+            if (callback)
+                callback(false, 0);
+            return;
+        }
 
-                         bool      ok    = false;
-                         const int level = response.value(QStringLiteral("CurrentVolume")).toInt(&ok);
-                         if (!ok)
-                             QWARN() << roomName() << "GetVolume returned invalid CurrentVolume:"
-                                     << response.value(QStringLiteral("CurrentVolume"));
-                         if (callback)
-                             callback(ok, level);
-                     });
+        bool      ok    = false;
+        const int level = response.value(QStringLiteral("CurrentVolume")).toInt(&ok);
+        if (!ok)
+            QWARN() << roomName()
+                    << "GetVolume returned invalid CurrentVolume:" << response.value(QStringLiteral("CurrentVolume"));
+        if (callback)
+            callback(ok, level);
+    });
 }
 
 void SonosZoneControl::getMute(QObject *context, std::function<void(bool, bool)> callback)
 {
     QNetworkReply *reply = m_renderingControl.GetMute(0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         if (response.error())
-                         {
-                             QWARN() << roomName() << "GetMute failed:" << response.faultString();
-                             if (callback)
-                                 callback(false, false);
-                             return;
-                         }
+        if (response.error())
+        {
+            QWARN() << roomName() << "GetMute failed:" << response.faultString();
+            if (callback)
+                callback(false, false);
+            return;
+        }
 
-                         const QString currentMute = response.value(QStringLiteral("CurrentMute"));
-                         const bool    valid = currentMute == QStringLiteral("0") || currentMute == QStringLiteral("1");
-                         if (!valid)
-                             QWARN() << roomName() << "GetMute returned invalid CurrentMute:" << currentMute;
-                         if (callback)
-                             callback(valid, currentMute == QStringLiteral("1"));
-                     });
+        const QString currentMute = response.value(QStringLiteral("CurrentMute"));
+        const bool    valid       = currentMute == QStringLiteral("0") || currentMute == QStringLiteral("1");
+        if (!valid)
+            QWARN() << roomName() << "GetMute returned invalid CurrentMute:" << currentMute;
+        if (callback)
+            callback(valid, currentMute == QStringLiteral("1"));
+    });
 }
 
 void SonosZoneControl::browse(QObject *context, const QString &objectId,
@@ -437,8 +395,7 @@ void SonosZoneControl::browse(QObject *context, const QString &objectId,
 {
     browseDetailed(
         context, objectId,
-        [callback](bool ok, const BrowseResult &result)
-        {
+        [callback](bool ok, const BrowseResult &result) {
             if (callback)
                 callback(ok, result.errorMessage, result.items);
         },
@@ -451,124 +408,113 @@ void SonosZoneControl::browseDetailed(QObject *context, const QString &objectId,
 {
     QNetworkReply *reply =
         m_contentDirectory.Browse(objectId, browseFlag, QStringLiteral("*"), startingIndex, requestedCount);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, objectId, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, objectId, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         BrowseResult result;
-                         if (response.error())
-                         {
-                             result.errorMessage = soapErrorDetail(response);
-                             QWARN() << roomName() << "Browse failed: objectId=" << objectId
-                                     << "httpStatus=" << response.httpStatusCode() << "error=" << result.errorMessage;
-                             if (callback)
-                                 callback(false, result);
-                             return;
-                         }
+        BrowseResult result;
+        if (response.error())
+        {
+            result.errorMessage = soapErrorDetail(response);
+            QWARN() << roomName() << "Browse failed: objectId=" << objectId
+                    << "httpStatus=" << response.httpStatusCode() << "error=" << result.errorMessage;
+            if (callback)
+                callback(false, result);
+            return;
+        }
 
-                         result.items         = Didl::parseItems(response.value(QStringLiteral("Result")).toUtf8());
-                         bool updateIdOk      = false;
-                         result.updateId      = response.value(QStringLiteral("UpdateID")).toInt(&updateIdOk);
-                         result.updateIdKnown = updateIdOk;
-                         if (callback)
-                             callback(true, result);
-                     });
+        result.items         = Didl::parseItems(response.value(QStringLiteral("Result")).toUtf8());
+        bool updateIdOk      = false;
+        result.updateId      = response.value(QStringLiteral("UpdateID")).toInt(&updateIdOk);
+        result.updateIdKnown = updateIdOk;
+        if (callback)
+            callback(true, result);
+    });
 }
 
 void SonosZoneControl::getTransportInfo(QObject *context, std::function<void(bool, const QString &)> callback)
 {
     QNetworkReply *reply = m_avTransport.GetTransportInfo(0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         if (response.error())
-                         {
-                             QWARN() << roomName() << "GetTransportInfo failed:" << response.faultString();
-                             if (callback)
-                                 callback(false, QString());
-                             return;
-                         }
+        if (response.error())
+        {
+            QWARN() << roomName() << "GetTransportInfo failed:" << response.faultString();
+            if (callback)
+                callback(false, QString());
+            return;
+        }
 
-                         if (callback)
-                             callback(true, response.value(QStringLiteral("CurrentTransportState")));
-                     });
+        if (callback)
+            callback(true, response.value(QStringLiteral("CurrentTransportState")));
+    });
 }
 
 void SonosZoneControl::getTransportSettings(QObject *context, std::function<void(bool, const QString &)> callback)
 {
     QNetworkReply *reply = m_avTransport.GetTransportSettings(0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         if (response.error())
-                         {
-                             QWARN() << roomName() << "GetTransportSettings failed:" << response.faultString();
-                             if (callback)
-                                 callback(false, QString());
-                             return;
-                         }
+        if (response.error())
+        {
+            QWARN() << roomName() << "GetTransportSettings failed:" << response.faultString();
+            if (callback)
+                callback(false, QString());
+            return;
+        }
 
-                         if (callback)
-                             callback(true, response.value(QStringLiteral("CurrentPlayMode")));
-                     });
+        if (callback)
+            callback(true, response.value(QStringLiteral("CurrentPlayMode")));
+    });
 }
 
 void SonosZoneControl::getCrossfadeMode(QObject *context, std::function<void(bool, bool)> callback)
 {
     QNetworkReply *reply = m_avTransport.GetCrossfadeMode(0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [this, reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [this, reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         if (response.error())
-                         {
-                             QWARN() << roomName() << "GetCrossfadeMode failed:" << response.faultString();
-                             if (callback)
-                                 callback(false, false);
-                             return;
-                         }
+        if (response.error())
+        {
+            QWARN() << roomName() << "GetCrossfadeMode failed:" << response.faultString();
+            if (callback)
+                callback(false, false);
+            return;
+        }
 
-                         if (callback)
-                             callback(true,
-                                      response.value(QStringLiteral("CurrentCrossfadeMode")) == QStringLiteral("1"));
-                     });
+        if (callback)
+            callback(true, response.value(QStringLiteral("CurrentCrossfadeMode")) == QStringLiteral("1"));
+    });
 }
 
 void SonosZoneControl::getPositionInfo(QObject *context, std::function<void(bool, const PositionInfo &)> callback)
 {
     QNetworkReply *reply = m_avTransport.GetPositionInfo(0);
-    QObject::connect(reply, &QNetworkReply::finished, context,
-                     [reply, callback]()
-                     {
-                         SoapResponse response(reply);
-                         reply->deleteLater();
+    QObject::connect(reply, &QNetworkReply::finished, context, [reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                         PositionInfo info;
-                         if (response.error())
-                         {
-                             if (callback)
-                                 callback(false, info);
-                             return;
-                         }
+        PositionInfo info;
+        if (response.error())
+        {
+            if (callback)
+                callback(false, info);
+            return;
+        }
 
-                         info.trackMetaData = response.value(QStringLiteral("TrackMetaData"));
-                         info.trackUri      = response.value(QStringLiteral("TrackURI"));
-                         info.relTime       = response.value(QStringLiteral("RelTime"));
-                         info.trackDuration = response.value(QStringLiteral("TrackDuration"));
-                         info.trackNumber   = response.value(QStringLiteral("Track")).toInt(&info.trackNumberKnown);
-                         if (callback)
-                             callback(true, info);
-                     });
+        info.trackMetaData = response.value(QStringLiteral("TrackMetaData"));
+        info.trackUri      = response.value(QStringLiteral("TrackURI"));
+        info.relTime       = response.value(QStringLiteral("RelTime"));
+        info.trackDuration = response.value(QStringLiteral("TrackDuration"));
+        info.trackNumber   = response.value(QStringLiteral("Track")).toInt(&info.trackNumberKnown);
+        if (callback)
+            callback(true, info);
+    });
 }
 
 } // namespace RoomTunes

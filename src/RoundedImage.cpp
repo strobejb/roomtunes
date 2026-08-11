@@ -132,33 +132,29 @@ void RoundedImage::load()
     setStatus(Loading);
     QNetworkReply *reply = m_network.get(QNetworkRequest(m_source));
     m_reply              = reply;
-    connect(reply, &QObject::destroyed, this,
-            [this, reply]()
-            {
-                if (m_reply == reply)
-                    m_reply.clear();
-            });
-    connect(reply, &QNetworkReply::finished, this,
-            [this, reply]()
-            {
-                if (m_reply != reply)
-                {
-                    reply->deleteLater();
-                    return;
-                }
+    connect(reply, &QObject::destroyed, this, [this, reply]() {
+        if (m_reply == reply)
+            m_reply.clear();
+    });
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        if (m_reply != reply)
+        {
+            reply->deleteLater();
+            return;
+        }
 
-                m_reply.clear();
-                const QByteArray data = reply->readAll();
-                const bool       ok   = reply->error() == QNetworkReply::NoError;
-                reply->deleteLater();
+        m_reply.clear();
+        const QByteArray data = reply->readAll();
+        const bool       ok   = reply->error() == QNetworkReply::NoError;
+        reply->deleteLater();
 
-                if (!ok)
-                {
-                    setStatus(Error);
-                    return;
-                }
-                finishLoad(data);
-            });
+        if (!ok)
+        {
+            setStatus(Error);
+            return;
+        }
+        finishLoad(data);
+    });
 }
 
 void RoundedImage::cancelPendingReply()

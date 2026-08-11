@@ -101,8 +101,7 @@ void SonosLibraryService::doSearch(const QString &category, const QString &term,
 void SonosLibraryService::doSearchPreview(const QString &term, int limit, ResultCallback callback)
 {
     doSearch(QStringLiteral("A:TRACKS"), term,
-             [limit, callback = std::move(callback)](bool ok, const QString &errorMessage, const QVariantList &items)
-             {
+             [limit, callback = std::move(callback)](bool ok, const QString &errorMessage, const QVariantList &items) {
                  callback(ok, errorMessage, limit > 0 ? items.mid(0, limit) : items);
              });
 }
@@ -173,8 +172,7 @@ void SonosLibraryService::doBrowse(const QString &objectId, ResultCallback callb
 
     const QString baseUrl = zone->baseUrl();
     zone->browse(objectId,
-                 [callback, objectId, baseUrl](bool ok, const QString &errorMessage, const QList<DidlItem> &items)
-                 {
+                 [callback, objectId, baseUrl](bool ok, const QString &errorMessage, const QList<DidlItem> &items) {
                      if (!ok)
                      {
                          // ZonePlayer::browse() already logged the full detail (room,

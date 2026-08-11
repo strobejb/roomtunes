@@ -38,17 +38,13 @@ void GenaNotifyServer::onNewConnection()
 {
     while (QTcpSocket *socket = m_server->nextPendingConnection())
     {
-        connect(socket, &QTcpSocket::readyRead, this,
-                [this, socket]()
-                {
-                    onReadyRead(socket);
-                });
-        connect(socket, &QTcpSocket::disconnected, this,
-                [this, socket]()
-                {
-                    m_buffers.remove(socket);
-                    socket->deleteLater();
-                });
+        connect(socket, &QTcpSocket::readyRead, this, [this, socket]() {
+            onReadyRead(socket);
+        });
+        connect(socket, &QTcpSocket::disconnected, this, [this, socket]() {
+            m_buffers.remove(socket);
+            socket->deleteLater();
+        });
     }
 }
 

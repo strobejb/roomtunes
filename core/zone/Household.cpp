@@ -303,29 +303,27 @@ void Household::fetchMusicServiceCatalog()
 
     QLOG() << "ListAvailableServices via coordinator" << zone->roomName();
     QNetworkReply *reply = zone->musicServices().ListAvailableServices();
-    connect(reply, &QNetworkReply::finished, this,
-            [this, reply, zoneUdn = zone->udn(), roomName = zone->roomName()]()
-            {
-                SoapResponse response(reply);
-                reply->deleteLater();
+    connect(reply, &QNetworkReply::finished, this, [this, reply, zoneUdn = zone->udn(), roomName = zone->roomName()]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                if (response.error())
-                {
-                    QWARN() << "ListAvailableServices failed against" << roomName << ":" << response.faultString()
-                            << "-- retrying (possibly against a different zone) in" << kServiceFetchRetrySeconds << "s";
-                    // Some zones (Subs, and indistinguishably-by-model-name
-                    // stereo-pair satellite slaves) never implement this action
-                    // correctly, so blindly retrying the exact same zone forever
-                    // would strand the whole household's catalog on one
-                    // permanently-broken device -- see pickCatalogFetchZone().
-                    m_catalogFailedZoneUdns.insert(zoneUdn);
-                    QTimer::singleShot(kServiceFetchRetrySeconds * 1000, this, &Household::fetchMusicServiceCatalog);
-                    return;
-                }
+        if (response.error())
+        {
+            QWARN() << "ListAvailableServices failed against" << roomName << ":" << response.faultString()
+                    << "-- retrying (possibly against a different zone) in" << kServiceFetchRetrySeconds << "s";
+            // Some zones (Subs, and indistinguishably-by-model-name
+            // stereo-pair satellite slaves) never implement this action
+            // correctly, so blindly retrying the exact same zone forever
+            // would strand the whole household's catalog on one
+            // permanently-broken device -- see pickCatalogFetchZone().
+            m_catalogFailedZoneUdns.insert(zoneUdn);
+            QTimer::singleShot(kServiceFetchRetrySeconds * 1000, this, &Household::fetchMusicServiceCatalog);
+            return;
+        }
 
-                onServiceCatalogFetched(response.value(QStringLiteral("AvailableServiceDescriptorList")).toUtf8(),
-                                        response.value(QStringLiteral("AvailableServiceTypeList")));
-            });
+        onServiceCatalogFetched(response.value(QStringLiteral("AvailableServiceDescriptorList")).toUtf8(),
+                                response.value(QStringLiteral("AvailableServiceTypeList")));
+    });
 }
 
 void Household::onServiceCatalogFetched(const QByteArray &descriptorList, const QString &typeList)
@@ -432,22 +430,20 @@ void Household::fetchServiceIcons()
     QNetworkRequest request{QUrl(QString::fromLatin1(ServiceLogoCatalog::kUrl))};
     QNetworkReply  *reply = m_netMgr.get(request);
 
-    connect(reply, &QNetworkReply::finished, this,
-            [this, reply]()
-            {
-                reply->deleteLater();
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
 
-                if (reply->error() != QNetworkReply::NoError)
-                {
-                    QWARN() << "mslogo.xml fetch failed:" << reply->errorString() << "-- retrying in background in"
-                            << kServiceIconFetchRetrySeconds << "s";
-                    m_serviceIconsReady = true;
-                    QTimer::singleShot(kServiceIconFetchRetrySeconds * 1000, this, &Household::fetchServiceIcons);
-                    return;
-                }
+        if (reply->error() != QNetworkReply::NoError)
+        {
+            QWARN() << "mslogo.xml fetch failed:" << reply->errorString() << "-- retrying in background in"
+                    << kServiceIconFetchRetrySeconds << "s";
+            m_serviceIconsReady = true;
+            QTimer::singleShot(kServiceIconFetchRetrySeconds * 1000, this, &Household::fetchServiceIcons);
+            return;
+        }
 
-                onServiceIconsFetched(ServiceLogoCatalog::parse(reply->readAll()));
-            });
+        onServiceIconsFetched(ServiceLogoCatalog::parse(reply->readAll()));
+    });
 }
 
 void Household::onServiceIconsFetched(const QHash<int, QString> &icons)
@@ -465,21 +461,19 @@ void Household::fetchServiceDeviceSerial()
         return;
 
     QNetworkReply *reply = topZone->systemProperties().GetString(QStringLiteral("R_TrialZPSerial"));
-    connect(reply, &QNetworkReply::finished, this,
-            [this, reply, topZone]()
-            {
-                SoapResponse response(reply);
-                reply->deleteLater();
+    connect(reply, &QNetworkReply::finished, this, [this, reply, topZone]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
 
-                // Falls back to the zone's own MAC-derived serial number, matching
-                // SonosApp::getSerialFinished() -- R_TrialZPSerial can come back
-                // empty on some systems.
-                QString serial = response.error() ? QString() : response.value(QStringLiteral("StringValue"));
-                if (serial.isEmpty())
-                    serial = topZone->serialNumber();
+        // Falls back to the zone's own MAC-derived serial number, matching
+        // SonosApp::getSerialFinished() -- R_TrialZPSerial can come back
+        // empty on some systems.
+        QString serial = response.error() ? QString() : response.value(QStringLiteral("StringValue"));
+        if (serial.isEmpty())
+            serial = topZone->serialNumber();
 
-                onServiceDeviceSerialFetched(serial);
-            });
+        onServiceDeviceSerialFetched(serial);
+    });
 }
 
 void Household::onServiceDeviceSerialFetched(const QString &serial)

@@ -37,31 +37,29 @@ void QueueModel::refresh()
         return;
 
     ZonePlayer *zone = m_zone;
-    zone->browseQueue(
-        [this, zone](bool ok, const QString &, const QList<DidlItem> &items, int updateId)
-        {
-            // The selected zone may have changed again while this request was
-            // in flight -- a stale reply landing after that shouldn't clobber
-            // the (already-requested-fresh) model for the new selection.
-            if (!ok || m_zone != zone)
-                return;
+    zone->browseQueue([this, zone](bool ok, const QString &, const QList<DidlItem> &items, int updateId) {
+        // The selected zone may have changed again while this request was
+        // in flight -- a stale reply landing after that shouldn't clobber
+        // the (already-requested-fresh) model for the new selection.
+        if (!ok || m_zone != zone)
+            return;
 
-            beginResetModel();
-            qDeleteAll(m_items);
-            m_items.clear();
-            for (const DidlItem &item : items)
-            {
-                DidlItem resolved = item;
-                // Local-library album art comes back as a path relative to the
-                // zone itself -- same resolution ZonePlayer::refreshTransportState
-                // does for the current track's art.
-                if (!resolved.albumArtUri.isEmpty() && resolved.albumArtUri.startsWith(QLatin1Char('/')))
-                    resolved.albumArtUri = zone->baseUrl().chopped(1) + resolved.albumArtUri;
-                m_items.append(MediaItem::fromDidl(resolved, this));
-            }
-            m_updateId = updateId;
-            endResetModel();
-        });
+        beginResetModel();
+        qDeleteAll(m_items);
+        m_items.clear();
+        for (const DidlItem &item : items)
+        {
+            DidlItem resolved = item;
+            // Local-library album art comes back as a path relative to the
+            // zone itself -- same resolution ZonePlayer::refreshTransportState
+            // does for the current track's art.
+            if (!resolved.albumArtUri.isEmpty() && resolved.albumArtUri.startsWith(QLatin1Char('/')))
+                resolved.albumArtUri = zone->baseUrl().chopped(1) + resolved.albumArtUri;
+            m_items.append(MediaItem::fromDidl(resolved, this));
+        }
+        m_updateId = updateId;
+        endResetModel();
+    });
 }
 
 int QueueModel::rowCount(const QModelIndex &parent) const
