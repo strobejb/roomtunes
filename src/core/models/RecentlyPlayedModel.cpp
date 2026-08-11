@@ -107,15 +107,21 @@ void RecentlyPlayedModel::recordSelectedItem(const QVariantMap &item)
         return;
 
     QVariantMap entry;
-    entry[QStringLiteral("id")]        = item.value(QStringLiteral("id"));
-    entry[QStringLiteral("parentId")]  = item.value(QStringLiteral("parentId"));
-    entry[QStringLiteral("title")]     = item.value(QStringLiteral("title"));
-    entry[QStringLiteral("artist")]    = item.value(QStringLiteral("artist"));
-    entry[QStringLiteral("album")]     = item.value(QStringLiteral("album"));
-    entry[QStringLiteral("imageUrl")]  = item.value(QStringLiteral("imageUrl"));
-    entry[QStringLiteral("uri")]       = uri;
-    entry[QStringLiteral("upnpClass")] = item.value(QStringLiteral("upnpClass"));
-    entry[QStringLiteral("container")] = false;
+    entry[QStringLiteral("id")]           = item.value(QStringLiteral("id"));
+    entry[QStringLiteral("parentId")]     = item.value(QStringLiteral("parentId"));
+    entry[QStringLiteral("title")]        = item.value(QStringLiteral("title"));
+    entry[QStringLiteral("artist")]       = item.value(QStringLiteral("artist"));
+    entry[QStringLiteral("album")]        = item.value(QStringLiteral("album"));
+    entry[QStringLiteral("imageUrl")]     = item.value(QStringLiteral("imageUrl"));
+    entry[QStringLiteral("uri")]          = uri;
+    entry[QStringLiteral("protocolInfo")] = item.value(QStringLiteral("protocolInfo"));
+    entry[QStringLiteral("upnpClass")]    = item.value(QStringLiteral("upnpClass"));
+    entry[QStringLiteral("didlId")]       = item.value(QStringLiteral("didlId"));
+    entry[QStringLiteral("browseId")]     = item.value(QStringLiteral("browseId"));
+    entry[QStringLiteral("desc")]         = item.value(QStringLiteral("desc"));
+    entry[QStringLiteral("kind")]         = item.value(QStringLiteral("kind"));
+    entry[QStringLiteral("playable")]     = true;
+    entry[QStringLiteral("container")]    = false;
 
     QLOG() << "recently played: selected track:" << entry.value(QStringLiteral("title")).toString() << "--"
            << entry.value(QStringLiteral("artist")).toString();

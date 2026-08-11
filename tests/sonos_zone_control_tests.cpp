@@ -18,6 +18,7 @@ class SonosZoneControlTests : public QObject
     void getVolumeSendsRenderingControlRequestAndParsesResponse();
     void setMutedSendsDesiredMute();
     void getTransportInfoParsesTransportState();
+    void getMediaInfoParsesCurrentUriMetadata();
     void browseParsesDidlItems();
 };
 
@@ -151,6 +152,39 @@ void SonosZoneControlTests::getTransportInfoParsesTransportState()
     QCOMPARE(request.url.path(), QStringLiteral("/MediaRenderer/AVTransport/Control"));
     QCOMPARE(request.rawHeader("SOAPACTION"),
              QByteArrayLiteral("\"urn:schemas-upnp-org:service:AVTransport:1#GetTransportInfo\""));
+}
+
+void SonosZoneControlTests::getMediaInfoParsesCurrentUriMetadata()
+{
+    ControlHarness harness;
+    harness.net.enqueueResponse({soapEnvelope(QByteArrayLiteral(R"xml(
+<u:GetMediaInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+  <CurrentURI>x-sonosapi-stream:s25419?sid=254&amp;flags=32</CurrentURI>
+  <CurrentURIMetaData>&lt;DIDL-Lite&gt;&lt;item&gt;&lt;dc:title&gt;BBC Radio 4&lt;/dc:title&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</CurrentURIMetaData>
+</u:GetMediaInfoResponse>
+)xml"))});
+
+    bool                         called = false;
+    bool                         ok     = false;
+    SonosZoneControl::MediaInfo  info;
+
+    harness.control.getMediaInfo(this, [&](bool callbackOk, const SonosZoneControl::MediaInfo &callbackInfo) {
+        called = true;
+        ok     = callbackOk;
+        info   = callbackInfo;
+    });
+
+    harness.net.completePendingReplies();
+
+    QTRY_VERIFY(called);
+    QVERIFY(ok);
+    QCOMPARE(info.currentUri, QStringLiteral("x-sonosapi-stream:s25419?sid=254&flags=32"));
+    QVERIFY(info.currentUriMetaData.contains(QStringLiteral("BBC Radio 4")));
+
+    const auto &request = harness.net.lastRequest();
+    QCOMPARE(request.url.path(), QStringLiteral("/MediaRenderer/AVTransport/Control"));
+    QCOMPARE(request.rawHeader("SOAPACTION"),
+             QByteArrayLiteral("\"urn:schemas-upnp-org:service:AVTransport:1#GetMediaInfo\""));
 }
 
 void SonosZoneControlTests::browseParsesDidlItems()

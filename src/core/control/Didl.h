@@ -29,7 +29,9 @@ struct DidlItem
     QString desc;           // Sonos desc/cdudn metadata to use when replaying/enqueueing
     int     serviceId = -1; // SA_RINCON service id parsed from desc, if present
     QString albumArtUri;
-    QString streamInfo; // Sonos r:streamInfo, used by TV/line-in sources
+    QString streamInfo;    // Sonos r:streamInfo, used by TV/line-in sources
+    QString streamContent; // Sonos r:streamContent, used by live radio metadata
+    QString radioShowMd;   // Sonos r:radioShowMd, used by live radio metadata
     QString trackNumber;
     bool    container = false;
 };

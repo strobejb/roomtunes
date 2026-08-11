@@ -67,7 +67,9 @@ class XmlUtilsTests : public QObject
     void wrapperReadsFirstDescendantText();
     void wrapperReadsBooleanText();
     void didlParsesNamespacedItems();
+    void didlParsesRadioNowPlayingMetadata();
     void didlAppliesFavoriteResourceMetadata();
+    void didlKeepsFavoriteRadioStationPlaybackMetadata();
     void catalogParsesServiceDescriptors();
     void catalogParsesNestedServiceLogos();
     void soapResponseReadsValues();
@@ -261,6 +263,32 @@ void XmlUtilsTests::didlParsesNamespacedItems()
     QVERIFY(items.at(1).container);
 }
 
+void XmlUtilsTests::didlParsesRadioNowPlayingMetadata()
+{
+    const QByteArray xml = R"xml(
+<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"
+           xmlns:dc="http://purl.org/dc/elements/1.1/"
+           xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"
+           xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/">
+  <item id="-1" parentID="-1">
+    <dc:title>x-sonosapi-hls:r:9263?sid=37&amp;flags=288</dc:title>
+    <upnp:class>object.item.audioItem.musicTrack</upnp:class>
+    <upnp:albumArtURI>http://www.siriusxm.com/albumart/Live/2230/pinkfloyd_51A6BA50_m.jpg</upnp:albumArtURI>
+    <r:streamContent>BR P|TYPE=SNG|TITLE Run Like Hell|ARTIST Pink Floyd</r:streamContent>
+    <r:radioShowMd>Pink Floyd 24/7,</r:radioShowMd>
+  </item>
+</DIDL-Lite>
+)xml";
+
+    const QList<DidlItem> items = Didl::parseItems(xml);
+
+    QCOMPARE(items.size(), 1);
+    QCOMPARE(items.first().streamContent, QStringLiteral("BR P|TYPE=SNG|TITLE Run Like Hell|ARTIST Pink Floyd"));
+    QCOMPARE(items.first().radioShowMd, QStringLiteral("Pink Floyd 24/7,"));
+    QCOMPARE(items.first().albumArtUri,
+             QStringLiteral("http://www.siriusxm.com/albumart/Live/2230/pinkfloyd_51A6BA50_m.jpg"));
+}
+
 void XmlUtilsTests::didlAppliesFavoriteResourceMetadata()
 {
     const QByteArray xml = R"xml(
@@ -286,6 +314,36 @@ void XmlUtilsTests::didlAppliesFavoriteResourceMetadata()
     QCOMPARE(items.first().serviceId, 2311);
     QCOMPARE(items.first().upnpClass, QStringLiteral("object.container.playlistContainer"));
     QVERIFY(items.first().container);
+}
+
+void XmlUtilsTests::didlKeepsFavoriteRadioStationPlaybackMetadata()
+{
+    const QByteArray xml = R"xml(
+<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"
+           xmlns:dc="http://purl.org/dc/elements/1.1/"
+           xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"
+           xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/">
+  <item id="FV:2/234" parentID="FV:2">
+    <dc:title>BBC Radio 4</dc:title>
+    <upnp:class>object.item.sonos-favorite</upnp:class>
+    <res protocolInfo="x-rincon-mp3radio:*:*:*">x-sonosapi-stream:s25419?sid=254&amp;flags=32</res>
+    <r:resMD>&lt;DIDL-Lite xmlns=&quot;urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/&quot; xmlns:dc=&quot;http://purl.org/dc/elements/1.1/&quot; xmlns:upnp=&quot;urn:schemas-upnp-org:metadata-1-0/upnp/&quot;&gt;&lt;item id=&quot;R:0/0/0&quot; parentID=&quot;R:0/0&quot;&gt;&lt;dc:title&gt;BBC Radio 4&lt;/dc:title&gt;&lt;upnp:class&gt;object.item.audioItem.audioBroadcast&lt;/upnp:class&gt;&lt;desc&gt;SA_RINCON65031_&lt;/desc&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</r:resMD>
+  </item>
+</DIDL-Lite>
+)xml";
+
+    const QList<DidlItem> items = Didl::parseItems(xml);
+
+    QCOMPARE(items.size(), 1);
+    QCOMPARE(items.first().id, QStringLiteral("FV:2/234"));
+    QCOMPARE(items.first().title, QStringLiteral("BBC Radio 4"));
+    QCOMPARE(items.first().res, QStringLiteral("x-sonosapi-stream:s25419?sid=254&flags=32"));
+    QCOMPARE(items.first().protocolInfo, QStringLiteral("x-rincon-mp3radio:*:*:*"));
+    QCOMPARE(items.first().didlId, QStringLiteral("R:0/0/0"));
+    QCOMPARE(items.first().didlParentId, QStringLiteral("R:0/0"));
+    QCOMPARE(items.first().desc, QStringLiteral("SA_RINCON65031_"));
+    QCOMPARE(items.first().upnpClass, QStringLiteral("object.item.audioItem.audioBroadcast"));
+    QVERIFY(!items.first().container);
 }
 
 void XmlUtilsTests::catalogParsesServiceDescriptors()

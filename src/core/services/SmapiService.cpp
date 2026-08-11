@@ -258,8 +258,9 @@ QString jsonString(const QJsonObject &object, const QString &name)
 }
 
 QVariantMap itemToVariant(const QString &id, const QString &title, const QString &artist, const QString &album,
-                          const QString &imageUrl, bool container, const QString &uri, const QString &upnpClass,
-                          const QString &didlId, const QString &parentId, const QString &desc, const QString &itemType)
+                          const QString &imageUrl, bool container, const QString &uri, const QString &protocolInfo,
+                          const QString &upnpClass, const QString &didlId, const QString &parentId,
+                          const QString &desc, const QString &itemType)
 {
     QVariantMap item;
     item[QStringLiteral("id")]        = id;
@@ -271,12 +272,13 @@ QVariantMap itemToVariant(const QString &id, const QString &title, const QString
     // QML uses browseId for folder descent so ContentDirectory favourites
     // can keep a distinct visible id and real browse target. SMAPI items do
     // not have that wrapper split, so their browse target is simply id.
-    item[QStringLiteral("browseId")]  = id;
-    item[QStringLiteral("uri")]       = uri;
-    item[QStringLiteral("upnpClass")] = upnpClass;
-    item[QStringLiteral("didlId")]    = didlId;
-    item[QStringLiteral("parentId")]  = parentId;
-    item[QStringLiteral("desc")]      = desc;
+    item[QStringLiteral("browseId")]     = id;
+    item[QStringLiteral("uri")]          = uri;
+    item[QStringLiteral("protocolInfo")] = protocolInfo;
+    item[QStringLiteral("upnpClass")]    = upnpClass;
+    item[QStringLiteral("didlId")]       = didlId;
+    item[QStringLiteral("parentId")]     = parentId;
+    item[QStringLiteral("desc")]         = desc;
     // SMAPI's own vocabulary (track/album/albumList/artist/playlist/
     // program/stream/container/other) -- kept alongside upnpClass since
     // lookupUpnpClass() above collapses several of these (artist/
@@ -311,6 +313,23 @@ QString lookupUpnpClass(const QString &itemType, const QString &mimeType)
     // container/album/albumList/artist/other: all the same musicAlbum
     // container class bb10 used as its catch-all.
     return QStringLiteral("object.container.album.musicAlbum");
+}
+
+QString lookupProtocolInfo(const QString &itemType, const QString &mimeType)
+{
+    if (itemType == QStringLiteral("track"))
+    {
+        if (mimeType == QStringLiteral("audio/x-spotify"))
+            return QStringLiteral("sonos.com-spotify:*:audio/x-spotify:*");
+        if (mimeType == QStringLiteral("audio/vnd.radiotime"))
+            return QStringLiteral("sonos.com-rtrecent:*:audio/x-sonos-recent:*");
+        return QStringLiteral("sonos.com-http:*:audio/mpeg3:*");
+    }
+    if (itemType == QStringLiteral("program"))
+        return QStringLiteral("x-sonosapi-radio:*:audio/x-sonosapi-radio:*");
+    if (itemType == QStringLiteral("stream"))
+        return QStringLiteral("x-rincon-mp3radio:*:*:*");
+    return QStringLiteral("x-rincon-cpcontainer:*:*:*");
 }
 
 // napster/rhapsody used "npsdy", siriusXM used "sirradio"/"x-sonosapi-hls"
@@ -415,6 +434,7 @@ QVariantMap parseOneItem(const XmlNode &node, bool isCollection, int smapiId, in
 
     const QString resourceType = lookupResourceType(itemType, mimeType);
     const QString uri          = enqueuedUri(resourceType, id, smapiId);
+    const QString protocolInfo = lookupProtocolInfo(itemType, mimeType);
     const QString upnpClass    = lookupUpnpClass(itemType, mimeType);
     // A <mediaMetadata> (playable) item's parentID is always the literal
     // "-1" per SMAPI's own enqueue convention -- only a <mediaCollection>
@@ -423,8 +443,8 @@ QVariantMap parseOneItem(const XmlNode &node, bool isCollection, int smapiId, in
     const QString parentId     = container ? QString() : QStringLiteral("-1");
     const QString desc         = QStringLiteral("SA_RINCON%1_%2").arg(serviceId).arg(username);
 
-    QVariantMap item                 = itemToVariant(id, title, artist, album, albumArtUri, container, uri, upnpClass,
-                                                     enqueuedId(id, resourceType), parentId, desc, itemType);
+    QVariantMap item                 = itemToVariant(id, title, artist, album, albumArtUri, container, uri, protocolInfo,
+                                                     upnpClass, enqueuedId(id, resourceType), parentId, desc, itemType);
     item[QStringLiteral("playable")] = playable;
     return item;
 }
@@ -464,12 +484,13 @@ QVariantList parseManifestBrowseItems(const QByteArray &body, int smapiId, int s
         const QString imageUrl     = details.value(QStringLiteral("imageUrl")).toString();
         const QString resourceType = lookupResourceType(itemType, QString());
         const QString uri          = enqueuedUri(resourceType, id, smapiId);
+        const QString protocolInfo = lookupProtocolInfo(itemType, QString());
         const QString parentId     = container ? QString() : QStringLiteral("-1");
         const QString desc         = QStringLiteral("SA_RINCON%1_%2").arg(serviceId).arg(username);
 
         QVariantMap item =
-            itemToVariant(id, title, artist, QString(), imageUrl, container, uri, lookupUpnpClass(itemType, QString()),
-                          enqueuedId(id, resourceType), parentId, desc, itemType);
+            itemToVariant(id, title, artist, QString(), imageUrl, container, uri, protocolInfo,
+                          lookupUpnpClass(itemType, QString()), enqueuedId(id, resourceType), parentId, desc, itemType);
         item[QStringLiteral("playable")] = playable;
         item[QStringLiteral("summary")]  = details.value(QStringLiteral("summary")).toString();
         items.append(item);

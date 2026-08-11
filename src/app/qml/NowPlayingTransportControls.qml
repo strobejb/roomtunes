@@ -15,6 +15,7 @@ RowLayout {
     id: root
 
     property var zone // ZonePlayer* -- null when no zone is selected
+    property var track: null
     property bool isPlaying: false
     property bool backgroundIsLight: true
     property color buttonFillColor: "#212121"
@@ -48,10 +49,21 @@ RowLayout {
 
     readonly property int buttonSize: Math.round(44 * sizeScale)
     readonly property int playButtonSize: Math.round(56 * sizeScale)
+    readonly property string trackUri: track && track.uri ? String(track.uri).toLowerCase() : ""
+    readonly property string trackClass: track && track.upnpClass ? String(track.upnpClass) : ""
+    readonly property bool isDirectStream: trackClass === "object.item.audioItem.audioBroadcast"
+                                           || trackClass.endsWith(".audioBroadcast")
+                                           || trackUri.indexOf("x-sonosapi-stream:") === 0
+                                           || trackUri.indexOf("x-sonosapi-radio:") === 0
+                                           || trackUri.indexOf("x-sonosapi-hls:") === 0
+                                           || trackUri.indexOf("x-rincon-mp3radio:") === 0
+                                           || trackUri.indexOf("x-rincon-stream:") === 0
+                                           || trackUri.indexOf("x-sonos-htastream:") === 0
 
     spacing: Math.round(28 * sizeScale)
 
     TransportIconButton {
+        visible: !root.isDirectStream
         buttonSize: root.buttonSize
         iconSource: {
             const active = root.zone && root.zone.shuffleEnabled
@@ -78,7 +90,7 @@ RowLayout {
             ? "../resources/icons/skip_previous.svg"
             : "../resources/icons/skip_previous_light.svg"
         iconSize: Math.round(28 * root.sizeScale)
-        enabled: root.zone !== null
+        enabled: root.zone !== null && !root.isDirectStream
         hoverColor: root.controlHoverColor
         pressedColor: root.controlPressedColor
         onClicked: root.zone.previous()
@@ -130,13 +142,14 @@ RowLayout {
             ? "../resources/icons/skip_next.svg"
             : "../resources/icons/skip_next_light.svg"
         iconSize: Math.round(28 * root.sizeScale)
-        enabled: root.zone !== null
+        enabled: root.zone !== null && !root.isDirectStream
         hoverColor: root.controlHoverColor
         pressedColor: root.controlPressedColor
         onClicked: root.zone.next()
     }
 
     TransportIconButton {
+        visible: !root.isDirectStream
         buttonSize: root.buttonSize
         iconSource: {
             const active = root.zone && root.zone.repeatMode > 0

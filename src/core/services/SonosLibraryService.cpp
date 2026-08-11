@@ -34,11 +34,16 @@ QString browseObjectIdForItem(const DidlItem &item)
 
 // ContentDirectory album art URIs come back host-relative; resolve them
 // against the zone's own base URL before handing them to QML.
-QVariantMap didlItemToVariant(const DidlItem &item, const QString &baseUrl)
+QVariantMap didlItemToVariant(const DidlItem &item, const QString &baseUrl, const Household *household)
 {
     QString artUrl = item.albumArtUri;
     if (!artUrl.isEmpty() && !artUrl.startsWith(QStringLiteral("http")))
         artUrl = baseUrl + (artUrl.startsWith(QLatin1Char('/')) ? artUrl.mid(1) : artUrl);
+    if (artUrl.isEmpty() && item.serviceId > 0 && household)
+    {
+        if (const MusicService *service = household->serviceById(item.serviceId))
+            artUrl = service->iconSource();
+    }
 
     QVariantMap variant;
     variant[QStringLiteral("id")]        = item.id;
@@ -59,11 +64,12 @@ QVariantMap didlItemToVariant(const DidlItem &item, const QString &baseUrl)
     // id/parentId; for Sonos Favourites, Didl::parseItems() has already
     // pulled these from the favourite's r:resMD inner playable item, which
     // is exactly what roomtunes-bb10's ParseDIDL() did before enqueueing.
-    variant[QStringLiteral("uri")]       = item.res;
-    variant[QStringLiteral("upnpClass")] = item.upnpClass;
-    variant[QStringLiteral("didlId")]    = item.didlId.isEmpty() ? item.id : item.didlId;
-    variant[QStringLiteral("parentId")]  = item.didlParentId.isEmpty() ? item.parentId : item.didlParentId;
-    variant[QStringLiteral("desc")]      = item.desc;
+    variant[QStringLiteral("uri")]          = item.res;
+    variant[QStringLiteral("protocolInfo")] = item.protocolInfo;
+    variant[QStringLiteral("upnpClass")]    = item.upnpClass;
+    variant[QStringLiteral("didlId")]       = item.didlId.isEmpty() ? item.id : item.didlId;
+    variant[QStringLiteral("parentId")]     = item.didlParentId.isEmpty() ? item.parentId : item.didlParentId;
+    variant[QStringLiteral("desc")]         = item.desc;
     return variant;
 }
 
@@ -172,7 +178,8 @@ void SonosLibraryService::doBrowse(const QString &objectId, ResultCallback callb
 
     const QString baseUrl = zone->baseUrl();
     zone->browse(objectId,
-                 [callback, objectId, baseUrl](bool ok, const QString &errorMessage, const QList<DidlItem> &items) {
+                 [callback, objectId, baseUrl, household = m_household](bool ok, const QString &errorMessage,
+                                                                        const QList<DidlItem> &items) {
                      if (!ok)
                      {
                          // ZonePlayer::browse() already logged the full detail (room,
@@ -190,7 +197,7 @@ void SonosLibraryService::doBrowse(const QString &objectId, ResultCallback callb
                      QVariantList result;
                      result.reserve(items.size());
                      for (const DidlItem &item : items)
-                         result.append(didlItemToVariant(item, baseUrl));
+                         result.append(didlItemToVariant(item, baseUrl, household));
 
                      callback(true, QString(), result);
                  });

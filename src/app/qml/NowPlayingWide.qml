@@ -96,6 +96,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.alignment: Qt.AlignHCenter
         zone: root.zone
+        track: root.track
         isPlaying: root.isPlaying
         backgroundIsLight: root.backgroundIsLight
         buttonFillColor: root.buttonFillColor

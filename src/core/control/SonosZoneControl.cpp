@@ -492,6 +492,28 @@ void SonosZoneControl::getCrossfadeMode(QObject *context, std::function<void(boo
     });
 }
 
+void SonosZoneControl::getMediaInfo(QObject *context, std::function<void(bool, const MediaInfo &)> callback)
+{
+    QNetworkReply *reply = m_avTransport.GetMediaInfo(0);
+    QObject::connect(reply, &QNetworkReply::finished, context, [reply, callback]() {
+        SoapResponse response(reply);
+        reply->deleteLater();
+
+        MediaInfo info;
+        if (response.error())
+        {
+            if (callback)
+                callback(false, info);
+            return;
+        }
+
+        info.currentUri         = response.value(QStringLiteral("CurrentURI"));
+        info.currentUriMetaData = response.value(QStringLiteral("CurrentURIMetaData"));
+        if (callback)
+            callback(true, info);
+    });
+}
+
 void SonosZoneControl::getPositionInfo(QObject *context, std::function<void(bool, const PositionInfo &)> callback)
 {
     QNetworkReply *reply = m_avTransport.GetPositionInfo(0);

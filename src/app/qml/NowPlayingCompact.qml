@@ -136,6 +136,7 @@ ColumnLayout {
         // circular.
         sizeScale: Math.max(root.sizeFloor, Math.min(1.0, root.width / root.fullControlsWidth))
         zone: root.zone
+        track: root.track
         isPlaying: root.isPlaying
         backgroundIsLight: root.backgroundIsLight
         buttonFillColor: root.buttonFillColor

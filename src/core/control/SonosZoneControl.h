@@ -29,6 +29,12 @@ class SonosZoneControl
         bool    trackNumberKnown = false;
     };
 
+    struct MediaInfo
+    {
+        QString currentUri;
+        QString currentUriMetaData;
+    };
+
     struct BrowseResult
     {
         QString         errorMessage;
@@ -76,6 +82,7 @@ class SonosZoneControl
     void getTransportInfo(QObject *context, std::function<void(bool ok, const QString &state)> callback);
     void getTransportSettings(QObject *context, std::function<void(bool ok, const QString &playMode)> callback);
     void getCrossfadeMode(QObject *context, std::function<void(bool ok, bool enabled)> callback);
+    void getMediaInfo(QObject *context, std::function<void(bool ok, const MediaInfo &info)> callback);
     void getPositionInfo(QObject *context, std::function<void(bool ok, const PositionInfo &info)> callback);
 
   private:

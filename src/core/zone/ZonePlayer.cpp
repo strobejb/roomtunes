@@ -6,6 +6,7 @@
 #include <QImage>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QRegularExpression>
 #include <QStringList>
 #include <QUrl>
 
@@ -64,6 +65,91 @@ bool isTvStreamUri(const QString &uri)
 bool isLineInStreamUri(const QString &uri)
 {
     return uri.startsWith(QStringLiteral("x-rincon-stream:"));
+}
+
+bool isRadioStreamUri(const QString &uri)
+{
+    return uri.startsWith(QStringLiteral("x-sonosapi-stream:")) ||
+           uri.startsWith(QStringLiteral("x-sonosapi-hls:")) ||
+           uri.startsWith(QStringLiteral("x-rincon-mp3radio:")) ||
+           uri.startsWith(QStringLiteral("x-sonosapi-radio:"));
+}
+
+bool isUriLikeTitle(const QString &title)
+{
+    return title.startsWith(QStringLiteral("x-sonosapi-")) ||
+           title.startsWith(QStringLiteral("x-rincon-mp3radio:")) ||
+           title.startsWith(QStringLiteral("http://")) ||
+           title.startsWith(QStringLiteral("https://"));
+}
+
+QString comparableUri(const QString &uri)
+{
+    return QUrl::fromPercentEncoding(uri.toUtf8());
+}
+
+bool sameUri(const QString &a, const QString &b)
+{
+    return comparableUri(a) == comparableUri(b);
+}
+
+QString trimmedRadioShow(QString radioShow)
+{
+    static const QRegularExpression suffixPattern(QStringLiteral(",\\w\\d+$"));
+    return radioShow.remove(suffixPattern);
+}
+
+void radioNowPlayingFields(const DidlItem &didl, const QString &fallbackUri, QString *title, QString *artist)
+{
+    QString streamContent = didl.streamContent;
+    QString radioShow     = trimmedRadioShow(didl.radioShowMd);
+    QString station       = didl.title;
+
+    static const QRegularExpression songPattern(QStringLiteral("\\|TITLE ([^|]*)\\|ARTIST ([^|]*)"));
+    const QRegularExpressionMatch   match = songPattern.match(streamContent);
+    if (match.hasMatch())
+    {
+        streamContent = match.captured(1);
+
+        radioShow = station;
+        if (!radioShow.isEmpty())
+            radioShow.append(QStringLiteral(" - "));
+        radioShow += match.captured(2);
+    }
+
+    *title = streamContent;
+    if (title->isEmpty())
+        *title = radioShow;
+    if (title->isEmpty())
+        *title = station;
+    if (title->isEmpty())
+        *title = fallbackUri;
+
+    *artist = station;
+    if (!streamContent.isEmpty() && !radioShow.isEmpty())
+        *artist = radioShow;
+}
+
+QVariantMap sourceItem(const QString &kind, const QString &id, const QString &title, const QString &imageUrl,
+                       const QString &uri, const QString &protocolInfo)
+{
+    QVariantMap item;
+    item[QStringLiteral("id")]           = id;
+    item[QStringLiteral("browseId")]     = id;
+    item[QStringLiteral("kind")]         = kind;
+    item[QStringLiteral("title")]        = title;
+    item[QStringLiteral("artist")]       = QString();
+    item[QStringLiteral("album")]        = QString();
+    item[QStringLiteral("imageUrl")]     = imageUrl;
+    item[QStringLiteral("container")]    = false;
+    item[QStringLiteral("playable")]     = true;
+    item[QStringLiteral("uri")]          = uri;
+    item[QStringLiteral("protocolInfo")] = protocolInfo;
+    item[QStringLiteral("upnpClass")]    = QStringLiteral("object.item.audioItem.audioBroadcast");
+    item[QStringLiteral("didlId")]       = id;
+    item[QStringLiteral("parentId")]     = QStringLiteral("-1");
+    item[QStringLiteral("desc")]         = QString();
+    return item;
 }
 
 bool modelSupportsTvSource(const QString &modelName)
@@ -207,7 +293,10 @@ void ZonePlayer::setModelName(const QString &name)
     m_modelName                    = name;
 
     if (oldSupportsTvSource != supportsTvSource())
+    {
         emit supportsTvSourceChanged();
+        emit sourceItemsChanged();
+    }
 }
 
 bool ZonePlayer::supportsTvSource() const
@@ -237,7 +326,10 @@ void ZonePlayer::setDeviceServices(const QSet<QString> &services)
     m_deviceServices                   = services;
 
     if (oldSupportsLineInSource != supportsLineInSource())
+    {
         emit supportsLineInSourceChanged();
+        emit sourceItemsChanged();
+    }
 }
 
 bool ZonePlayer::hasDeviceService(const QString &serviceName) const
@@ -262,6 +354,27 @@ bool ZonePlayer::supportsLineInSource() const
     // only zones that expose AudioIn and can browse ContentDirectory's AI:
     // container should be offered as Line-In sources.
     return hasDeviceService(QStringLiteral("AudioIn")) && hasDeviceService(QStringLiteral("ContentDirectory"));
+}
+
+QVariantList ZonePlayer::sourceItems() const
+{
+    QVariantList items;
+    if (supportsLineInSource())
+    {
+        items.append(sourceItem(QStringLiteral("lineIn"), QStringLiteral("AI:%1").arg(m_udn), tr("Line-In"),
+                                QStringLiteral("qrc:/qt/qml/RoomTunes/resources/icons/line_in.svg"),
+                                QStringLiteral("x-rincon-stream:%1").arg(m_udn),
+                                QStringLiteral("x-rincon-stream:*:*:*")));
+    }
+
+    if (supportsTvSource())
+    {
+        items.append(sourceItem(QStringLiteral("tv"), QStringLiteral("TV"), tr("TV"),
+                                QStringLiteral("qrc:/qt/qml/RoomTunes/resources/icons/tv.svg"),
+                                QStringLiteral("x-sonos-htastream:%1:spdif").arg(m_udn),
+                                QStringLiteral("x-sonos-htastream:*:*:*")));
+    }
+    return items;
 }
 
 void ZonePlayer::setCoordinatorUdn(const QString &udn)
@@ -366,7 +479,10 @@ void ZonePlayer::setCurrentTrack(MediaItem *track)
     emit currentTrackChanged();
 
     if (oldSupportsTvSource != supportsTvSource())
+    {
         emit supportsTvSourceChanged();
+        emit sourceItemsChanged();
+    }
 
     refreshAccentColor(track ? track->imageUrl() : QString());
     checkCurrentTrackFavouriteStatus();
@@ -968,7 +1084,55 @@ void ZonePlayer::refreshPositionInfo()
         QString       sourceArtist;
         QString       sourceImageUrl;
 
-        if (isTvStreamUri(sourceUri))
+        auto applySourceTrack = [this, sourceUri, info](const QString &title, const QString &artist,
+                                                        const QString &imageUrl, const DidlItem &sourceMetadata) {
+            if (!m_currentTrack || m_currentTrack->id() != sourceUri || m_currentTrack->uri() != sourceUri ||
+                m_currentTrack->title() != title || m_currentTrack->artist() != artist ||
+                m_currentTrack->imageUrl() != imageUrl)
+            {
+                setCurrentTrack(new MediaItem(sourceUri, QString(), title, artist, QString(), QString(), sourceUri,
+                                              sourceMetadata.protocolInfo, sourceMetadata.upnpClass,
+                                              sourceMetadata.desc, imageUrl, false, this));
+            }
+            setPosition(parseUpnpTime(info.relTime), parseUpnpTime(info.trackDuration));
+        };
+
+        if (isRadioStreamUri(sourceUri))
+        {
+            radioNowPlayingFields(didl, sourceUri, &sourceTitle, &sourceArtist);
+            sourceImageUrl = didl.albumArtUri;
+
+            if (isUriLikeTitle(sourceTitle) || sourceImageUrl.isEmpty())
+            {
+                m_control.getMediaInfo(this, [this, sourceUri, sourceTitle, sourceArtist, sourceImageUrl, didl,
+                                              applySourceTrack](bool ok, const SonosZoneControl::MediaInfo &media) mutable {
+                    if (ok && (media.currentUri.isEmpty() || sameUri(media.currentUri, sourceUri)))
+                    {
+                        const QList<DidlItem> mediaItems = Didl::parseItems(media.currentUriMetaData.toUtf8());
+                        if (!mediaItems.isEmpty())
+                        {
+                            DidlItem fallback = mediaItems.first();
+                            if (!fallback.albumArtUri.isEmpty() && fallback.albumArtUri.startsWith(QLatin1Char('/')))
+                                fallback.albumArtUri = baseUrl().chopped(1) + fallback.albumArtUri;
+
+                            if (!fallback.title.isEmpty() && !isUriLikeTitle(fallback.title) &&
+                                isUriLikeTitle(sourceTitle))
+                                sourceTitle = fallback.title;
+                            if (sourceImageUrl.isEmpty())
+                                sourceImageUrl = fallback.albumArtUri;
+                        }
+                    }
+
+                    if (isUriLikeTitle(sourceTitle))
+                        sourceTitle = tr("Radio");
+                    if (isUriLikeTitle(sourceArtist))
+                        sourceArtist.clear();
+                    applySourceTrack(sourceTitle, sourceArtist, sourceImageUrl, didl);
+                });
+                return;
+            }
+        }
+        else if (isTvStreamUri(sourceUri))
         {
             // BB10 detected Playbar/Beam TV input from AVTransportURI and
             // displayed a synthetic "TV" track with the bundled TV icon. The
@@ -985,15 +1149,7 @@ void ZonePlayer::refreshPositionInfo()
 
         if (!sourceTitle.isEmpty())
         {
-            if (!m_currentTrack || m_currentTrack->id() != sourceUri || m_currentTrack->uri() != sourceUri ||
-                m_currentTrack->title() != sourceTitle || m_currentTrack->artist() != sourceArtist ||
-                m_currentTrack->imageUrl() != sourceImageUrl)
-            {
-                setCurrentTrack(new MediaItem(sourceUri, QString(), sourceTitle, sourceArtist, QString(), QString(),
-                                              sourceUri, QStringLiteral("object.item.audioItem"), sourceImageUrl, false,
-                                              this));
-            }
-            setPosition(parseUpnpTime(info.relTime), parseUpnpTime(info.trackDuration));
+            applySourceTrack(sourceTitle, sourceArtist, sourceImageUrl, didl);
             return;
         }
 

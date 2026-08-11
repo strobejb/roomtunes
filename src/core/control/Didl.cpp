@@ -71,6 +71,8 @@ DidlItem parseOneItem(const XmlNode &node, bool isContainer)
     item.album        = node.text("album");
     item.albumArtUri  = node.text("albumArtURI");
     item.streamInfo   = node.text("streamInfo");
+    item.streamContent = node.text("streamContent");
+    item.radioShowMd   = node.text("radioShowMd");
     item.trackNumber  = node.text("originalTrackNumber");
     item.desc         = node.text("desc");
 

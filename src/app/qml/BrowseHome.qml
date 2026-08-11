@@ -61,34 +61,18 @@ Item {
     property var favouriteItems: []
     property bool favouritesLoading: true
     property string favouritesError: ""
-    readonly property var sonosSources: [
-        {
-            "title": qsTr("Music Library"),
-            "imageUrl": "../resources/icons/library.svg",
-            "kind": "library"
-        },
-        {
-            "title": qsTr("Line-In"),
-            "imageUrl": "../resources/icons/line_in.svg",
-            "kind": "lineIn"
-        },
-        {
-            "title": qsTr("TV"),
-            "imageUrl": "../resources/icons/tv.svg",
-            "kind": "tv"
-        }
-    ]
-    readonly property bool selectedZoneSupportsTvSource: !!root.browseStack
-                                                         && !!root.browseStack.zone
-                                                         && root.browseStack.zone.supportsTvSource
-    readonly property bool selectedZoneSupportsLineInSource: !!root.browseStack
-                                                             && !!root.browseStack.zone
-                                                             && root.browseStack.zone.supportsLineInSource
-    readonly property var availableSonosSources: sonosSources.filter(function(source) {
-        if (source.kind === "lineIn")
-            return root.selectedZoneSupportsLineInSource
-        return source.kind !== "tv" || root.selectedZoneSupportsTvSource
-    })
+    readonly property var librarySource: {
+        "title": qsTr("Music Library"),
+        "imageUrl": "../resources/icons/library.svg",
+        "kind": "library"
+    }
+    readonly property var availableSonosSources: {
+        var sources = [root.librarySource]
+        var zoneSources = root.browseStack && root.browseStack.zone ? root.browseStack.zone.sourceItems : []
+        for (var i = 0; i < zoneSources.length; ++i)
+            sources.push(zoneSources[i])
+        sources
+    }
 
     function browseHistoryKey(section, id) {
         return "browse:" + section + ":" + id
@@ -191,6 +175,12 @@ Item {
     // browse through ContentDirectory or a SMAPI service.
     function openFavourite(item) {
         browseHistory.recordUse(root.browseHistoryKey("favourite", item.id))
+        if (!item.container && item.uri) {
+            if (root.browseStack.zone)
+                root.browseStack.zone.playItem(item)
+            return
+        }
+
         root.browseStack.pushFolder(root.pageComponent, {
             title: item.title,
             service: root.libraryService,
@@ -204,9 +194,14 @@ Item {
 
     function openSonosSource(source) {
         browseHistory.recordUse(root.browseHistoryKey("source", source.kind))
-        if (source.kind !== "library" || !root.libraryService)
+        if (source.kind !== "library") {
+            if (root.browseStack.zone)
+                root.browseStack.zone.playItem(source)
             return
+        }
 
+        if (!root.libraryService)
+            return
         root.browseStack.pushFolder(root.pageComponent, {
             title: source.title,
             service: root.libraryService,

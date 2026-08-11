@@ -8,6 +8,8 @@
 #include <QObject>
 #include <QSet>
 #include <QString>
+#include <QVariantList>
+#include <QVariantMap>
 
 #include "../control/Didl.h"
 #include "../control/SonosZoneControl.h"
@@ -50,6 +52,7 @@ class ZonePlayer : public QObject
     Q_PROPERTY(bool invisible READ invisible NOTIFY invisibleChanged)
     Q_PROPERTY(bool supportsTvSource READ supportsTvSource NOTIFY supportsTvSourceChanged)
     Q_PROPERTY(bool supportsLineInSource READ supportsLineInSource NOTIFY supportsLineInSourceChanged)
+    Q_PROPERTY(QVariantList sourceItems READ sourceItems NOTIFY sourceItemsChanged)
     Q_PROPERTY(int volume READ volume NOTIFY volumeChanged)
     Q_PROPERTY(bool volumeKnown READ volumeKnown NOTIFY volumeChanged)
     Q_PROPERTY(bool muted READ muted NOTIFY mutedChanged)
@@ -145,6 +148,7 @@ class ZonePlayer : public QObject
     bool        hasDeviceService(const QString &serviceName) const;
     QStringList deviceServices() const;
     bool        supportsLineInSource() const;
+    QVariantList sourceItems() const;
 
     const QString &serialNumber() const
     {
@@ -336,7 +340,7 @@ class ZonePlayer : public QObject
     // Plays a browse/search result item (a QVariantMap in the shape
     // MusicService subclasses produce -- id/title/uri/upnpClass/didlId/
     // parentId/desc/container, see SonosLibraryService/SmapiService) right
-    // now: a stream (upnpClass ending .audioBroadcast) replaces the
+    // now: a stream/audio source replaces the
     // transport URI directly and plays; anything else is enqueued right
     // after whatever's currently playing, then sought to and played --
     // mirrors roomtunes-bb10's SonosApp::play_track()/play_stream().
@@ -397,6 +401,7 @@ class ZonePlayer : public QObject
     void invisibleChanged();
     void supportsTvSourceChanged();
     void supportsLineInSourceChanged();
+    void sourceItemsChanged();
     void playStateChanged();
     void playModeChanged();
     void crossfadeChanged();
@@ -452,10 +457,10 @@ class ZonePlayer : public QObject
     bool       m_volumeKnown      = false;
     bool       m_muted            = false;
     bool       m_muteKnown        = false;
-    MediaItem *m_currentTrack     = nullptr;
-    QColor     m_accentColor;
-    QString    m_accentColorRequestUrl; // guards against a stale reply landing after currentTrack changed again
-    QString    m_tvAudioInfo;
+    MediaItem  *m_currentTrack = nullptr;
+    QColor      m_accentColor;
+    QString     m_accentColorRequestUrl; // guards against a stale reply landing after currentTrack changed again
+    QString     m_tvAudioInfo;
     int        m_positionSeconds    = 0;
     int        m_durationSeconds    = 0;
     int        m_currentTrackNumber = 0;
