@@ -139,3 +139,39 @@ jobs:
         with:
           name: roomtunes-windows
           path: dist\
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp version
+        shell: python
+        run: |
+          import os
+          import subprocess
+          import sys
+
+          subprocess.check_call([
+              sys.executable, "scripts/stamp_version.py",
+              "--build-count", os.environ["GITHUB_RUN_NUMBER"],
+              "--ref-name", os.environ["GITHUB_REF_NAME"],
+          ])
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.*'
+          host: mac
+          target: desktop
+          arch: clang_64
+          cache: true
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
