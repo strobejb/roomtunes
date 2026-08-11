@@ -75,7 +75,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/version.h
+          git add src/app/version.h
           if git diff --cached --quiet; then
             echo "version.h already contains ${{ steps.release-info.outputs.version }}"
           else
@@ -134,23 +134,23 @@ jobs:
       - name: Package AppImage
         run: |
           sudo apt-get install -y imagemagick
-          convert resources/icons/app.png -resize 512x512! roomtunes.png
+          convert src/app/resources/icons/app.png -resize 512x512! roomtunes.png
           wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
           mkdir -p AppDir/usr/bin
           mkdir -p AppDir/usr/share/metainfo
           cp build/roomtunes AppDir/usr/bin/
-          cp resources/roomtunes.metainfo.xml AppDir/usr/share/metainfo/
+          cp src/app/resources/roomtunes.metainfo.xml AppDir/usr/share/metainfo/
           appimage="roomtunes-${ROOMTUNES_FILE_VERSION}-linux-x86_64.AppImage"
           QMAKE="$QT_ROOT_DIR/bin/qmake" \
-          QML_SOURCES_PATHS="$PWD/qml" \
+          QML_SOURCES_PATHS="$PWD/src/app/qml" \
           LDAI_OUTPUT="${appimage}" \
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
             --plugin qt \
             --output appimage \
-            --desktop-file resources/roomtunes.desktop \
+            --desktop-file src/app/resources/roomtunes.desktop \
             --icon-file roomtunes.png
           test -f "${appimage}"
           echo "Created AppImage: ${appimage}"
@@ -185,7 +185,7 @@ jobs:
       - name: Convert PNG to ICO
         shell: pwsh
         run: |
-          magick resources/icons/app.png -define icon:auto-resize=256,128,64,48,32,16 resources/icons/app.ico
+          magick src/app/resources/icons/app.png -define icon:auto-resize=256,128,64,48,32,16 src/app/resources/icons/app.ico
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -210,7 +210,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist
           Copy-Item build\Release\RoomTunes.exe dist\
-          windeployqt --release --no-translations --qmldir qml dist\RoomTunes.exe
+          windeployqt --release --no-translations --qmldir src\app\qml dist\RoomTunes.exe
           foreach ($file in @("LICENSE", "NOTICES", "CHANGELOG.md", "README.md")) {
             if (Test-Path $file) {
               Copy-Item $file dist\

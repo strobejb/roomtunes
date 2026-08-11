@@ -6,7 +6,7 @@ repo_root="$(cd -- "${script_dir}/.." && pwd)"
 
 build_dir="${1:-${repo_root}/build/Desktop_Qt_6_10_2-Debug}"
 binary="${build_dir}/roomtunes"
-icon_source="${repo_root}/resources/icons/app.png"
+icon_source="${repo_root}/src/app/resources/icons/app.png"
 
 if [[ ! -x "${binary}" ]]; then
     echo "RoomTunes binary not found or not executable: ${binary}" >&2

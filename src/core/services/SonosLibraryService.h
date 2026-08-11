@@ -15,7 +15,7 @@ class Household;
 // zone's ContentDirectory::Browse.
 //
 // Search: ContentDirectory::Search was never ported (see
-// core/control/services/ContentDirectory.h) and doesn't need to be --
+// src/core/control/services/ContentDirectory.h) and doesn't need to be --
 // roomtunes-bb10's SonosLibrary::search() never called it either. Sonos'
 // own ContentDirectory implementation treats "<category>:<term>" as a
 // browsable object id in its own right (e.g. "A:TRACKS:led"), so a

@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 
     QCommandLineOption spotifyUrlOption(
         QStringLiteral("spotify-url"),
-        QStringLiteral("Spotify SMAPI endpoint URL (see core/services/SpotifyServiceConfig.h for why this must be "
+        QStringLiteral("Spotify SMAPI endpoint URL (see src/core/services/SpotifyServiceConfig.h for why this must be "
                        "supplied rather than guessed)"),
         QStringLiteral("url"));
     parser.addOption(spotifyUrlOption);

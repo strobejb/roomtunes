@@ -7,9 +7,8 @@
 #include <qqml.h>
 
 #include "Logging.h"
-#include "RoundedImage.h"
-#include "chrome/PlatformChrome.h"
-#include "chrome/WindowsChrome.h"
+#include "desktop/chrome/PlatformChrome.h"
+#include "desktop/chrome/WindowsChrome.h"
 #include "models/GroupedZoneModel.h"
 #include "models/MusicServiceListModel.h"
 #include "models/QueueModel.h"
@@ -17,6 +16,7 @@
 #include "settings/AppSettings.h"
 #include "settings/BrowseHistoryStore.h"
 #include "settings/Settings.h"
+#include "ui/RoundedImage.h"
 #include "version.h"
 #include "zone/Household.h"
 

@@ -5,7 +5,7 @@ import QtQuick.Layouts
 
 // One level of the Browse panel's navigation stack: a browse() or search()
 // result for one folder of one MusicService (the Sonos Music Library or a
-// SMAPI partner service -- see core/services/MusicService.h). Only ever
+// SMAPI partner service -- see src/core/services/MusicService.h). Only ever
 // created by BrowseStack.qml pushing pageComponent (either the initial
 // "root" folder of a service, or -- recursively, from this same file -- a
 // sub-folder browsed into from an existing page, or a search-results page,

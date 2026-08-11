@@ -16,7 +16,7 @@ class MusicService;
 // see Household::services(). TitleRole/ImageUrlRole are read straight off
 // the MusicService object, kept as roles purely for QML delegate
 // convenience; ServiceRole is the object itself, for anything that needs
-// to call browse()/search() on it (see qml/BrowseStack.qml).
+// to call browse()/search() on it (see src/app/qml/BrowseStack.qml).
 class MusicServiceListModel : public QAbstractListModel
 {
     Q_OBJECT

@@ -28,7 +28,7 @@ def main() -> None:
     parser.add_argument("--build-count", type=int, required=True)
     parser.add_argument("--version", default="")
     parser.add_argument("--ref-name", default="")
-    parser.add_argument("--version-header", default="src/version.h")
+    parser.add_argument("--version-header", default="src/app/version.h")
     args = parser.parse_args()
 
     header = Path(args.version_header).resolve()
