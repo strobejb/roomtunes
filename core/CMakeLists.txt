@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Xml)
 
 qt_add_library(roomtunes_core STATIC
     Logging.h
@@ -83,4 +83,4 @@ qt_add_library(roomtunes_core STATIC
 )
 
 target_include_directories(roomtunes_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(roomtunes_core PUBLIC Qt6::Core Qt6::Gui Qt6::Network)
+target_link_libraries(roomtunes_core PUBLIC Qt6::Core Qt6::Gui Qt6::Network Qt6::Xml)

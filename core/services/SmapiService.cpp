@@ -14,17 +14,17 @@
 #include <QTimer>
 #include <QUrl>
 #include <QUuid>
-#include <QXmlStreamReader>
 
 #include <cstdlib>
-#include <initializer_list>
 #include <memory>
+#include <string_view>
 #include <utility>
 
 #include "../Logging.h"
 #include "../control/SoapResponse.h"
 #include "../control/services/MusicServices.h"
 #include "../settings/Settings.h"
+#include "../xml/XmlUtils.h"
 #include "../zone/Household.h"
 #include "../zone/ZonePlayer.h"
 
@@ -61,52 +61,23 @@ struct DeviceAuthTokenDetails
 DeviceLinkDetails parseAppLinkDeviceLink(const QByteArray &body)
 {
     DeviceLinkDetails details;
-    QXmlStreamReader  xml(body);
-    while (!xml.atEnd())
-    {
-        if (!xml.readNextStartElement())
-            continue;
-        if (xml.name() != QLatin1String("deviceLink"))
-            continue;
+    const XmlDoc      doc        = XmlDoc::parse(body, XmlOptions{Qt::CaseInsensitive});
+    const XmlNode     deviceLink = doc.first("//deviceLink");
 
-        while (xml.readNextStartElement())
-        {
-            const QString name = xml.name().toString();
-            if (name == QStringLiteral("regUrl"))
-                details.registrationUrl = xml.readElementText(QXmlStreamReader::SkipChildElements);
-            else if (name == QStringLiteral("linkCode"))
-                details.linkCode = xml.readElementText(QXmlStreamReader::SkipChildElements);
-            else if (name == QStringLiteral("linkDeviceId"))
-                details.linkDeviceId = xml.readElementText(QXmlStreamReader::SkipChildElements);
-            else if (name == QStringLiteral("showLinkCode"))
-                details.showLinkCode = xml.readElementText(QXmlStreamReader::SkipChildElements)
-                                           .compare(QStringLiteral("false"), Qt::CaseInsensitive) != 0;
-            else
-                xml.skipCurrentElement();
-        }
-        break;
+    if (deviceLink)
+    {
+        details.registrationUrl = deviceLink.text("regUrl");
+        details.linkCode        = deviceLink.text("linkCode");
+        details.linkDeviceId    = deviceLink.text("linkDeviceId");
+        details.showLinkCode    = deviceLink.textBool("showLinkCode", details.showLinkCode);
     }
     return details;
 }
 
-QString firstResponseValue(const SoapResponse &response, std::initializer_list<QString> names)
-{
-    for (const QString &name : names)
-    {
-        const QString value = response.value(name);
-        if (!value.isEmpty())
-            return value;
-    }
-    return {};
-}
-
 DeviceAuthTokenDetails parseDeviceAuthTokenResponse(const SoapResponse &response)
 {
-    DeviceAuthTokenDetails details{
-        firstResponseValue(response, {QStringLiteral("AuthToken"), QStringLiteral("authToken"), QStringLiteral("Token"),
-                                      QStringLiteral("token")}),
-        firstResponseValue(response, {QStringLiteral("Key"), QStringLiteral("key"), QStringLiteral("PrivateKey"),
-                                      QStringLiteral("privateKey")})};
+    DeviceAuthTokenDetails details{response.firstValue({"AuthToken", "Token"}),
+                                   response.firstValue({"Key", "PrivateKey"})};
 
     if (!details.token.isEmpty() && !details.key.isEmpty())
         return details;
@@ -115,27 +86,11 @@ DeviceAuthTokenDetails parseDeviceAuthTokenResponse(const SoapResponse &response
     // getDeviceAuthTokenResponse. SoapResponse::value() deliberately only
     // flattens immediate response children, so scan this one specialised
     // response shape here instead of changing generic SOAP parsing.
-    QXmlStreamReader xml(response.rawBody());
-    while (!xml.atEnd())
-    {
-        if (!xml.readNextStartElement())
-            continue;
-
-        const QString name = xml.name().toString();
-        if (details.token.isEmpty() && (name.compare(QStringLiteral("AuthToken"), Qt::CaseInsensitive) == 0 ||
-                                        name.compare(QStringLiteral("token"), Qt::CaseInsensitive) == 0))
-        {
-            details.token = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        }
-        else if (details.key.isEmpty() && (name.compare(QStringLiteral("Key"), Qt::CaseInsensitive) == 0 ||
-                                           name.compare(QStringLiteral("PrivateKey"), Qt::CaseInsensitive) == 0))
-        {
-            details.key = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        }
-
-        if (!details.token.isEmpty() && !details.key.isEmpty())
-            break;
-    }
+    const XmlDoc doc = XmlDoc::parse(response.rawBody(), XmlOptions{Qt::CaseInsensitive});
+    if (details.token.isEmpty())
+        details.token = doc.firstText({"AuthToken", "token"});
+    if (details.key.isEmpty())
+        details.key = doc.firstText({"Key", "PrivateKey"});
 
     return details;
 }
@@ -167,38 +122,22 @@ QString compactXmlForLog(QString xml)
 
 bool hasNilMetadataResponse(const QByteArray &body)
 {
-    QXmlStreamReader xml(body);
-    while (!xml.atEnd())
+    const XmlDoc doc = XmlDoc::parse(body, XmlOptions{Qt::CaseInsensitive});
+    for (const XmlNode &node : doc.all("//*"))
     {
-        if (!xml.readNextStartElement())
-            continue;
-        const QString name = xml.name().toString();
-        if (name != QStringLiteral("getMetadataResponse") && name != QStringLiteral("searchResponse"))
+        if (!node.nameIn({"getMetadataResponse", "searchResponse"}))
             continue;
 
-        const QXmlStreamAttributes attrs = xml.attributes();
-        for (const QXmlStreamAttribute &attr : attrs)
-        {
-            if (attr.name() == QLatin1String("nil") && attr.value() == QLatin1String("true"))
-                return true;
-        }
-        return false;
+        return node.attr("nil") == QStringLiteral("true");
     }
     return false;
 }
 
 bool hasSoapBodyPayload(const QByteArray &body)
 {
-    QXmlStreamReader xml(body);
-    while (!xml.atEnd())
-    {
-        if (!xml.readNextStartElement())
-            continue;
-        if (!xml.name().endsWith(QLatin1String("Body")))
-            continue;
-        return xml.readNextStartElement();
-    }
-    return false;
+    const XmlDoc  doc      = XmlDoc::parse(body, XmlOptions{Qt::CaseInsensitive});
+    const XmlNode bodyNode = doc.first("//Body");
+    return bodyNode && !bodyNode.children().isEmpty();
 }
 
 bool looksLikeAuthExpiredError(const QString &errorMessage)
@@ -422,62 +361,48 @@ QString enqueuedId(const QString &itemId, const QString &resourceType)
 // username are the enclosing service's own identity, needed to synthesize
 // this item's playable uri/didlId/desc (see the lookup helpers above and
 // roomtunes-bb10's SonosTrack::enqueued_id()/didl_desc()).
-QVariantMap parseOneItem(QXmlStreamReader &xml, bool isCollection, int smapiId, int serviceId, const QString &username)
+QVariantMap parseOneItem(const XmlNode &node, bool isCollection, int smapiId, int serviceId, const QString &username)
 {
-    QString id, itemType, mimeType, title, artist, album, albumArtUri, canPlay, onDemand;
+    const QString id          = node.text("id");
+    const QString itemType    = node.text("itemType");
+    const QString mimeType    = node.text("mimeType");
+    const QString title       = node.text("title");
+    QString       artist      = node.text("artist");
+    QString       album       = node.text("album");
+    QString       albumArtUri = node.text("albumArtURI");
+    const QString canPlay     = node.text("canPlay");
+    const QString onDemand    = node.text("onDemand");
 
-    while (xml.readNextStartElement())
+    const XmlNode trackMetadata = node.child("trackMetadata");
+    if (trackMetadata)
     {
-        const QString name = xml.name().toString();
-        if (name == QStringLiteral("id"))
-            id = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("itemType"))
-            itemType = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("mimeType"))
-            mimeType = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("title"))
-            title = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("artist"))
-            artist = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("albumArtURI"))
-            albumArtUri = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("canPlay"))
-            canPlay = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("onDemand"))
-            onDemand = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("trackMetadata"))
+        const QString trackArtist = trackMetadata.text("artist");
+        const QString trackAlbum  = trackMetadata.text("album");
+        const QString trackArt    = trackMetadata.text("albumArtURI");
+        if (!trackArtist.isEmpty())
+            artist = trackArtist;
+        if (!trackAlbum.isEmpty())
+            album = trackAlbum;
+        if (!trackArt.isEmpty())
+            albumArtUri = trackArt;
+    }
+
+    const XmlNode streamMetadata = node.child("streamMetadata");
+    if (streamMetadata)
+    {
+        if (artist.isEmpty())
         {
-            while (xml.readNextStartElement())
+            for (const XmlNode &child : streamMetadata.children())
             {
-                const QString field = xml.name().toString();
-                if (field == QStringLiteral("artist"))
-                    artist = xml.readElementText(QXmlStreamReader::SkipChildElements);
-                else if (field == QStringLiteral("album"))
-                    album = xml.readElementText(QXmlStreamReader::SkipChildElements);
-                else if (field == QStringLiteral("albumArtURI"))
-                    albumArtUri = xml.readElementText(QXmlStreamReader::SkipChildElements);
-                else
-                    xml.skipCurrentElement();
+                if (child.nameIn({"currentHost", "description"}))
+                {
+                    artist = child.text();
+                    break;
+                }
             }
         }
-        else if (name == QStringLiteral("streamMetadata"))
-        {
-            while (xml.readNextStartElement())
-            {
-                const QString field = xml.name().toString();
-                if ((field == QStringLiteral("currentHost") || field == QStringLiteral("description")) &&
-                    artist.isEmpty())
-                    artist = xml.readElementText(QXmlStreamReader::SkipChildElements);
-                else if (field == QStringLiteral("logo") && albumArtUri.isEmpty())
-                    albumArtUri = xml.readElementText(QXmlStreamReader::SkipChildElements);
-                else
-                    xml.skipCurrentElement();
-            }
-        }
-        else
-        {
-            xml.skipCurrentElement();
-        }
+        if (albumArtUri.isEmpty())
+            albumArtUri = streamMetadata.text("logo");
     }
 
     const bool playable =
@@ -554,16 +479,14 @@ QVariantList parseManifestBrowseItems(const QByteArray &body, int smapiId, int s
 
 QVariantList parseMetadataXml(const QByteArray &body, int smapiId, int serviceId, const QString &username)
 {
-    QVariantList     items;
-    QXmlStreamReader xml(body);
-    while (!xml.atEnd())
+    QVariantList items;
+    const XmlDoc doc = XmlDoc::parse(body, XmlOptions{Qt::CaseInsensitive});
+    for (const XmlNode &node : doc.all("//*"))
     {
-        if (!xml.readNextStartElement())
-            continue;
-        if (xml.name() == QLatin1String("mediaCollection"))
-            items.append(parseOneItem(xml, true, smapiId, serviceId, username));
-        else if (xml.name() == QLatin1String("mediaMetadata"))
-            items.append(parseOneItem(xml, false, smapiId, serviceId, username));
+        if (node.nameIs("mediaCollection"))
+            items.append(parseOneItem(node, true, smapiId, serviceId, username));
+        else if (node.nameIs("mediaMetadata"))
+            items.append(parseOneItem(node, false, smapiId, serviceId, username));
     }
     return items;
 }
@@ -958,7 +881,7 @@ void SmapiService::withCredentials(const QString &requestDescription, ResultCall
                         return;
                     }
 
-                    const QString sessionId = response.value(QStringLiteral("SessionId"));
+                    const QString sessionId = response.value(QLatin1String("SessionId"));
                     m_smapi.setSessionIdCredentials(m_household->serviceDeviceSerial(), QStringLiteral("Sonos"),
                                                     sessionId);
                     onReady();
@@ -1439,30 +1362,30 @@ void SmapiService::requestDeviceLinkCode(const QString                          
 {
     QWARN() << title() << "requesting getDeviceLinkCode";
     QNetworkReply *reply = m_smapi.getDeviceLinkCode(householdId);
-    connect(
-        reply, &QNetworkReply::finished, this,
-        [this, reply, callback]()
-        {
-            SoapResponse response(reply);
-            reply->deleteLater();
-
-            if (response.error())
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, callback]()
             {
-                QWARN() << title() << "getDeviceLinkCode failed:" << response.faultString();
-                emit authorizationFailed(response.faultString());
-                if (callback)
-                    callback(false, QString(), QString());
-                return;
-            }
+                SoapResponse response(reply);
+                reply->deleteLater();
 
-            m_pendingShowLinkCode =
-                response.value(QStringLiteral("ShowLinkCode")).compare(QStringLiteral("false"), Qt::CaseInsensitive) !=
-                0;
-            if (callback)
-                callback(true, response.value(QStringLiteral("LinkCode")), response.value(QStringLiteral("RegUrl")));
-            QLOG() << title() << "sign-in browser url:" << response.value(QStringLiteral("RegUrl"))
-                   << "showCode=" << m_pendingShowLinkCode;
-        });
+                if (response.error())
+                {
+                    QWARN() << title() << "getDeviceLinkCode failed:" << response.faultString();
+                    emit authorizationFailed(response.faultString());
+                    if (callback)
+                        callback(false, QString(), QString());
+                    return;
+                }
+
+                m_pendingShowLinkCode = response.boolValue("ShowLinkCode", true);
+                if (callback)
+                {
+                    const QString linkCode = response.value(QLatin1String("LinkCode"));
+                    const QString regUrl   = response.value(QLatin1String("RegUrl"));
+                    callback(true, linkCode, regUrl);
+                    QLOG() << title() << "sign-in browser url:" << regUrl << "showCode=" << m_pendingShowLinkCode;
+                }
+            });
 }
 
 void SmapiService::requestAppLinkCode(const QString                                              &householdId,

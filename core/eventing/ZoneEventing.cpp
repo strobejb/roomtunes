@@ -2,10 +2,10 @@
 
 #include <QNetworkReply>
 #include <QUdpSocket>
-#include <QXmlStreamReader>
 
 #include "../Logging.h"
 #include "../control/UpnpService.h"
+#include "../xml/XmlUtils.h"
 #include "../zone/ZonePlayer.h"
 
 #define QLOG_CATEGORY logEventing
@@ -30,27 +30,7 @@ QString localAddressForPeer(const QString &peerHost)
 
 QString extractGenaProperty(const QByteArray &body, const QString &propertyName)
 {
-    QXmlStreamReader xml(body);
-
-    while (!xml.atEnd())
-    {
-        if (!xml.readNextStartElement())
-            continue;
-
-        // The root <e:propertyset> must be descended into; skipping every
-        // non-property element here would also skip all of its children.
-        if (xml.name() != QLatin1String("property"))
-            continue;
-
-        if (xml.readNextStartElement())
-        {
-            if (xml.name() == propertyName)
-                return xml.readElementText(QXmlStreamReader::SkipChildElements);
-            xml.skipCurrentElement();
-        }
-    }
-
-    return {};
+    return XmlDoc::parse(body).firstText(propertyName);
 }
 
 QString zoneEventSubscriptionKey(const QString &udn, const char *serviceName)

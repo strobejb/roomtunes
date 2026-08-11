@@ -4,6 +4,8 @@
 #include <QUrl>
 #include <QXmlStreamWriter>
 
+#include "../xml/XmlUtils.h"
+
 namespace RoomTunes
 {
 
@@ -53,6 +55,39 @@ void applyResourceMetadata(DidlItem *item, const QString &resourceMetadata)
         item->upnpClass = nested.upnpClass;
         item->container = nested.upnpClass.contains(QStringLiteral(".container"));
     }
+}
+
+DidlItem parseOneItem(const XmlNode &node, bool isContainer)
+{
+    DidlItem item;
+    item.container    = isContainer;
+    item.id           = node.attr("id");
+    item.parentId     = node.attr("parentID");
+    item.didlId       = item.id;
+    item.didlParentId = item.parentId;
+    item.title        = node.text("title");
+    item.upnpClass    = node.text("class");
+    item.artist       = node.text("creator");
+    item.album        = node.text("album");
+    item.albumArtUri  = node.text("albumArtURI");
+    item.streamInfo   = node.text("streamInfo");
+    item.trackNumber  = node.text("originalTrackNumber");
+    item.desc         = node.text("desc");
+
+    const XmlNode resource = node.child("res");
+    if (resource)
+    {
+        item.protocolInfo = resource.attr("protocolInfo");
+        item.res          = resource.text();
+    }
+
+    // Sonos Favourites wrap the real playable item in r:resMD while the
+    // outer item's own id/class remain the favourite entry itself. Apply
+    // this after the full outer item has been parsed so the inner playable
+    // metadata wins regardless of the XML element order Sonos returned.
+    applyResourceMetadata(&item, node.text("resMD"));
+
+    return item;
 }
 } // namespace
 
@@ -137,73 +172,25 @@ QByteArray Didl::buildFavoriteItem(const DidlItem &item)
 
 QList<DidlItem> Didl::parseItems(const QByteArray &didlXml)
 {
-    QList<DidlItem>  items;
-    QXmlStreamReader xml(didlXml);
+    QList<DidlItem> items;
+    const XmlDoc    doc  = XmlDoc::parse(didlXml);
+    const XmlNode   root = doc.root();
 
-    while (!xml.atEnd())
+    auto appendItem = [&items](const XmlNode &node)
     {
-        if (!xml.readNextStartElement())
-            continue;
+        if (node.nameIs("item"))
+            items.append(parseOneItem(node, false));
+        else if (node.nameIs("container"))
+            items.append(parseOneItem(node, true));
+    };
 
-        if (xml.name() == QLatin1String("item"))
-            items.append(parseOneItem(xml, false));
-        else if (xml.name() == QLatin1String("container"))
-            items.append(parseOneItem(xml, true));
-        else if (xml.name() != QLatin1String("DIDL-Lite"))
-            xml.skipCurrentElement();
-    }
+    if (root.nameIs("item") || root.nameIs("container"))
+        appendItem(root);
+    else if (root.nameIs("DIDL-Lite"))
+        for (const XmlNode &child : root.children())
+            appendItem(child);
 
     return items;
-}
-
-DidlItem Didl::parseOneItem(QXmlStreamReader &xml, bool isContainer)
-{
-    DidlItem item;
-    item.container    = isContainer;
-    item.id           = xml.attributes().value(QStringLiteral("id")).toString();
-    item.parentId     = xml.attributes().value(QStringLiteral("parentID")).toString();
-    item.didlId       = item.id;
-    item.didlParentId = item.parentId;
-    QString resourceMetadata;
-
-    while (xml.readNextStartElement())
-    {
-        const QString name = xml.name().toString();
-
-        if (name == QStringLiteral("title"))
-            item.title = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("class"))
-            item.upnpClass = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("creator"))
-            item.artist = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("album"))
-            item.album = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("albumArtURI"))
-            item.albumArtUri = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("streamInfo"))
-            item.streamInfo = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("originalTrackNumber"))
-            item.trackNumber = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("res"))
-        {
-            item.protocolInfo = xml.attributes().value(QStringLiteral("protocolInfo")).toString();
-            item.res          = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        }
-        else if (name == QStringLiteral("desc"))
-            item.desc = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (name == QStringLiteral("resMD"))
-            resourceMetadata = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else
-            xml.skipCurrentElement();
-    }
-
-    // Sonos Favourites wrap the real playable item in r:resMD while the
-    // outer item's own id/class remain the favourite entry itself. Apply
-    // this after the full outer item has been parsed so the inner playable
-    // metadata wins regardless of the XML element order Sonos returned.
-    applyResourceMetadata(&item, resourceMetadata);
-
-    return item;
 }
 
 } // namespace RoomTunes

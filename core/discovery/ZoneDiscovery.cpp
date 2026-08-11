@@ -14,6 +14,7 @@
 #include "../Logging.h"
 #include "../control/Soap.h"
 #include "../control/SoapResponse.h"
+#include "../xml/XmlUtils.h"
 
 #define QLOG_CATEGORY logDiscovery
 static const QString LOGSEPARATOR(80, QLatin1Char('-'));
@@ -62,95 +63,46 @@ QString serviceNameFromType(const QString &serviceType)
     return serviceType.mid(nameStart, nameEnd - nameStart);
 }
 
-QSet<QString> parseServiceList(QXmlStreamReader &xml)
+void collectDeviceServices(const XmlNode &device, DeviceDescription *description)
 {
-    QSet<QString> services;
-
-    while (xml.readNextStartElement())
+    for (const XmlNode &service : device.all(".//serviceList/service"))
     {
-        if (xml.name() != QLatin1String("service"))
-        {
-            xml.skipCurrentElement();
-            continue;
-        }
-
-        while (xml.readNextStartElement())
-        {
-            if (xml.name() == QLatin1String("serviceType"))
-            {
-                const QString serviceName =
-                    serviceNameFromType(xml.readElementText(QXmlStreamReader::SkipChildElements));
-                if (!serviceName.isEmpty())
-                    services.insert(serviceName);
-            }
-            else
-            {
-                xml.skipCurrentElement();
-            }
-        }
+        const QString serviceName = serviceNameFromType(service.text("serviceType"));
+        if (!serviceName.isEmpty())
+            description->services.insert(serviceName);
     }
-
-    return services;
 }
 
-void parseDeviceElement(QXmlStreamReader &xml, DeviceDescription &description, bool rootDevice)
+void parseDeviceElement(const XmlNode &device, DeviceDescription *description)
 {
-    while (xml.readNextStartElement())
-    {
-        if (rootDevice && xml.name() == QLatin1String("roomName"))
-            description.roomName = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (rootDevice && xml.name() == QLatin1String("displayName"))
-            description.displayName = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (rootDevice && xml.name() == QLatin1String("modelName"))
-            description.modelName = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (rootDevice && xml.name() == QLatin1String("serialNum"))
-            description.serialNumber = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (rootDevice && xml.name() == QLatin1String("displayVersion"))
-            description.displayVersion = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (rootDevice && xml.name() == QLatin1String("softwareVersion"))
-            description.softwareVersion = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (rootDevice && xml.name() == QLatin1String("zoneType"))
-            description.zoneType = xml.readElementText(QXmlStreamReader::SkipChildElements);
-        else if (rootDevice && xml.name().startsWith(QLatin1String("feature")))
-            description.features.append(xml.readElementText(QXmlStreamReader::SkipChildElements));
-        else if (xml.name() == QLatin1String("serviceList"))
-            description.services.unite(parseServiceList(xml));
-        else if (xml.name() == QLatin1String("deviceList"))
-        {
-            while (xml.readNextStartElement())
-            {
-                if (xml.name() == QLatin1String("device"))
-                    parseDeviceElement(xml, description, false);
-                else
-                    xml.skipCurrentElement();
-            }
-        }
-        else
-        {
-            xml.skipCurrentElement();
-        }
-    }
+    description->roomName        = device.text("roomName");
+    description->displayName     = device.text("displayName");
+    description->modelName       = device.text("modelName");
+    description->serialNumber    = device.text("serialNum");
+    description->displayVersion  = device.text("displayVersion");
+    description->softwareVersion = device.text("softwareVersion");
+    description->zoneType        = device.text("zoneType");
+
+    for (const XmlNode &child : device.children())
+        if (child.nameStartsWith("feature"))
+            description->features.append(child.text());
+
+    // Sonos device_description.xml has useful services both on the root
+    // ZonePlayer device and on nested MediaRenderer/MediaServer devices.
+    // RenderingControl and AVTransport live in those nested devices, so
+    // skipping nested device services makes startup mute/volume polling
+    // impossible.
+    collectDeviceServices(device, description);
 }
 
 DeviceDescription parseDeviceDescription(const QByteArray &body)
 {
     DeviceDescription description;
-    QXmlStreamReader  xml(body);
+    const XmlDoc      doc    = XmlDoc::parse(body);
+    const XmlNode     device = doc.first("//device");
 
-    while (!xml.atEnd())
-    {
-        if (!xml.readNextStartElement())
-            continue;
-        if (xml.name() != QLatin1String("device"))
-            continue;
-
-        // Sonos device_description.xml has useful services both on the root
-        // ZonePlayer device and on nested MediaRenderer/MediaServer devices.
-        // RenderingControl and AVTransport live in those nested devices, so
-        // skipping deviceList makes startup mute/volume polling impossible.
-        parseDeviceElement(xml, description, true);
-        break;
-    }
+    if (device)
+        parseDeviceElement(device, &description);
 
     return description;
 }
@@ -655,31 +607,19 @@ void ZoneDiscovery::parseZoneGroupState(const QByteArray &xmlBody)
         QLOG() << prettyPrintXml(xmlBody);
     }
 
-    QXmlStreamReader xml(xmlBody);
+    const XmlDoc doc = XmlDoc::parse(xmlBody);
 
-    while (!xml.atEnd())
+    for (const XmlNode &group : doc.all("//ZoneGroup"))
     {
-        if (!xml.readNextStartElement())
-            continue;
-        if (xml.name() != QLatin1String("ZoneGroup"))
-            continue;
+        const QString coordinatorUdn = group.attr("Coordinator");
 
-        const QString coordinatorUdn = xml.attributes().value(QStringLiteral("Coordinator")).toString();
-
-        while (xml.readNextStartElement())
+        for (const XmlNode &member : group.children("ZoneGroupMember"))
         {
-            if (xml.name() != QLatin1String("ZoneGroupMember"))
-            {
-                xml.skipCurrentElement();
-                continue;
-            }
-
-            const QXmlStreamAttributes attrs     = xml.attributes();
-            const QString              udn       = attrs.value(QStringLiteral("UUID")).toString();
-            const QString              location  = attrs.value(QStringLiteral("Location")).toString();
-            const QString              roomName  = attrs.value(QStringLiteral("ZoneName")).toString();
-            const bool                 invisible = attrs.value(QStringLiteral("Invisible")) == QStringLiteral("1");
-            const QString              softwareVersion = attrs.value(QStringLiteral("SoftwareVersion")).toString();
+            const QString udn             = member.attr("UUID");
+            const QString location        = member.attr("Location");
+            const QString roomName        = member.attr("ZoneName");
+            const bool    invisible       = member.attrBool01("Invisible");
+            const QString softwareVersion = member.attr("SoftwareVersion");
             if (SoapRequest::userAgent().isEmpty() && !softwareVersion.isEmpty())
             {
                 // BB10 set the SOAP User-Agent from ZoneGroupState's real
@@ -716,20 +656,11 @@ void ZoneDiscovery::parseZoneGroupState(const QByteArray &xmlBody)
             // children -- not siblings, and not flagged Invisible at this
             // level -- so this member has to be descended into (not
             // skipped) to find and hide them.
-            while (xml.readNextStartElement())
+            for (const XmlNode &sat : member.children("Satellite"))
             {
-                if (xml.name() != QLatin1String("Satellite"))
-                {
-                    xml.skipCurrentElement();
-                    continue;
-                }
-
-                const QXmlStreamAttributes satAttrs    = xml.attributes();
-                const QString              satUdn      = satAttrs.value(QStringLiteral("UUID")).toString();
-                const QString              satLocation = satAttrs.value(QStringLiteral("Location")).toString();
-                const QString              satRoomName = satAttrs.value(QStringLiteral("ZoneName")).toString();
-
-                xml.skipCurrentElement();
+                const QString satUdn      = sat.attr("UUID");
+                const QString satLocation = sat.attr("Location");
+                const QString satRoomName = sat.attr("ZoneName");
 
                 if (satUdn.isEmpty())
                     continue;

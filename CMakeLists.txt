@@ -26,7 +26,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Network Svg)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Network Svg Xml)
 
 qt_standard_project_setup()
 
@@ -39,6 +39,11 @@ endif()
 
 add_subdirectory(core)
 add_subdirectory(tools/core-cli)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
 
 qt_add_executable(RoomTunes
     src/main.cpp

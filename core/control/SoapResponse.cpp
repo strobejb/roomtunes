@@ -1,8 +1,6 @@
 #include "SoapResponse.h"
 
 #include "../Logging.h"
-#include "../xml/XmlUtils.h"
-
 #include <QRegularExpression>
 
 namespace RoomTunes
@@ -112,71 +110,47 @@ QString SoapResponse::diagnosticText() const
 
 void SoapResponse::parse(const QByteArray &body)
 {
-    QXmlStreamReader xml(body);
+    const XmlDoc  doc      = XmlDoc::parse(body);
+    const XmlNode bodyNode = doc.first("//Body");
+    if (!bodyNode)
+        return;
 
-    while (!xml.atEnd())
-    {
-        if (!xml.readNextStartElement())
-            continue;
+    const QVector<XmlNode> responseChildren = bodyNode.children();
+    if (responseChildren.isEmpty())
+        return;
 
-        if (!xml.name().endsWith(QLatin1String("Body")))
-            continue;
-
-        if (xml.readNextStartElement())
-        {
-            if (xml.name().endsWith(QLatin1String("Fault")))
-                parseFault(xml);
-            else
-                m_values = flattenElement(xml);
-        }
-        break;
-    }
+    const XmlNode response = responseChildren.first();
+    if (response.nameIs("Fault"))
+        parseFault(response);
+    else
+        m_values = response.childTextMap();
 }
 
-void SoapResponse::parseFault(QXmlStreamReader &xml)
+void SoapResponse::parseFault(const XmlNode &fault)
 {
     m_hasFault = true;
 
-    while (xml.readNextStartElement())
-    {
-        const QString name = xml.name().toString();
+    m_faultCode     = fault.text("faultcode");
+    const int colon = m_faultCode.indexOf(QLatin1Char(':'));
+    if (colon >= 0)
+        m_faultCode = m_faultCode.mid(colon + 1);
 
-        if (name == QStringLiteral("faultcode"))
+    m_faultString = fault.text("faultstring");
+
+    const XmlNode detail = fault.child("detail");
+    for (const XmlNode &child : detail.children())
+    {
+        if (child.nameIs("UPnPError"))
         {
-            m_faultCode     = xml.readElementText();
-            const int colon = m_faultCode.indexOf(QLatin1Char(':'));
-            if (colon >= 0)
-                m_faultCode = m_faultCode.mid(colon + 1);
+            const QMap<QString, QString> upnpError = child.childTextMap();
+            m_upnpErrorCode                        = upnpError.value(QStringLiteral("errorCode"));
+            m_upnpErrorDescription                 = upnpError.value(QStringLiteral("errorDescription"));
         }
-        else if (name == QStringLiteral("faultstring"))
+        else if (child.nameIs("refreshAuthTokenResult"))
         {
-            m_faultString = xml.readElementText();
-        }
-        else if (name == QStringLiteral("detail"))
-        {
-            while (xml.readNextStartElement())
-            {
-                if (xml.name() == QLatin1String("UPnPError"))
-                {
-                    const QMap<QString, QString> upnpError = flattenElement(xml);
-                    m_upnpErrorCode                        = upnpError.value(QStringLiteral("errorCode"));
-                    m_upnpErrorDescription                 = upnpError.value(QStringLiteral("errorDescription"));
-                }
-                else if (xml.name() == QLatin1String("refreshAuthTokenResult"))
-                {
-                    const QMap<QString, QString> refreshed = flattenElement(xml);
-                    m_refreshedAuthToken                   = refreshed.value(QStringLiteral("authToken"));
-                    m_refreshedPrivateKey                  = refreshed.value(QStringLiteral("privateKey"));
-                }
-                else
-                {
-                    xml.skipCurrentElement();
-                }
-            }
-        }
-        else
-        {
-            xml.skipCurrentElement();
+            const QMap<QString, QString> refreshed = child.childTextMap();
+            m_refreshedAuthToken                   = refreshed.value(QStringLiteral("authToken"));
+            m_refreshedPrivateKey                  = refreshed.value(QStringLiteral("privateKey"));
         }
     }
 }

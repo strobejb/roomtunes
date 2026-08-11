@@ -5,7 +5,8 @@
 #include <QMap>
 #include <QSet>
 #include <QStringList>
-#include <QXmlStreamReader>
+
+#include "../xml/XmlUtils.h"
 
 namespace RoomTunes
 {
@@ -33,56 +34,34 @@ struct ParsedEntry
 QList<ParsedEntry> parseDescriptors(const QByteArray &xml)
 {
     QList<ParsedEntry> result;
-    QXmlStreamReader   reader(xml);
+    const XmlDoc       doc = XmlDoc::parse(xml);
 
-    while (!reader.atEnd())
+    for (const XmlNode &service : doc.all("//Service"))
     {
-        if (!reader.readNextStartElement())
-            continue;
-        if (reader.name() != QLatin1String("Service"))
+        ParsedEntry parsed;
+        parsed.entry.smapiId       = service.attrInt("Id");
+        parsed.entry.title         = service.attr("Name");
+        parsed.entry.uri           = service.attr("Uri");
+        parsed.entry.secureUri     = service.attr("SecureUri");
+        parsed.entry.containerType = service.attr("ContainerType");
+        parsed.entry.capabilities  = service.attr("Capabilities");
+
+        const XmlNode policy = service.child("Policy");
+        if (policy)
         {
-            // Don't skip -- this also matches the root <Services> wrapper,
-            // which needs descending into, not past.
-            continue;
+            parsed.entry.auth         = policy.attr("Auth");
+            parsed.entry.pollInterval = policy.attr("PollInterval");
         }
 
-        ParsedEntry                parsed;
-        const QXmlStreamAttributes attrs = reader.attributes();
-        parsed.entry.smapiId             = attrs.value(QStringLiteral("Id")).toInt();
-        parsed.entry.title               = attrs.value(QStringLiteral("Name")).toString();
-        parsed.entry.uri                 = attrs.value(QStringLiteral("Uri")).toString();
-        parsed.entry.secureUri           = attrs.value(QStringLiteral("SecureUri")).toString();
-        parsed.entry.containerType       = attrs.value(QStringLiteral("ContainerType")).toString();
-        parsed.entry.capabilities        = attrs.value(QStringLiteral("Capabilities")).toString();
+        const XmlNode manifest = service.child("Manifest");
+        if (manifest)
+            parsed.entry.manifestUri = manifest.attr("Uri");
 
-        while (reader.readNextStartElement())
+        const XmlNode presentation = service.child("Presentation");
+        if (presentation)
         {
-            if (reader.name() == QLatin1String("Policy"))
-            {
-                parsed.entry.auth         = reader.attributes().value(QStringLiteral("Auth")).toString();
-                parsed.entry.pollInterval = reader.attributes().value(QStringLiteral("PollInterval")).toString();
-                reader.skipCurrentElement();
-            }
-            else if (reader.name() == QLatin1String("Manifest"))
-            {
-                parsed.entry.manifestUri = reader.attributes().value(QStringLiteral("Uri")).toString();
-                reader.skipCurrentElement();
-            }
-            else if (reader.name() == QLatin1String("Presentation"))
-            {
-                while (reader.readNextStartElement())
-                {
-                    if (reader.name() == QLatin1String("Strings"))
-                        parsed.strVersion = reader.attributes().value(QStringLiteral("Version")).toInt();
-                    else if (reader.name() == QLatin1String("PresentationMap"))
-                        parsed.presVersion = reader.attributes().value(QStringLiteral("Version")).toInt();
-                    reader.skipCurrentElement();
-                }
-            }
-            else
-            {
-                reader.skipCurrentElement();
-            }
+            parsed.strVersion  = presentation.child("Strings").attrInt("Version");
+            parsed.presVersion = presentation.child("PresentationMap").attrInt("Version");
         }
 
         result.append(parsed);
@@ -152,6 +131,7 @@ QHash<int, SmapiCatalogEntry> MusicServiceCatalog::build(const QByteArray &descr
     {
         while (smapiIt != bySmapiId.constEnd() && mappedSmapiIds.contains(smapiIt.key()))
             ++smapiIt;
+
         if (smapiIt == bySmapiId.constEnd())
             break;
 
@@ -167,20 +147,13 @@ QString MusicServiceCatalog::legacyServiceName(int serviceId)
 {
     switch (serviceId)
     {
-    case kRhapsodyTrialId:
-        return QStringLiteral("Rhapsody Trial");
-    case kRhapsodyServiceId:
-        return QStringLiteral("Rhapsody");
-    case kNapsterTrialId:
-        return QStringLiteral("Napster Trial");
-    case kNapsterServiceId:
-        return QStringLiteral("Napster");
-    case kPandoraServiceId:
-        return QStringLiteral("Pandora");
-    case kLastFmServiceId:
-        return QStringLiteral("Last.fm");
-    default:
-        return {};
+    case kRhapsodyTrialId:      return QStringLiteral("Rhapsody Trial");
+    case kRhapsodyServiceId:    return QStringLiteral("Rhapsody");
+    case kNapsterTrialId:       return QStringLiteral("Napster Trial");
+    case kNapsterServiceId:     return QStringLiteral("Napster");
+    case kPandoraServiceId:     return QStringLiteral("Pandora");
+    case kLastFmServiceId:      return QStringLiteral("Last.fm");
+    default:                    return {};
     }
 }
 

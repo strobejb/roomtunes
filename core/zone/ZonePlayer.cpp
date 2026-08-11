@@ -8,11 +8,11 @@
 #include <QNetworkRequest>
 #include <QStringList>
 #include <QUrl>
-#include <QXmlStreamReader>
 
 #include "../Logging.h"
 #include "../control/SonosPlaybackPayload.h"
 #include "../media/AlbumColorAnalyzer.h"
+#include "../xml/XmlUtils.h"
 
 #define QLOG_CATEGORY logZone
 
@@ -155,42 +155,19 @@ AvTransportTrackSnapshot avTransportTrackSnapshot(const QByteArray &body)
     if (lastChange.isEmpty())
         return snapshot;
 
-    QXmlStreamReader xml(lastChange);
-    while (!xml.atEnd())
-    {
-        if (!xml.readNextStartElement())
-            continue;
-
-        if (xml.name() == QLatin1String("TransportState"))
-            snapshot.transportState = xml.attributes().value(QStringLiteral("val")).toString();
-        else if (xml.name() == QLatin1String("CurrentPlayMode"))
-            snapshot.playMode = xml.attributes().value(QStringLiteral("val")).toString();
-        else if (xml.name() == QLatin1String("CurrentCrossfadeMode"))
-            snapshot.crossfadeMode = xml.attributes().value(QStringLiteral("val")).toString();
-        else if (xml.name() == QLatin1String("CurrentTrackURI"))
-            snapshot.uri = xml.attributes().value(QStringLiteral("val")).toString();
-        else if (xml.name() == QLatin1String("CurrentTrackMetaData"))
-            snapshot.metadata = xml.attributes().value(QStringLiteral("val")).toString();
-    }
+    const XmlDoc doc        = XmlDoc::parse(lastChange.toUtf8());
+    snapshot.transportState = doc.first("//TransportState").attr("val");
+    snapshot.playMode       = doc.first("//CurrentPlayMode").attr("val");
+    snapshot.crossfadeMode  = doc.first("//CurrentCrossfadeMode").attr("val");
+    snapshot.uri            = doc.first("//CurrentTrackURI").attr("val");
+    snapshot.metadata       = doc.first("//CurrentTrackMetaData").attr("val");
 
     return snapshot;
 }
 
 QString genaProperty(const QByteArray &body, const QString &propertyName)
 {
-    QXmlStreamReader xml(body);
-
-    while (!xml.atEnd())
-    {
-        if (!xml.readNextStartElement())
-            continue;
-        if (xml.name() != QLatin1String("property"))
-            continue;
-        if (xml.readNextStartElement() && xml.name() == propertyName)
-            return xml.readElementText(QXmlStreamReader::SkipChildElements);
-    }
-
-    return {};
+    return XmlDoc::parse(body).firstText(propertyName);
 }
 
 QString playModeFor(bool shuffleEnabled, int repeatMode)
@@ -917,17 +894,13 @@ void ZonePlayer::handleRenderingControlEvent(const QByteArray &body)
     if (lastChange.isEmpty())
         return;
 
-    QXmlStreamReader xml(lastChange);
-    while (!xml.atEnd())
+    const XmlDoc doc = XmlDoc::parse(lastChange.toUtf8());
+    for (const XmlNode &volume : doc.all("//Volume"))
     {
-        if (!xml.readNextStartElement())
-            continue;
-
-        if (xml.name() == QLatin1String("Volume") &&
-            xml.attributes().value(QStringLiteral("channel")) == QLatin1String("Master"))
+        if (volume.attr("channel") == QStringLiteral("Master"))
         {
             bool      ok    = false;
-            const int level = xml.attributes().value(QStringLiteral("val")).toInt(&ok);
+            const int level = volume.attr("val").toInt(&ok);
             if (ok && (level != m_volume || !m_volumeKnown))
             {
                 m_volume      = level;
@@ -935,10 +908,13 @@ void ZonePlayer::handleRenderingControlEvent(const QByteArray &body)
                 emit volumeChanged();
             }
         }
-        else if (xml.name() == QLatin1String("Mute") &&
-                 xml.attributes().value(QStringLiteral("channel")) == QLatin1String("Master"))
+    }
+
+    for (const XmlNode &muteNode : doc.all("//Mute"))
+    {
+        if (muteNode.attr("channel") == QStringLiteral("Master"))
         {
-            const bool muted = xml.attributes().value(QStringLiteral("val")) == QLatin1String("1");
+            const bool muted = muteNode.attr("val") == QStringLiteral("1");
             if (muted != m_muted || !m_muteKnown)
             {
                 m_muted     = muted;

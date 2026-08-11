@@ -3,7 +3,6 @@
 #include <QByteArray>
 #include <QList>
 #include <QString>
-#include <QXmlStreamReader>
 
 namespace RoomTunes
 {
@@ -35,7 +34,7 @@ struct DidlItem
     bool    container = false;
 };
 
-// DIDL-Lite building (QXmlStreamWriter) and parsing (QXmlStreamReader).
+// DIDL-Lite building and parsing.
 // Replaces control/didl.hpp's manual byte-buffer concatenation and Qt::escape().
 class Didl
 {
@@ -52,9 +51,6 @@ class Didl
     // Parses a <DIDL-Lite> document (e.g. a ContentDirectory::Browse Result)
     // into its top-level <item>/<container> entries.
     static QList<DidlItem> parseItems(const QByteArray &didlXml);
-
-  private:
-    static DidlItem parseOneItem(QXmlStreamReader &xml, bool isContainer);
 };
 
 } // namespace RoomTunes

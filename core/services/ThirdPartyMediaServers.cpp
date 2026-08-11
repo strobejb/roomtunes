@@ -9,6 +9,7 @@
 
 #include "../Logging.h"
 #include "../crypto/Aes128Cbc.h"
+#include "../xml/XmlUtils.h"
 
 #define QLOG_CATEGORY logServices
 
@@ -178,30 +179,19 @@ QList<InstalledService> ThirdPartyMediaServers::parse(const QString &householdId
     // one InstalledService rather than producing a phantom duplicate entry.
     QHash<int, int> indexByServiceId;
 
-    QXmlStreamReader reader(xml);
-    while (!reader.atEnd())
+    const XmlDoc doc = XmlDoc::parse(xml);
+    for (const XmlNode &serviceNode : doc.all("//Service"))
     {
-        if (!reader.readNextStartElement())
-            continue;
-        if (reader.name() != QLatin1String("Service"))
-        {
-            // Don't skip -- this also matches the root <MediaServers>
-            // wrapper, which needs descending into (via the next bare
-            // readNextStartElement()) rather than skipping past.
-            continue;
-        }
-
-        const QXmlStreamAttributes    attrs = reader.attributes();
-        const QString                 udn   = attrs.value(QStringLiteral("UDN")).toString();
+        const QString                 udn   = serviceNode.attr("UDN");
         const QRegularExpressionMatch match = kUdnPattern.match(udn);
         if (match.hasMatch())
         {
             const int     serviceId = match.captured(1).toInt();
-            QString       username  = attrs.value(QStringLiteral("Username0")).toString();
-            const QString password  = attrs.value(QStringLiteral("Password0")).toString();
-            const QString token     = attrs.value(QStringLiteral("Token0")).toString();
-            const QString key       = attrs.value(QStringLiteral("Key0")).toString();
-            const QString nickname  = attrs.value(QStringLiteral("Nickname0")).toString();
+            QString       username  = serviceNode.attr("Username0");
+            const QString password  = serviceNode.attr("Password0");
+            const QString token     = serviceNode.attr("Token0");
+            const QString key       = serviceNode.attr("Key0");
+            const QString nickname  = serviceNode.attr("Nickname0");
 
             // The UDN suffix is only a real fallback username for the
             // legacy "SA_RINCON<id>_<username>" shape; on a token-only
@@ -238,8 +228,6 @@ QList<InstalledService> ThirdPartyMediaServers::parse(const QString &householdId
                 services.append(service);
             }
         }
-
-        reader.skipCurrentElement();
     }
 
     QLOG() << "ThirdPartyMediaServersX: parsed" << services.size() << "installed service(s)";
