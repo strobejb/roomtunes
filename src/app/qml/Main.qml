@@ -223,14 +223,21 @@ ApplicationWindow {
                     id: titleBar
                     Layout.fillWidth: true
                     appWindow: window
-                    // The "Zones" column isn't as wide as "Browse", so the
-                    // Now Playing column (nowPlayingColumn) isn't centered
-                    // in the window either -- center the title over it
-                    // specifically rather than over the whole title bar.
-                    centerX: nowPlayingColumn.mapToItem(titleBar, nowPlayingColumn.width / 2, 0).x
+                    // In the 3-column layout, center over Now Playing. Once
+                    // Zones folds away for the compact 2-column layout, use
+                    // the window midpoint instead.
+                    // Keep ancestor position changes explicit here:
+                    // mapToItem() returns the right coordinate, but the
+                    // binding does not reliably re-run when the capped
+                    // content row is re-centered in a very wide window.
+                    centerX: !zonesColumn.visible
+                             ? width / 2
+                             : contentRow.x - titleBar.x
+                               + nowPlayingColumn.x + nowPlayingColumn.width / 2
                 }
 
                 RowLayout {
+                    id: contentRow
                     // fillWidth still grows normally up to maxContentWidth,
                     // then AlignHCenter takes over -- once every column
                     // below is at its own individual cap, this row's own
