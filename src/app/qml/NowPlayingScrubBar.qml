@@ -9,7 +9,9 @@ Item {
     id: root
 
     property var zone // ZonePlayer* -- null when no zone is selected
+    property var track: null
     property color contrastColor: "#212121"
+    property int stationHorizontalAlignment: Text.AlignHCenter
     // True while NowPlayingPanel.qml's volume pill is expanded -- the
     // scrub bar's own content hides rather than being fought over the
     // same screen space in NowPlayingWide.qml's layout (where the volume
@@ -22,6 +24,24 @@ Item {
 
     readonly property int durationSeconds: root.zone ? root.zone.durationSeconds : 0
     readonly property int positionSeconds: root.zone ? root.zone.positionSeconds : 0
+    readonly property string trackUri: root.track && root.track.uri ? String(root.track.uri).toLowerCase() : ""
+    readonly property string trackClass: root.track && root.track.upnpClass ? String(root.track.upnpClass) : ""
+    readonly property bool isDirectStream: trackClass === "object.item.audioItem.audioBroadcast"
+                                           || trackClass.endsWith(".audioBroadcast")
+                                           || trackUri.indexOf("x-sonosapi-stream:") === 0
+                                           || trackUri.indexOf("x-sonosapi-radio:") === 0
+                                           || trackUri.indexOf("x-sonosapi-hls:") === 0
+                                           || trackUri.indexOf("x-rincon-mp3radio:") === 0
+                                           || trackUri.indexOf("x-rincon-stream:") === 0
+                                           || trackUri.indexOf("x-sonos-htastream:") === 0
+    readonly property string stationText: {
+        if (!root.track)
+            return ""
+        if (root.track.album)
+            return root.track.album
+        return ""
+    }
+    readonly property string stationImageUrl: root.track && root.track.stationImageUrl ? root.track.stationImageUrl : ""
     readonly property real liveRatio:
         durationSeconds > 0 ? Math.max(0, Math.min(1, positionSeconds / durationSeconds)) : 0
 
@@ -46,8 +66,8 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 12
-        opacity: root.hideForVolume ? 0 : 1
-        enabled: !root.hideForVolume
+        opacity: root.hideForVolume || root.isDirectStream ? 0 : 1
+        enabled: !root.hideForVolume && !root.isDirectStream
 
         Rectangle {
             id: scrubTrack
@@ -120,7 +140,7 @@ Item {
         text: root.formatPosition(root.displaySeconds)
         font.pixelSize: 11
         color: root.contrastColor
-        opacity: root.hideForVolume ? 0 : 0.55
+        opacity: root.hideForVolume || root.isDirectStream ? 0 : 0.55
     }
 
     Text {
@@ -130,6 +150,41 @@ Item {
         text: root.formatPosition(root.durationSeconds)
         font.pixelSize: 11
         color: root.contrastColor
-        opacity: root.hideForVolume ? 0 : 0.55
+        opacity: root.hideForVolume || root.isDirectStream ? 0 : 0.55
+    }
+
+    Item {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        opacity: root.hideForVolume || !root.isDirectStream ? 0 : 0.65
+        height: 18
+
+        Row {
+            spacing: 6
+            height: 18
+            width: Math.min(implicitWidth, parent.width)
+            x: root.stationHorizontalAlignment === Text.AlignLeft ? 0 : (parent.width - width) / 2
+            y: (parent.height - height) / 2
+
+            RoundedImage {
+                id: stationLogo
+                anchors.verticalCenter: parent.verticalCenter
+                width: 16
+                height: 16
+                radius: 3
+                source: root.stationImageUrl
+                visible: root.stationImageUrl !== "" && status === RoundedImage.Ready
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(implicitWidth, root.width - (stationLogo.visible ? stationLogo.width + parent.spacing : 0))
+                text: root.stationText
+                font.pixelSize: 12
+                color: root.contrastColor
+                elide: Text.ElideRight
+            }
+        }
     }
 }

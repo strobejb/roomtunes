@@ -165,6 +165,7 @@ class Household : public QObject
     void        fetchServiceDeviceSerial();
     void        onServiceDeviceSerialFetched(const QString &serial);
     void        decodeInstalledServicesWhenReady();
+    void        installServiceIconResolver(ZonePlayer *zone);
     void        rebuildMusicServices();
     void        updateMusicServicesReady();
     void        logServiceMap() const;

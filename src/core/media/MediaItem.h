@@ -31,6 +31,7 @@ class MediaItem : public QObject
     Q_PROPERTY(QString upnpClass CONSTANT READ upnpClass)
     Q_PROPERTY(QString desc CONSTANT READ desc)
     Q_PROPERTY(QString imageUrl CONSTANT READ imageUrl)
+    Q_PROPERTY(QString stationImageUrl CONSTANT READ stationImageUrl)
     Q_PROPERTY(bool container CONSTANT READ isContainer)
     Q_PROPERTY(bool playable CONSTANT READ isPlayable)
     Q_PROPERTY(QString rating READ rating NOTIFY ratingChanged)
@@ -51,10 +52,10 @@ class MediaItem : public QObject
     MediaItem(const QString &id, const QString &parentId, const QString &title, const QString &artist,
               const QString &album, const QString &duration, const QString &uri, const QString &protocolInfo,
               const QString &upnpClass, const QString &desc, const QString &imageUrl, bool container,
-              QObject *parent = nullptr)
+              QObject *parent = nullptr, const QString &stationImageUrl = QString())
         : QObject(parent), m_id(id), m_parentId(parentId), m_title(title), m_artist(artist), m_album(album),
           m_duration(duration), m_uri(uri), m_protocolInfo(protocolInfo), m_upnpClass(upnpClass), m_desc(desc),
-          m_imageUrl(imageUrl), m_container(container)
+          m_imageUrl(imageUrl), m_stationImageUrl(stationImageUrl), m_container(container)
     {
     }
 
@@ -119,6 +120,11 @@ class MediaItem : public QObject
         return m_imageUrl;
     }
 
+    QString stationImageUrl() const
+    {
+        return m_stationImageUrl;
+    }
+
     bool isContainer() const
     {
         return m_container;
@@ -143,6 +149,7 @@ class MediaItem : public QObject
             {QStringLiteral("artist"), m_artist},
             {QStringLiteral("album"), m_album},
             {QStringLiteral("imageUrl"), m_imageUrl},
+            {QStringLiteral("stationImageUrl"), m_stationImageUrl},
             {QStringLiteral("uri"), m_uri},
             {QStringLiteral("protocolInfo"), m_protocolInfo},
             {QStringLiteral("upnpClass"), m_upnpClass},
@@ -180,6 +187,7 @@ class MediaItem : public QObject
     QString m_upnpClass;
     QString m_desc;
     QString m_imageUrl;
+    QString m_stationImageUrl;
     bool    m_container = false;
     QString m_rating;
 };

@@ -113,6 +113,7 @@ ColumnLayout {
             Layout.topMargin: 6
             visible: root.track !== null
             zone: root.zone
+            track: root.track
             contrastColor: root.contrastColor
         }
     }

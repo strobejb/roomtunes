@@ -141,13 +141,13 @@ class ZonePlayer : public QObject
         return m_features;
     }
 
-    void        setDeviceDescriptionDetails(const QString &displayName, const QString &displayVersion,
-                                            const QString &softwareVersion, const QString &zoneType,
-                                            const QStringList &features);
-    void        setDeviceServices(const QSet<QString> &services);
-    bool        hasDeviceService(const QString &serviceName) const;
-    QStringList deviceServices() const;
-    bool        supportsLineInSource() const;
+    void         setDeviceDescriptionDetails(const QString &displayName, const QString &displayVersion,
+                                             const QString &softwareVersion, const QString &zoneType,
+                                             const QStringList &features);
+    void         setDeviceServices(const QSet<QString> &services);
+    bool         hasDeviceService(const QString &serviceName) const;
+    QStringList  deviceServices() const;
+    bool         supportsLineInSource() const;
     QVariantList sourceItems() const;
 
     const QString &serialNumber() const
@@ -308,6 +308,8 @@ class ZonePlayer : public QObject
         return m_systemProperties;
     }
 
+    void setServiceIconResolver(std::function<QString(int)> resolver);
+
     // transport / queue
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
@@ -419,15 +421,16 @@ class ZonePlayer : public QObject
     void sonosFavouriteStatus(bool isFavourite, const QString &objectId);
 
   private:
-    void setPlayState(PlayState state);
-    void setPlayMode(const QString &playMode);
-    void setCrossfadeState(bool enabled, bool known = true);
-    void setCurrentTrack(MediaItem *track);
-    void checkCurrentTrackFavouriteStatus();
-    void refreshAccentColor(const QString &imageUrl);
-    void refreshPositionInfo();
-    void setPosition(int positionSeconds, int durationSeconds);
-    void playQueueTrackInternal(int trackNumber, const QVariantMap &selectedItem = {});
+    void    setPlayState(PlayState state);
+    void    setPlayMode(const QString &playMode);
+    void    setCrossfadeState(bool enabled, bool known = true);
+    void    setCurrentTrack(MediaItem *track);
+    void    checkCurrentTrackFavouriteStatus();
+    void    refreshAccentColor(const QString &imageUrl);
+    void    refreshPositionInfo();
+    void    setPosition(int positionSeconds, int durationSeconds);
+    void    playQueueTrackInternal(int trackNumber, const QVariantMap &selectedItem = {});
+    QString serviceIconForMetadata(const DidlItem &item) const;
 
   private:
     QNetworkAccessManager *m_netMgr;
@@ -449,21 +452,22 @@ class ZonePlayer : public QObject
     bool          m_validZoneTopology = false;
     bool          m_ready             = false;
 
-    PlayState  m_playState        = PlayState::Stopped;
-    QString    m_playMode         = QStringLiteral("NORMAL");
-    bool       m_crossfadeEnabled = false;
-    bool       m_crossfadeKnown   = false;
-    int        m_volume           = 0;
-    bool       m_volumeKnown      = false;
-    bool       m_muted            = false;
-    bool       m_muteKnown        = false;
-    MediaItem  *m_currentTrack = nullptr;
-    QColor      m_accentColor;
-    QString     m_accentColorRequestUrl; // guards against a stale reply landing after currentTrack changed again
-    QString     m_tvAudioInfo;
-    int        m_positionSeconds    = 0;
-    int        m_durationSeconds    = 0;
-    int        m_currentTrackNumber = 0;
+    PlayState                   m_playState        = PlayState::Stopped;
+    QString                     m_playMode         = QStringLiteral("NORMAL");
+    bool                        m_crossfadeEnabled = false;
+    bool                        m_crossfadeKnown   = false;
+    std::function<QString(int)> m_serviceIconResolver;
+    int                         m_volume       = 0;
+    bool                        m_volumeKnown  = false;
+    bool                        m_muted        = false;
+    bool                        m_muteKnown    = false;
+    MediaItem                  *m_currentTrack = nullptr;
+    QColor                      m_accentColor;
+    QString m_accentColorRequestUrl; // guards against a stale reply landing after currentTrack changed again
+    QString m_tvAudioInfo;
+    int     m_positionSeconds    = 0;
+    int     m_durationSeconds    = 0;
+    int     m_currentTrackNumber = 0;
 
     AVTransport       m_avTransport;
     RenderingControl  m_renderingControl;

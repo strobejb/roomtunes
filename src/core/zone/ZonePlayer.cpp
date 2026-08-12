@@ -69,28 +69,14 @@ bool isLineInStreamUri(const QString &uri)
 
 bool isRadioStreamUri(const QString &uri)
 {
-    return uri.startsWith(QStringLiteral("x-sonosapi-stream:")) ||
-           uri.startsWith(QStringLiteral("x-sonosapi-hls:")) ||
-           uri.startsWith(QStringLiteral("x-rincon-mp3radio:")) ||
-           uri.startsWith(QStringLiteral("x-sonosapi-radio:"));
+    return uri.startsWith(QStringLiteral("x-sonosapi-stream:")) || uri.startsWith(QStringLiteral("x-sonosapi-hls:")) ||
+           uri.startsWith(QStringLiteral("x-rincon-mp3radio:")) || uri.startsWith(QStringLiteral("x-sonosapi-radio:"));
 }
 
 bool isUriLikeTitle(const QString &title)
 {
-    return title.startsWith(QStringLiteral("x-sonosapi-")) ||
-           title.startsWith(QStringLiteral("x-rincon-mp3radio:")) ||
-           title.startsWith(QStringLiteral("http://")) ||
-           title.startsWith(QStringLiteral("https://"));
-}
-
-QString comparableUri(const QString &uri)
-{
-    return QUrl::fromPercentEncoding(uri.toUtf8());
-}
-
-bool sameUri(const QString &a, const QString &b)
-{
-    return comparableUri(a) == comparableUri(b);
+    return title.startsWith(QStringLiteral("x-sonosapi-")) || title.startsWith(QStringLiteral("x-rincon-mp3radio:")) ||
+           title.startsWith(QStringLiteral("http://")) || title.startsWith(QStringLiteral("https://"));
 }
 
 QString trimmedRadioShow(QString radioShow)
@@ -99,7 +85,8 @@ QString trimmedRadioShow(QString radioShow)
     return radioShow.remove(suffixPattern);
 }
 
-void radioNowPlayingFields(const DidlItem &didl, const QString &fallbackUri, QString *title, QString *artist)
+void radioNowPlayingFields(const DidlItem &didl, const QString &fallbackUri, QString *title, QString *artist,
+                           QString *stationName)
 {
     QString streamContent = didl.streamContent;
     QString radioShow     = trimmedRadioShow(didl.radioShowMd);
@@ -128,6 +115,8 @@ void radioNowPlayingFields(const DidlItem &didl, const QString &fallbackUri, QSt
     *artist = station;
     if (!streamContent.isEmpty() && !radioShow.isEmpty())
         *artist = radioShow;
+
+    *stationName = QString();
 }
 
 QVariantMap sourceItem(const QString &kind, const QString &id, const QString &title, const QString &imageUrl,
@@ -194,17 +183,26 @@ QString tvAudioInfoFromStreamCode(const QString &streamInfo)
     // unknown firmware values fall back to the URI input name instead.
     switch (code)
     {
-    case 19:        return QStringLiteral("SPDIF");
-    case 22:        return QStringLiteral("Silence");
-    case 33554434:  return QStringLiteral("Stereo PCM 2.0");
-    case 33554488:  return QStringLiteral("Dolby Digital 2.0");
-    case 84934713:  return QStringLiteral("Dolby Digital 5.1");
-    case 84934714:  return QStringLiteral("Dolby Digital Plus 5.1");
+    case 19:
+        return QStringLiteral("SPDIF");
+    case 22:
+        return QStringLiteral("Silence");
+    case 33554434:
+        return QStringLiteral("Stereo PCM 2.0");
+    case 33554488:
+        return QStringLiteral("Dolby Digital 2.0");
+    case 84934713:
+        return QStringLiteral("Dolby Digital 5.1");
+    case 84934714:
+        return QStringLiteral("Dolby Digital Plus 5.1");
     case 32:
-    case 84934721:  return QStringLiteral("DTS");
+    case 84934721:
+        return QStringLiteral("DTS");
     case 59:
-    case 63:        return QStringLiteral("Dolby Atmos");
-    default:        return {};
+    case 63:
+        return QStringLiteral("Dolby Atmos");
+    default:
+        return {};
     }
 }
 
@@ -252,13 +250,17 @@ QString playModeFor(bool shuffleEnabled, int repeatMode)
 {
     if (shuffleEnabled)
     {
-        if (repeatMode == 2)            return QStringLiteral("SHUFFLE_REPEAT_ONE");
-        if (repeatMode == 1)            return QStringLiteral("SHUFFLE");
+        if (repeatMode == 2)
+            return QStringLiteral("SHUFFLE_REPEAT_ONE");
+        if (repeatMode == 1)
+            return QStringLiteral("SHUFFLE");
         return QStringLiteral("SHUFFLE_NOREPEAT");
     }
 
-    if (repeatMode == 2)        return QStringLiteral("REPEAT_ONE");
-    if (repeatMode == 1)        return QStringLiteral("REPEAT_ALL");
+    if (repeatMode == 2)
+        return QStringLiteral("REPEAT_ONE");
+    if (repeatMode == 1)
+        return QStringLiteral("REPEAT_ALL");
     return QStringLiteral("NORMAL");
 }
 
@@ -273,6 +275,11 @@ ZonePlayer::ZonePlayer(QNetworkAccessManager *netMgr, const QString &deviceIp, c
           return m_roomName;
       })
 {
+}
+
+void ZonePlayer::setServiceIconResolver(std::function<QString(int)> resolver)
+{
+    m_serviceIconResolver = std::move(resolver);
 }
 
 void ZonePlayer::setRoomName(const QString &name)
@@ -417,11 +424,15 @@ QString ZonePlayer::playStateText() const
 {
     switch (m_playState)
     {
-    case PlayState::Playing:        return QStringLiteral("Playing");
-    case PlayState::Paused:         return QStringLiteral("Paused");
-    case PlayState::Transitioning:  return QStringLiteral("Buffering");
+    case PlayState::Playing:
+        return QStringLiteral("Playing");
+    case PlayState::Paused:
+        return QStringLiteral("Paused");
+    case PlayState::Transitioning:
+        return QStringLiteral("Buffering");
     case PlayState::Stopped:
-    default:                        return QStringLiteral("Stopped");
+    default:
+        return QStringLiteral("Stopped");
     }
 }
 
@@ -995,10 +1006,14 @@ void ZonePlayer::handleAVTransportEvent(const QByteArray &body)
 {
     const AvTransportTrackSnapshot snapshot = avTransportTrackSnapshot(body);
 
-    if (snapshot.transportState == QStringLiteral("PLAYING"))               setPlayState(PlayState::Playing);
-    else if (snapshot.transportState == QStringLiteral("PAUSED_PLAYBACK"))  setPlayState(PlayState::Paused);
-    else if (snapshot.transportState == QStringLiteral("TRANSITIONING"))    setPlayState(PlayState::Transitioning);
-    else if (!snapshot.transportState.isEmpty())                            setPlayState(PlayState::Stopped);
+    if (snapshot.transportState == QStringLiteral("PLAYING"))
+        setPlayState(PlayState::Playing);
+    else if (snapshot.transportState == QStringLiteral("PAUSED_PLAYBACK"))
+        setPlayState(PlayState::Paused);
+    else if (snapshot.transportState == QStringLiteral("TRANSITIONING"))
+        setPlayState(PlayState::Transitioning);
+    else if (!snapshot.transportState.isEmpty())
+        setPlayState(PlayState::Stopped);
 
     setPlayMode(snapshot.playMode);
 
@@ -1035,10 +1050,14 @@ void ZonePlayer::refreshTransportState()
         if (!ok)
             return;
 
-        if (state == QStringLiteral("PLAYING"))              setPlayState(PlayState::Playing);
-        else if (state == QStringLiteral("PAUSED_PLAYBACK")) setPlayState(PlayState::Paused);
-        else if (state == QStringLiteral("TRANSITIONING"))   setPlayState(PlayState::Transitioning);
-        else                                                 setPlayState(PlayState::Stopped);
+        if (state == QStringLiteral("PLAYING"))
+            setPlayState(PlayState::Playing);
+        else if (state == QStringLiteral("PAUSED_PLAYBACK"))
+            setPlayState(PlayState::Paused);
+        else if (state == QStringLiteral("TRANSITIONING"))
+            setPlayState(PlayState::Transitioning);
+        else
+            setPlayState(PlayState::Stopped);
     });
 
     m_control.getTransportSettings(this, [this](bool ok, const QString &playMode) {
@@ -1082,55 +1101,63 @@ void ZonePlayer::refreshPositionInfo()
         const QString sourceUri = info.trackUri.isEmpty() ? didl.res : info.trackUri;
         QString       sourceTitle;
         QString       sourceArtist;
+        QString       sourceAlbum;
         QString       sourceImageUrl;
+        QString       sourceStationImageUrl;
 
         auto applySourceTrack = [this, sourceUri, info](const QString &title, const QString &artist,
-                                                        const QString &imageUrl, const DidlItem &sourceMetadata) {
+                                                        const QString &album, const QString &imageUrl,
+                                                        const QString  &stationImageUrl,
+                                                        const DidlItem &sourceMetadata) {
             if (!m_currentTrack || m_currentTrack->id() != sourceUri || m_currentTrack->uri() != sourceUri ||
                 m_currentTrack->title() != title || m_currentTrack->artist() != artist ||
-                m_currentTrack->imageUrl() != imageUrl)
+                m_currentTrack->album() != album || m_currentTrack->imageUrl() != imageUrl ||
+                m_currentTrack->stationImageUrl() != stationImageUrl)
             {
-                setCurrentTrack(new MediaItem(sourceUri, QString(), title, artist, QString(), QString(), sourceUri,
+                setCurrentTrack(new MediaItem(sourceUri, QString(), title, artist, album, QString(), sourceUri,
                                               sourceMetadata.protocolInfo, sourceMetadata.upnpClass,
-                                              sourceMetadata.desc, imageUrl, false, this));
+                                              sourceMetadata.desc, imageUrl, false, this, stationImageUrl));
             }
             setPosition(parseUpnpTime(info.relTime), parseUpnpTime(info.trackDuration));
         };
 
         if (isRadioStreamUri(sourceUri))
         {
-            radioNowPlayingFields(didl, sourceUri, &sourceTitle, &sourceArtist);
+            radioNowPlayingFields(didl, sourceUri, &sourceTitle, &sourceArtist, &sourceAlbum);
             sourceImageUrl = didl.albumArtUri;
 
-            if (isUriLikeTitle(sourceTitle) || sourceImageUrl.isEmpty())
-            {
-                m_control.getMediaInfo(this, [this, sourceUri, sourceTitle, sourceArtist, sourceImageUrl, didl,
-                                              applySourceTrack](bool ok, const SonosZoneControl::MediaInfo &media) mutable {
-                    if (ok && (media.currentUri.isEmpty() || sameUri(media.currentUri, sourceUri)))
+            m_control.getMediaInfo(this, [this, sourceTitle, sourceArtist, sourceAlbum, sourceImageUrl,
+                                          sourceStationImageUrl, didl,
+                                          applySourceTrack](bool ok, const SonosZoneControl::MediaInfo &media) mutable {
+                if (ok)
+                {
+                    const QList<DidlItem> mediaItems = Didl::parseItems(media.currentUriMetaData.toUtf8());
+                    if (!mediaItems.isEmpty())
                     {
-                        const QList<DidlItem> mediaItems = Didl::parseItems(media.currentUriMetaData.toUtf8());
-                        if (!mediaItems.isEmpty())
-                        {
-                            DidlItem fallback = mediaItems.first();
-                            if (!fallback.albumArtUri.isEmpty() && fallback.albumArtUri.startsWith(QLatin1Char('/')))
-                                fallback.albumArtUri = baseUrl().chopped(1) + fallback.albumArtUri;
+                        DidlItem fallback = mediaItems.first();
+                        if (!fallback.albumArtUri.isEmpty() && fallback.albumArtUri.startsWith(QLatin1Char('/')))
+                            fallback.albumArtUri = baseUrl().chopped(1) + fallback.albumArtUri;
 
-                            if (!fallback.title.isEmpty() && !isUriLikeTitle(fallback.title) &&
-                                isUriLikeTitle(sourceTitle))
-                                sourceTitle = fallback.title;
-                            if (sourceImageUrl.isEmpty())
-                                sourceImageUrl = fallback.albumArtUri;
-                        }
+                        if (!fallback.title.isEmpty() && !isUriLikeTitle(fallback.title) && isUriLikeTitle(sourceTitle))
+                            sourceTitle = fallback.title;
+                        if (!fallback.title.isEmpty() && !isUriLikeTitle(fallback.title))
+                            sourceAlbum = fallback.title;
+                        if (!fallback.albumArtUri.isEmpty())
+                            sourceStationImageUrl = fallback.albumArtUri;
+                        if (sourceStationImageUrl.isEmpty())
+                            sourceStationImageUrl = serviceIconForMetadata(fallback);
+                        if (sourceImageUrl.isEmpty())
+                            sourceImageUrl = sourceStationImageUrl;
                     }
+                }
 
-                    if (isUriLikeTitle(sourceTitle))
-                        sourceTitle = tr("Radio");
-                    if (isUriLikeTitle(sourceArtist))
-                        sourceArtist.clear();
-                    applySourceTrack(sourceTitle, sourceArtist, sourceImageUrl, didl);
-                });
-                return;
-            }
+                if (isUriLikeTitle(sourceTitle))
+                    sourceTitle = tr("Radio");
+                if (isUriLikeTitle(sourceArtist))
+                    sourceArtist.clear();
+                applySourceTrack(sourceTitle, sourceArtist, sourceAlbum, sourceImageUrl, sourceStationImageUrl, didl);
+            });
+            return;
         }
         else if (isTvStreamUri(sourceUri))
         {
@@ -1149,7 +1176,7 @@ void ZonePlayer::refreshPositionInfo()
 
         if (!sourceTitle.isEmpty())
         {
-            applySourceTrack(sourceTitle, sourceArtist, sourceImageUrl, didl);
+            applySourceTrack(sourceTitle, sourceArtist, sourceAlbum, sourceImageUrl, sourceStationImageUrl, didl);
             return;
         }
 
@@ -1163,6 +1190,14 @@ void ZonePlayer::refreshPositionInfo()
 
         setPosition(parseUpnpTime(info.relTime), parseUpnpTime(info.trackDuration));
     });
+}
+
+QString ZonePlayer::serviceIconForMetadata(const DidlItem &item) const
+{
+    if (!m_serviceIconResolver || item.serviceId <= 0)
+        return QString();
+
+    return m_serviceIconResolver(item.serviceId);
 }
 
 void ZonePlayer::advancePositionTick()

@@ -79,6 +79,7 @@ Household::Household(QObject *parent) : QObject(parent), m_discovery(&m_netMgr, 
     connect(&m_discovery, &ZoneDiscovery::thirdPartyMediaServersXReceived, this,
             &Household::onThirdPartyMediaServersXReceived);
     connect(&m_networkWatcher, &NetworkWatcher::networkChanged, this, &Household::onNetworkChanged);
+    connect(this, &Household::zoneReady, this, &Household::installServiceIconResolver);
 }
 
 MusicService *Household::libraryService() const
@@ -476,6 +477,18 @@ void Household::onServiceDeviceSerialFetched(const QString &serial)
     updateMusicServicesReady();
 }
 
+void Household::installServiceIconResolver(ZonePlayer *zone)
+{
+    if (!zone)
+        return;
+
+    zone->setServiceIconResolver([this](int serviceId) {
+        if (const MusicService *service = serviceById(serviceId))
+            return service->iconSource();
+        return QString();
+    });
+}
+
 void Household::rebuildMusicServices()
 {
     // Created lazily, the first time any zone is reachable -- deliberately
@@ -520,7 +533,7 @@ void Household::rebuildMusicServices()
         // catalog services alike -- by the household's own serviceId
         // directly. Looking icons up by smapiId (the old scheme) silently
         // found nothing for every catalog-resolved service.
-        service.iconUrl    = m_serviceIcons.value(service.serviceId);
+        service.iconUrl = m_serviceIcons.value(service.serviceId);
 
         // loginName mirrors the UDN suffix Sonos itself uses: a real
         // username for UserId-auth services, or the synthetic
@@ -585,6 +598,9 @@ void Household::rebuildMusicServices()
     }
 
     m_services = rebuilt;
+    for (ZonePlayer *zone : m_discovery.zones())
+        installServiceIconResolver(zone);
+
     updateMusicServicesReady();
     QLOG() << "rebuildMusicServices:" << m_services.size()
            << "service(s) total (library=" << (m_libraryService != nullptr) << ", smapi=" << m_smapiServicesByKey.size()
