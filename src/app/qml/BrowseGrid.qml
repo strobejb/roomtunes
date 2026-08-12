@@ -4,17 +4,16 @@ import QtQuick
 // Shared sizing policy for the Browse column's icon-tile grids
 // (BrowseHome.qml's Recently Played/Favourites/Your Services sections).
 // The column's own outer width (see idealWidth below, read by Main.qml's
-// browseColumn) tracks window.width continuously/proportionally, exactly
-// like zonesColumn's UiScale.factor -- but unlike Zones (which only ever
-// shrinks from its 280 baseline), Browse can also grow past its baseline
-// in a wide window, since more room genuinely helps a tile grid.
+// browseColumn) aims at a proportion of window.width, exactly like
+// zonesColumn's UiScale.factor -- but unlike Zones (which only ever shrinks
+// from its 280 baseline), Browse can also grow past its baseline, since more
+// whole tile columns genuinely help a tile grid.
 //
-// The number of tile columns actually shown is a *step* function of
-// that width, not continuous -- 3 minimum, stepping up to 4/5/6/... only
-// once there's room for a whole extra column at minTileWidth. Below
-// that threshold tiles simply grow to fill the newly available space at
-// the current column count, the same way a file-explorer icon view or
-// photo grid reflows: width changes smoothly, column count jumps.
+// The outer width and tile count are both snapped: 3 minimum, stepping up
+// to 4/5/6 only once the proportional target has room for another whole
+// tile. Tiles keep a fixed width; spare window space goes to the other
+// columns or the centered outer margins instead of stretching Browse's icon
+// spacing.
 QtObject {
     // Main.qml binds this once, off the same window-width signal that
     // drives UiScale.windowWidth.
@@ -25,47 +24,56 @@ QtObject {
     // no visual jump for a user who's never resized the window.
     readonly property real widthFraction: 320 / 1100
 
-    // 64 matches the tile width today's hardcoded 4-column grid already
-    // produces at the default window size (see columnsFor's own comment)
-    // -- so column count at the default size resolves to 4, unchanged.
-    readonly property int minTileWidth: 64
+    // Keeps the default 1100px window at 4 columns: 4*66 + 3*8 plus the
+    // BrowseStack side margins below resolves to 318px, close to the old
+    // continuous 320px target.
+    readonly property int tileWidth: 66
     readonly property int columnSpacing: 8
     readonly property int minColumns: 3
+    readonly property int maxColumns: 6
 
-    // Estimated inset between the Browse column's own outer width (see
-    // idealWidth below) and the actual inner width its tile grids
-    // resolve to -- BrowseStack's own anchors.margins: 20 in Main.qml,
-    // both sides. Only used for minimumColumnWidth/maxWidth's estimates
-    // below; the grids themselves compute their real column count from
-    // their own actual measured width (sectionsColumn.width in
-    // BrowseHome.qml), not this estimate, so it never needs to be exact.
-    readonly property int horizontalPadding: 40
+    // Inset between the Browse column's own outer width (see idealWidth
+    // below) and the actual inner width its tile grids resolve to --
+    // BrowseStack's 15px left/right margins in Main.qml.
+    readonly property int horizontalPadding: 30
+
+    function innerWidthFor(columns) {
+        return columns * tileWidth + (columns - 1) * columnSpacing
+    }
+
+    function outerWidthFor(columns) {
+        return innerWidthFor(columns) + horizontalPadding
+    }
+
+    function columnsForTarget(targetWidth) {
+        return Math.max(minColumns,
+                        Math.min(maxColumns,
+                                 Math.floor((targetWidth - horizontalPadding + columnSpacing)
+                                            / (tileWidth + columnSpacing))))
+    }
 
     // Caps how far Browse grows in a very wide window -- past 6 columns
-    // a tile grid stops reading as "usefully more content" and starts
-    // reading as "oddly sparse", so growth just stops here instead
-    // (Main.qml centers the whole 3-column group once every column has
-    // hit its own cap like this one -- see its own maxContentWidth).
-    readonly property int maxColumns: 6
-    readonly property int maxWidth: maxColumns * minTileWidth + (maxColumns - 1) * columnSpacing + horizontalPadding
+    // a tile grid stops reading as "usefully more content".
+    readonly property int maxWidth: outerWidthFor(maxColumns)
 
-    readonly property int idealWidth: Math.min(maxWidth, Math.round(windowWidth * widthFraction))
+    readonly property int idealColumns: columnsForTarget(Math.round(windowWidth * widthFraction))
+    readonly property int idealWidth: outerWidthFor(idealColumns)
 
     // The largest column count whose tiles would each be at least
-    // minTileWidth wide within availableWidth -- derived the same way
+    // tileWidth wide within availableWidth -- derived the same way
     // BrowseHome.qml's own (now-removed) per-grid tileWidth math always
     // worked backwards from a fixed column count, just solved for
-    // columns instead: N tiles at minTileWidth with (N-1) gaps fit iff
-    // availableWidth >= N*minTileWidth + (N-1)*columnSpacing, i.e.
-    // N <= (availableWidth + columnSpacing) / (minTileWidth + columnSpacing).
+    // columns instead: N tiles at tileWidth with (N-1) gaps fit iff
+    // availableWidth >= N*tileWidth + (N-1)*columnSpacing, i.e.
+    // N <= (availableWidth + columnSpacing) / (tileWidth + columnSpacing).
     function columnsFor(availableWidth) {
         return Math.max(minColumns,
-                         Math.floor((availableWidth + columnSpacing) / (minTileWidth + columnSpacing)))
+                        Math.min(maxColumns,
+                                 Math.floor((availableWidth + columnSpacing) / (tileWidth + columnSpacing))))
     }
 
     // Main.qml's browseColumn Layout.minimumWidth -- never narrower than
-    // whatever minColumns needs at minTileWidth, so "no narrower than 3
+    // whatever minColumns needs at tileWidth, so "no narrower than 3
     // icons per row" holds even at the app's own narrowest window size.
-    readonly property int minimumColumnWidth:
-        minColumns * minTileWidth + (minColumns - 1) * columnSpacing + horizontalPadding
+    readonly property int minimumColumnWidth: outerWidthFor(minColumns)
 }

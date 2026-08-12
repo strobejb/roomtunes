@@ -238,26 +238,37 @@ ApplicationWindow {
 
                 RowLayout {
                     id: contentRow
-                    // fillWidth still grows normally up to maxContentWidth,
-                    // then AlignHCenter takes over -- once every column
-                    // below is at its own individual cap, this row's own
-                    // resolved width sits below the ColumnLayout's real
-                    // width, and alignment centers it there instead of
-                    // stretching further. Safe against the same
-                    // implicit-width-vs-real-width mixup NowPlayingCompact's
-                    // art centering hit (see its own comment) -- this
-                    // ColumnLayout's real width comes from anchors.fill on
-                    // the window itself, not from any child's implicit
-                    // size, so there's no wrong "implicit" width for
-                    // AlignHCenter to center against by mistake here.
+                    // Keep the inter-column gaps fixed. Browse snaps to
+                    // fixed tile-column widths, so the row itself must cap
+                    // to the actual visible column sum; otherwise leftover
+                    // width can sit inside the RowLayout and read as a
+                    // growing gap between Now Playing and Browse.
                     Layout.fillWidth: true
-                    Layout.maximumWidth: window.maxContentWidth
+                    Layout.maximumWidth: resolvedContentWidth
                     Layout.alignment: Qt.AlignHCenter
                     Layout.fillHeight: true
                     Layout.margins: 20
                     spacing: 20
                     readonly property int outerMargins: 40
                     readonly property int zonesPreferredWidth: Math.round(280 * UiScale.factor)
+                    readonly property int visibleGapWidth: zonesColumn.visible ? spacing * 2 : spacing
+                    readonly property int compactBrowsePreferredWidth:
+                        background.width - outerMargins - spacing - nowPlaying.minimumCompactWidth
+                        >= BrowseGrid.outerWidthFor(4)
+                            ? BrowseGrid.outerWidthFor(4)
+                            : BrowseGrid.minimumColumnWidth
+                    readonly property int browsePreferredWidth:
+                        zonesColumn.visible ? BrowseGrid.idealWidth : compactBrowsePreferredWidth
+                    readonly property int availableNowPlayingWidth:
+                        background.width - outerMargins - visibleGapWidth
+                        - (zonesColumn.visible ? zonesPreferredWidth : 0)
+                        - browsePreferredWidth
+                    readonly property int nowPlayingPreferredWidth:
+                        Math.min(window.nowPlayingMaxWidth,
+                                 Math.max(nowPlaying.minimumCompactWidth, availableNowPlayingWidth))
+                    readonly property int resolvedContentWidth:
+                        (zonesColumn.visible ? zonesPreferredWidth + spacing : 0)
+                        + nowPlayingPreferredWidth + spacing + browsePreferredWidth
                     readonly property int wideLayoutRequiredWidth:
                         zonesPreferredWidth + nowPlaying.minimumCompactWidth + BrowseGrid.minimumColumnWidth
                         + 40 // two inter-column gaps while Zones is visible
@@ -295,7 +306,7 @@ ApplicationWindow {
                     // Same Item-not-Layout pattern as zonesColumn above.
                     Item {
                         id: nowPlayingColumn
-                        Layout.fillWidth: true
+                        Layout.preferredWidth: contentRow.nowPlayingPreferredWidth
                         Layout.fillHeight: true
                         // Protects NowPlayingCompact's transport controls
                         // from shrinking past nowPlaying.compactSizeFloor
@@ -403,8 +414,9 @@ ApplicationWindow {
                     // doesn't.
                     Item {
                         id: browseColumn
-                        Layout.preferredWidth: BrowseGrid.idealWidth
+                        Layout.preferredWidth: contentRow.browsePreferredWidth
                         Layout.minimumWidth: BrowseGrid.minimumColumnWidth
+                        Layout.maximumWidth: contentRow.browsePreferredWidth
                         Layout.fillHeight: true
 
                         ColumnLayout {

@@ -6,11 +6,9 @@ import QtQuick.Layouts
 // initialItem instead of a plain vertical list of installed services.
 // Three horizontally-wrapping icon-tile sections (3-6+ per row --
 // BrowseGrid.columnsFor(), a step function of the Browse column's own
-// width, see BrowseGrid.qml and Main.qml's browseColumn), each capped
-// to its first 5 items (or, once this page itself gets too short for
-// two rows per section to fit comfortably, just its first row -- see
-// compactSections) with a header chevron pushing the full list: Recently
-// Played (this
+// width, see BrowseGrid.qml and Main.qml's browseColumn), each capped to
+// its first visible row with a header chevron pushing the full list:
+// Recently Played (this
 // app's own client-side history -- see RecentlyPlayedModel.h for why,
 // Sonos itself doesn't expose one), Sonos Favourites, then installed
 // music services. Services and Favourites both feed into the same
@@ -247,16 +245,6 @@ Item {
             clearSearchPill()
     }
 
-    // Below this, three sections each wrapping their up-to-5 items into
-    // 2 rows would need more vertical room than a short window actually
-    // has, forcing the Flickable below into constant scrolling just to
-    // see "Your Services" at all -- capped to a single row per section
-    // instead once height gets tight. root.height (not e.g. Main.qml's
-    // browseColumn) since this Item already sits fully sized within
-    // BrowseStack's own content area (StackView items fill available
-    // space, same as width), no threading-through needed.
-    readonly property bool compactSections: root.height < 550
-
     ColumnLayout {
         anchors.fill: parent
         spacing: 20
@@ -402,36 +390,12 @@ Item {
 
                     GridLayout {
                         id: recentlyPlayedGrid
-                        // Tiles exactly fill this row's available width,
-                        // not each tile's own (fixed) implicitWidth --
-                        // otherwise columns * BrowseTile.implicitWidth
-                        // plus gaps can exceed the panel's actual content
-                        // width and overflow past its edge instead of
-                        // being evenly distributed within it.
-                        //
-                        // Both derived from sectionsColumn.width (a
-                        // plain, top-down "width: parent.width" binding
-                        // with no dependency on any child's size), not
-                        // this GridLayout's *own* width -- binding a
-                        // tile's Layout.preferredWidth back to a width
-                        // that this same GridLayout's own layout pass
-                        // helps determine is a real circular dependency:
-                        // Qt Quick Layouts re-polishes on every geometry
-                        // change, so tileWidth changing the tiles' sizes
-                        // changes this GridLayout's content, which can
-                        // change its resolved width again, forever.
-                        // Confirmed via a live hang: CPU time climbing
-                        // continuously with "Not Responding" and nothing
-                        // rendering, immediately after this exact pattern
-                        // was introduced.
-                        //
                         // columnCount, not "columns" -- GridLayout already
                         // has a built-in columns property (the one actually
                         // assigned below), so a same-named custom property
                         // here would collide with it exactly like Item's
                         // built-in scale did in NowPlayingTransportControls.qml.
                         readonly property int columnCount: BrowseGrid.columnsFor(sectionsColumn.width)
-                        readonly property real tileWidth: (sectionsColumn.width - (columnCount - 1) * columnSpacing) / columnCount
                         Layout.fillWidth: true
                         columns: columnCount
                         columnSpacing: 8
@@ -442,8 +406,8 @@ Item {
                             model: recentlyPlayedModel
 
                             BrowseTile {
-                                visible: index < (root.compactSections ? recentlyPlayedGrid.columnCount : 5)
-                                Layout.preferredWidth: recentlyPlayedGrid.tileWidth
+                                visible: index < recentlyPlayedGrid.columnCount
+                                Layout.preferredWidth: BrowseGrid.tileWidth
                                 title: model.title
                                 imageUrl: model.imageUrl
                                 circularIcon: false
@@ -525,15 +489,9 @@ Item {
 
                     GridLayout {
                         id: favouritesGrid
-                        // sectionsColumn.width, not this GridLayout's own
-                        // width -- see recentlyPlayedGrid.tileWidth's
-                        // comment for why (a genuine circular layout
-                        // dependency, confirmed via a live hang).
-                        //
                         // columnCount, not "columns" -- see
                         // recentlyPlayedGrid's own comment for why.
                         readonly property int columnCount: BrowseGrid.columnsFor(sectionsColumn.width)
-                        readonly property real tileWidth: (sectionsColumn.width - (columnCount - 1) * columnSpacing) / columnCount
                         Layout.fillWidth: true
                         visible: !root.favouritesLoading && root.favouriteItems.length > 0
                         columns: columnCount
@@ -544,8 +502,8 @@ Item {
                             model: root.orderedFavourites
 
                             BrowseTile {
-                                visible: index < (root.compactSections ? favouritesGrid.columnCount : 5)
-                                Layout.preferredWidth: favouritesGrid.tileWidth
+                                visible: index < favouritesGrid.columnCount
+                                Layout.preferredWidth: BrowseGrid.tileWidth
                                 title: modelData.title
                                 imageUrl: modelData.imageUrl
                                 circularIcon: false
@@ -603,15 +561,9 @@ Item {
 
                     GridLayout {
                         id: servicesGrid
-                        // sectionsColumn.width, not this GridLayout's own
-                        // width -- see recentlyPlayedGrid.tileWidth's
-                        // comment for why (a genuine circular layout
-                        // dependency, confirmed via a live hang).
-                        //
                         // columnCount, not "columns" -- see
                         // recentlyPlayedGrid's own comment for why.
                         readonly property int columnCount: BrowseGrid.columnsFor(sectionsColumn.width)
-                        readonly property real tileWidth: (sectionsColumn.width - (columnCount - 1) * columnSpacing) / columnCount
                         Layout.fillWidth: true
                         columns: columnCount
                         columnSpacing: 8
@@ -622,14 +574,12 @@ Item {
                             model: musicServiceModel
 
                             BrowseTile {
-                                // Only the first 5 (or, once
-                                // compactSections kicks in, only the
-                                // first row) -- an invisible GridLayout
-                                // item skips its cell entirely rather
-                                // than reserving blank space, so this
+                                // Only the first visible row -- an invisible
+                                // GridLayout item skips its cell entirely
+                                // rather than reserving blank space, so this
                                 // doesn't leave a gap.
-                                visible: index < (root.compactSections ? servicesGrid.columnCount : 5)
-                                Layout.preferredWidth: servicesGrid.tileWidth
+                                visible: index < servicesGrid.columnCount
+                                Layout.preferredWidth: BrowseGrid.tileWidth
                                 title: model.item.title
                                 imageUrl: model.item.imageUrl
 
@@ -665,7 +615,6 @@ Item {
                     GridLayout {
                         id: sonosSourcesGrid
                         readonly property int columnCount: BrowseGrid.columnsFor(sectionsColumn.width)
-                        readonly property real tileWidth: (sectionsColumn.width - (columnCount - 1) * columnSpacing) / columnCount
                         Layout.fillWidth: true
                         columns: columnCount
                         columnSpacing: 8
@@ -675,8 +624,8 @@ Item {
                             model: root.orderedSonosSources
 
                             BrowseTile {
-                                visible: index < (root.compactSections ? sonosSourcesGrid.columnCount : 5)
-                                Layout.preferredWidth: sonosSourcesGrid.tileWidth
+                                visible: index < sonosSourcesGrid.columnCount
+                                Layout.preferredWidth: BrowseGrid.tileWidth
                                 title: modelData.title
                                 imageUrl: modelData.imageUrl
                                 circularIcon: false
