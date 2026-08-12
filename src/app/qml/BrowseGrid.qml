@@ -25,17 +25,19 @@ QtObject {
     readonly property real widthFraction: 320 / 1100
 
     // Keeps the default 1100px window at 4 columns: 4*66 + 3*8 plus the
-    // BrowseStack side margins below resolves to 318px, close to the old
-    // continuous 320px target.
+    // BrowseStack side margins and hover gutters below resolves to 330px,
+    // close to the old continuous 320px target.
     readonly property int tileWidth: 66
     readonly property int columnSpacing: 8
+    readonly property int tileHoverOutset: 6
     readonly property int minColumns: 3
     readonly property int maxColumns: 6
 
     // Inset between the Browse column's own outer width (see idealWidth
-    // below) and the actual inner width its tile grids resolve to --
-    // BrowseStack's 15px left/right margins in Main.qml.
-    readonly property int horizontalPadding: 30
+    // below) and the measured tile grid: BrowseStack's 15px left/right
+    // margins in Main.qml plus room for hover rectangles to bleed without
+    // clipping against the Flickable edges.
+    readonly property int horizontalPadding: 30 + tileHoverOutset * 2
 
     function innerWidthFor(columns) {
         return columns * tileWidth + (columns - 1) * columnSpacing
@@ -69,7 +71,8 @@ QtObject {
     function columnsFor(availableWidth) {
         return Math.max(minColumns,
                         Math.min(maxColumns,
-                                 Math.floor((availableWidth + columnSpacing) / (tileWidth + columnSpacing))))
+                                 Math.floor((availableWidth - tileHoverOutset * 2 + columnSpacing)
+                                            / (tileWidth + columnSpacing))))
     }
 
     // Main.qml's browseColumn Layout.minimumWidth -- never narrower than

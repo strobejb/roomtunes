@@ -217,6 +217,7 @@ Item {
                     (!!rowTrackUri && rowTrackUri === currentTrackUri)
                     || queueIdMatches(rowTrackId, currentTrackId)
                 readonly property bool rowHoverActive: mouseArea.containsMouse && !rowMenuButton.hovered
+                readonly property bool rowPressActive: rowHoverActive && mouseArea.pressed
 
                 function queueIdMatches(rowId, trackId) {
                     if (!rowId || !trackId)
@@ -236,9 +237,11 @@ Item {
                     width: parent.width + 16
                     radius: 10
                     antialiasing: true
-                    color: rowItem.rowHoverActive
-                           ? "#F5F5F5"
-                           : (rowItem.isCurrentQueueTrack && !rowMenuButton.hovered ? "#E0E0E0" : "transparent")
+                    color: rowItem.rowPressActive
+                           ? "#E8E8E8"
+                           : (rowItem.rowHoverActive
+                              ? "#F5F5F5"
+                              : (rowItem.isCurrentQueueTrack && !rowMenuButton.hovered ? "#E0E0E0" : "transparent"))
                 }
 
                 // Already-queued track -- Seek(TRACK_NR) + Play, no

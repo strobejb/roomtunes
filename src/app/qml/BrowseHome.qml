@@ -397,6 +397,8 @@ Item {
                         // built-in scale did in NowPlayingTransportControls.qml.
                         readonly property int columnCount: BrowseGrid.columnsFor(sectionsColumn.width)
                         Layout.fillWidth: true
+                        Layout.leftMargin: BrowseGrid.tileHoverOutset
+                        Layout.rightMargin: BrowseGrid.tileHoverOutset
                         columns: columnCount
                         columnSpacing: 8
                         rowSpacing: 8
@@ -493,6 +495,8 @@ Item {
                         // recentlyPlayedGrid's own comment for why.
                         readonly property int columnCount: BrowseGrid.columnsFor(sectionsColumn.width)
                         Layout.fillWidth: true
+                        Layout.leftMargin: BrowseGrid.tileHoverOutset
+                        Layout.rightMargin: BrowseGrid.tileHoverOutset
                         visible: !root.favouritesLoading && root.favouriteItems.length > 0
                         columns: columnCount
                         columnSpacing: 8
@@ -565,6 +569,8 @@ Item {
                         // recentlyPlayedGrid's own comment for why.
                         readonly property int columnCount: BrowseGrid.columnsFor(sectionsColumn.width)
                         Layout.fillWidth: true
+                        Layout.leftMargin: BrowseGrid.tileHoverOutset
+                        Layout.rightMargin: BrowseGrid.tileHoverOutset
                         columns: columnCount
                         columnSpacing: 8
                         rowSpacing: 8
@@ -616,6 +622,8 @@ Item {
                         id: sonosSourcesGrid
                         readonly property int columnCount: BrowseGrid.columnsFor(sectionsColumn.width)
                         Layout.fillWidth: true
+                        Layout.leftMargin: BrowseGrid.tileHoverOutset
+                        Layout.rightMargin: BrowseGrid.tileHoverOutset
                         columns: columnCount
                         columnSpacing: 8
                         rowSpacing: 8

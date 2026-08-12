@@ -34,6 +34,7 @@ Item {
 
     implicitHeight: 52
     readonly property bool rowHoverActive: mouseArea.containsMouse && !rowMenuButton.hovered && !root.menuOpen
+    readonly property bool rowPressActive: rowHoverActive && mouseArea.pressed
 
     // Same gutter geometry as QueuePanel.qml: the highlight extends into
     // the panel padding without moving row contents, while leaving enough
@@ -43,10 +44,10 @@ Item {
     Rectangle {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
-        x: root.trackNumber.length > 0 ? iconArea.x - 10 : 0
-        width: parent.width + 16 - x
+        x: 0
+        width: parent.width + 16
         radius: 10
-        color: root.rowHoverActive ? "#F5F5F5" : "transparent"
+        color: root.rowPressActive ? "#E8E8E8" : (root.rowHoverActive ? "#F5F5F5" : "transparent")
     }
 
     // Declared before the RowLayout so the row-wide click target sits

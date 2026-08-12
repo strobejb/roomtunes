@@ -21,6 +21,7 @@ Item {
 
     implicitWidth: 76
     implicitHeight: 112
+    readonly property int hoverHorizontalPadding: BrowseGrid.tileHoverOutset
 
     MouseArea {
         id: mouseArea
@@ -34,13 +35,13 @@ Item {
         anchors.top: parent.top
         anchors.topMargin: -8
         anchors.horizontalCenter: parent.horizontalCenter
-        width: parent.width
+        width: parent.width + root.hoverHorizontalPadding * 2
         height: Math.min(parent.height - anchors.topMargin, iconArea.height + titleLabel.anchors.topMargin
                          + Math.ceil(titleLabel.font.pixelSize * 1.25) * 2 + 16)
         radius: 12
         antialiasing: true
-        color: "#E8E8E8"
-        visible: mouseArea.containsMouse
+        color: mouseArea.pressed ? "#DCDCDC" : "#E8E8E8"
+        visible: mouseArea.containsMouse || mouseArea.pressed
     }
 
     Item {

@@ -718,7 +718,8 @@ Item {
                                                                     maxWidth)
                                     Layout.preferredHeight: 32
                                     radius: height / 2
-                                    color: playPillMouseArea.containsMouse ? "#E8E8E8" : "#F0F0F0"
+                                    color: playPillMouseArea.pressed ? "#D0D0D0"
+                                                                      : (playPillMouseArea.containsMouse ? "#E8E8E8" : "#F0F0F0")
 
                                     Label {
                                         id: roomNameMeasure
