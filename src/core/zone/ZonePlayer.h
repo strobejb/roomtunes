@@ -338,6 +338,8 @@ class ZonePlayer : public QObject
     Q_INVOKABLE void saveQueueAsSonosPlaylist(const QString &title);
     Q_INVOKABLE void addCurrentTrackToSonosFavourites();
     Q_INVOKABLE void removeCurrentTrackFromSonosFavourites(const QString &objectId);
+    Q_INVOKABLE void addItemToSonosFavourites(const QVariantMap &item);
+    Q_INVOKABLE void removeItemFromSonosFavourites(const QVariantMap &item);
 
     // Plays a browse/search result item (a QVariantMap in the shape
     // MusicService subclasses produce -- id/title/uri/upnpClass/didlId/

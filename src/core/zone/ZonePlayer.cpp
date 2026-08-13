@@ -25,6 +25,21 @@ namespace
 
 QString genaProperty(const QByteArray &body, const QString &propertyName);
 
+QString itemString(const QVariantMap &item, const QString &key)
+{
+    return item.value(key).toString();
+}
+
+bool itemBool(const QVariantMap &item, const QString &key)
+{
+    return item.value(key).toBool();
+}
+
+bool isSonosFavouriteId(const QString &objectId)
+{
+    return objectId.startsWith(QStringLiteral("FV:2/"));
+}
+
 // UPnP RelTime/TrackDuration are "H+:MM:SS" (one or more hour digits) --
 // parses to total seconds, or 0 for anything that doesn't fit that shape
 // (e.g. the literal "NOT_IMPLEMENTED" some sources report when they don't
@@ -138,6 +153,31 @@ QVariantMap sourceItem(const QString &kind, const QString &id, const QString &ti
     item[QStringLiteral("didlId")]       = id;
     item[QStringLiteral("parentId")]     = QStringLiteral("-1");
     item[QStringLiteral("desc")]         = QString();
+    return item;
+}
+
+DidlItem didlItemFromVariant(const QVariantMap &variant)
+{
+    DidlItem item;
+    item.id           = itemString(variant, QStringLiteral("id"));
+    item.parentId     = itemString(variant, QStringLiteral("parentId"));
+    item.didlId       = itemString(variant, QStringLiteral("didlId"));
+    item.didlParentId = item.parentId;
+    item.title        = itemString(variant, QStringLiteral("title"));
+    item.artist       = itemString(variant, QStringLiteral("artist"));
+    item.album        = itemString(variant, QStringLiteral("album"));
+    item.upnpClass    = itemString(variant, QStringLiteral("upnpClass"));
+    item.res          = itemString(variant, QStringLiteral("uri"));
+    item.protocolInfo = itemString(variant, QStringLiteral("protocolInfo"));
+    item.desc         = itemString(variant, QStringLiteral("desc"));
+    item.albumArtUri  = itemString(variant, QStringLiteral("imageUrl"));
+    item.container    = itemBool(variant, QStringLiteral("container"));
+
+    if (item.didlId.isEmpty())
+        item.didlId = item.id;
+    if (item.upnpClass.isEmpty())
+        item.upnpClass = item.container ? QStringLiteral("object.container")
+                                        : QStringLiteral("object.item.audioItem.musicTrack");
     return item;
 }
 
@@ -826,6 +866,26 @@ void ZonePlayer::addCurrentTrackToSonosFavourites()
 void ZonePlayer::removeCurrentTrackFromSonosFavourites(const QString &objectId)
 {
     if (objectId.isEmpty())
+        return;
+
+    m_control.removeFromSonosFavourites(this, objectId, [](bool) {
+    });
+}
+
+void ZonePlayer::addItemToSonosFavourites(const QVariantMap &variant)
+{
+    DidlItem item = didlItemFromVariant(variant);
+    if (item.title.isEmpty() || item.id.isEmpty())
+        return;
+
+    m_control.addToSonosFavourites(this, item, [](bool, const QString &) {
+    });
+}
+
+void ZonePlayer::removeItemFromSonosFavourites(const QVariantMap &variant)
+{
+    const QString objectId = itemString(variant, QStringLiteral("id"));
+    if (!isSonosFavouriteId(objectId))
         return;
 
     m_control.removeFromSonosFavourites(this, objectId, [](bool) {

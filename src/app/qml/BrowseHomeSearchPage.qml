@@ -46,13 +46,39 @@ Item {
         }
     }
 
+    function isSonosFavourite(item) {
+        return item && String(item.id || "").indexOf("FV:2/") === 0
+    }
+
+    function favouriteActionText(item) {
+        return isSonosFavourite(item) ? qsTr("Remove from Favourites") : qsTr("Favourite")
+    }
+
+    function rowMenuItems(item) {
+        const favouriteAction = root.favouriteActionText(item)
+        if (!item || !item.uri)
+            return [favouriteAction]
+        return [favouriteAction, "-", qsTr("Play Now"), qsTr("Play Next"),
+                qsTr("Add to End of Queue"), qsTr("Replace Queue")]
+    }
+
     ActionMenu {
         id: rowMenu
         property var currentItem: ({})
-        items: [qsTr("Play Now"), qsTr("Play Next"), qsTr("Add to End of Queue"), qsTr("Replace Queue")]
+        items: root.rowMenuItems(currentItem)
 
         onItemClicked: (text) => {
-            if (!root.zone || !rowMenu.currentItem.uri)
+            if (!root.zone)
+                return
+            if (text === qsTr("Favourite")) {
+                root.zone.addItemToSonosFavourites(rowMenu.currentItem)
+                return
+            }
+            if (text === qsTr("Remove from Favourites")) {
+                root.zone.removeItemFromSonosFavourites(rowMenu.currentItem)
+                return
+            }
+            if (!rowMenu.currentItem.uri)
                 return
             if (text === qsTr("Play Now"))
                 root.zone.playItem(rowMenu.currentItem)
@@ -266,7 +292,7 @@ Item {
                                     title: modelData.title
                                     imageUrl: modelData.imageUrl
                                     showChevron: !!modelData.container
-                                    showMenu: !!modelData.uri
+                                    showMenu: true
                                     showPlayOverlay: !modelData.container && !!modelData.uri
                                     menuOpen: rowMenu.visible && rowMenu.parent === rowItem
                                     circularIcon: false

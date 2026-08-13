@@ -29,6 +29,14 @@ Item {
         failedImageUrls = failed
     }
 
+    function isSonosFavourite(item) {
+        return item && String(item.id || "").indexOf("FV:2/") === 0
+    }
+
+    function favouriteActionText(item) {
+        return isSonosFavourite(item) ? qsTr("Remove from Favourites") : qsTr("Favourite")
+    }
+
     // Shared by every row rather than one per delegate -- opened against
     // whichever row's dots button was clicked (see the delegate below),
     // same approach as Main.qml's zonesSettingsMenu.
@@ -37,19 +45,19 @@ Item {
         property int trackIndex: -1
         property string trackId: ""
         property var currentItem: ({})
-        items: [qsTr("Favourite"), "-", qsTr("Play Now"), qsTr("Remove Track")]
+        items: [root.favouriteActionText(currentItem), "-", qsTr("Play Now"), qsTr("Remove Track")]
 
         onItemClicked: (text) => {
             if (!root.queue || !root.queue.zone)
                 return
-            if (text === qsTr("Play Now"))
+            if (text === qsTr("Favourite"))
+                root.queue.zone.addItemToSonosFavourites(rowMenu.currentItem)
+            else if (text === qsTr("Remove from Favourites"))
+                root.queue.zone.removeItemFromSonosFavourites(rowMenu.currentItem)
+            else if (text === qsTr("Play Now"))
                 root.queue.zone.playQueueItem(rowMenu.trackIndex + 1, rowMenu.currentItem)
             else if (text === qsTr("Remove Track"))
                 root.queue.zone.removeQueueTrack(rowMenu.trackId)
-            // "Favourite" isn't wired to anything yet -- there's no
-            // favourites feature in this app yet (AddItemToFavorites/a
-            // favourites list) to call into, same "visual affordance only"
-            // situation as the Edit pill below.
         }
     }
 
