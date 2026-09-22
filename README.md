@@ -29,3 +29,9 @@ A modern rewrite of the original Room Tunes for BlackBerry 10 Sonos controller.
 Copyright (C) 2026 James Brown.
 
 Room Tunes is licensed under GPL-3.0-or-later. The full license text is included in [LICENSE](LICENSE).
+
+## Support
+
+RoomTunes is open source and under active development. If you use it and want to help support continued development, you can sponsor the project through [GitHub Sponsors](https://github.com/sponsors/strobejb) or [Ko-fi](https://ko-fi.com/jbcatch22).
+
+Commercial support and custom development are available through Catch22 Solutions.
